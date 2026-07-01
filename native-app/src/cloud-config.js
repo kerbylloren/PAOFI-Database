@@ -3,6 +3,7 @@ const path = require("node:path");
 
 const DATA_FOLDER_NAME = "PAOFI-LP-Database-Data";
 const CLOUD_CONFIG_FILE = "cloud-database.json";
+const CLOUD_DEFAULTS_FILE = "cloud-defaults.json";
 
 function appDataDir() {
   if (process.env.LPDB_DATA_DIR) return process.env.LPDB_DATA_DIR;
@@ -13,6 +14,17 @@ function appDataDir() {
 
 function cloudConfigPath() {
   return process.env.LPDB_CLOUD_CONFIG || path.join(appDataDir(), CLOUD_CONFIG_FILE);
+}
+
+function packagedCloudConfigPaths() {
+  const candidates = [];
+
+  if (process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, CLOUD_DEFAULTS_FILE));
+  }
+
+  candidates.push(path.join(__dirname, "..", "build", CLOUD_DEFAULTS_FILE));
+  return candidates;
 }
 
 function normalizeConfig(config = {}) {
@@ -34,10 +46,20 @@ function readCloudConfig() {
   if (envConfig) return envConfig;
 
   const configPath = cloudConfigPath();
-  if (!fs.existsSync(configPath)) return null;
+  if (fs.existsSync(configPath)) {
+    const parsed = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    return normalizeConfig(parsed);
+  }
 
-  const parsed = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  return normalizeConfig(parsed);
+  for (const packagedConfigPath of packagedCloudConfigPaths()) {
+    if (!fs.existsSync(packagedConfigPath)) continue;
+
+    const parsed = JSON.parse(fs.readFileSync(packagedConfigPath, "utf8"));
+    const packagedConfig = normalizeConfig(parsed);
+    if (packagedConfig) return packagedConfig;
+  }
+
+  return null;
 }
 
 function writeCloudConfig(config) {
@@ -65,6 +87,7 @@ module.exports = {
   appDataDir,
   cloudConfigPath,
   cloudLocationLabel,
+  packagedCloudConfigPaths,
   readCloudConfig,
   writeCloudConfig
 };

@@ -1,6 +1,6 @@
 {
   "name": "lp-database-native",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Desktop database app for LP beneficiary records.",
   "author": {
@@ -42,6 +42,12 @@
       "package.json",
       "public/**/*",
       "src/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "build/cloud-defaults.json",
+        "to": "cloud-defaults.json"
+      }
     ],
     "win": {
       "icon": "build/icon.ico",
