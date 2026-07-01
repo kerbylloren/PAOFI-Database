@@ -1,13 +1,13 @@
 # PAOFI Livelihood Program Database
 
-A desktop database application for the Payatas Orione Foundation Inc.
-Livelihood Program. The project started as a Google Apps Script and Google
-Sheets database workflow, then expanded into a standalone Windows application
-with a Turso cloud database backend.
+A standalone Windows database application for the Payatas Orione Foundation
+Inc. Livelihood Program. The app stores records in Turso cloud database mode
+for multi-PC access and can fall back to a local SQLite database when no cloud
+config is present.
 
-## Current App
+## App Source
 
-The active application lives in:
+The application lives in:
 
 ```text
 native-app/
@@ -80,10 +80,8 @@ native-app\dist-electron\PAOFI-LP-Database-Standalone.exe
 
 ```text
 .
-|-- native-app/          Desktop database application
-|-- *.js                 Original Google Apps Script files
-|-- appsscript.json      Apps Script manifest
-|-- .clasp.json          Apps Script project configuration
+|-- native-app/          Electron desktop database application
+|-- README.md            Repository overview
 ```
 
 ## Data Safety

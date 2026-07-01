@@ -5,12 +5,6 @@ local SQLite file or a configured Turso cloud database.
 
 ## Start
 
-Double-click:
-
-```text
-start-lp-database.cmd
-```
-
 The standalone Windows package is built with Electron and does not use the
 user's Edge or Chrome installation.
 
@@ -28,6 +22,12 @@ Or run:
 
 ```powershell
 npm start
+```
+
+For the desktop shell during development:
+
+```powershell
+npm run electron:dev
 ```
 
 Without cloud config, the app stores data in:
