@@ -5,6 +5,52 @@ const { FIELD_NAMES, SUMMARY_FIELDS } = require("./metadata");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
 const DEFAULT_DB_PATH = path.join(DATA_DIR, "lp_database.sqlite");
+const RAW_VALUE_FIELDS = new Set([
+  "date_updated",
+  "control_no",
+  "picture_data",
+  "field_c11",
+  "field_l11",
+  "list_c18",
+  "list_m18"
+]);
+const UPPERCASE_TERMS = new Set([
+  "ALS",
+  "BPI",
+  "LP",
+  "MDPP",
+  "N/A",
+  "OFW",
+  "PAOFI",
+  "PWD",
+  "TESDA",
+  "TVET"
+]);
+const ABBREVIATIONS = new Map([
+  ["apt", "Apt."],
+  ["apt.", "Apt."],
+  ["blk", "Blk."],
+  ["blk.", "Blk."],
+  ["brgy", "Brgy."],
+  ["brgy.", "Brgy."],
+  ["dr", "Dr."],
+  ["dr.", "Dr."],
+  ["jr", "Jr."],
+  ["jr.", "Jr."],
+  ["lot", "Lot"],
+  ["mr", "Mr."],
+  ["mr.", "Mr."],
+  ["mrs", "Mrs."],
+  ["mrs.", "Mrs."],
+  ["ms", "Ms."],
+  ["ms.", "Ms."],
+  ["no", "No."],
+  ["no.", "No."],
+  ["sr", "Sr."],
+  ["sr.", "Sr."],
+  ["st", "St."],
+  ["st.", "St."]
+]);
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -23,6 +69,63 @@ function normalizeText(value) {
   return String(value);
 }
 
+function normalizeContactNumber(value) {
+  let digits = normalizeText(value).replace(/\D/g, "");
+
+  if (digits.startsWith("63") && digits.length === 12) {
+    digits = `0${digits.slice(2)}`;
+  }
+
+  if (digits.startsWith("9") && digits.length === 10) {
+    digits = `0${digits}`;
+  }
+
+  return digits.slice(0, 11);
+}
+
+function capitalizeWord(word) {
+  const abbreviation = ABBREVIATIONS.get(word.toLowerCase());
+
+  if (abbreviation) return abbreviation;
+
+  const hasTrailingPeriod = word.endsWith(".");
+  const base = hasTrailingPeriod ? word.slice(0, -1) : word;
+  const uppercaseBase = base.toUpperCase();
+
+  if (UPPERCASE_TERMS.has(uppercaseBase)) {
+    return `${uppercaseBase}${hasTrailingPeriod ? "." : ""}`;
+  }
+
+  if (/^[A-Za-z]$/.test(base)) {
+    return `${base.toUpperCase()}${hasTrailingPeriod ? "." : ""}`;
+  }
+
+  const capitalized = base
+    .split(/([-'])/)
+    .map((part, index, parts) => {
+      if (part === "-" || part === "'") return part;
+      if (parts[index - 1] === "'" && ["s", "t", "d", "m"].includes(part.toLowerCase())) {
+        return part.toLowerCase();
+      }
+      return part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part;
+    })
+    .join("");
+
+  return `${capitalized}${hasTrailingPeriod ? "." : ""}`;
+}
+
+function titleCaseValue(value) {
+  return normalizeText(value)
+    .trim()
+    .replace(/[A-Za-z]+(?:'[A-Za-z]+)*\.?/g, capitalizeWord);
+}
+
+function normalizeFieldValue(fieldName, value) {
+  if (fieldName === "field_l11") return normalizeContactNumber(value);
+  if (RAW_VALUE_FIELDS.has(fieldName)) return normalizeText(value).trim();
+  return titleCaseValue(value);
+}
+
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -35,7 +138,7 @@ function normalizeRecord(input = {}) {
   const output = {};
 
   FIELD_NAMES.forEach(fieldName => {
-    output[fieldName] = normalizeText(input[fieldName]);
+    output[fieldName] = normalizeFieldValue(fieldName, input[fieldName]);
   });
 
   if (!output.date_updated) output.date_updated = todayDate();
@@ -300,6 +403,11 @@ class BeneficiaryDatabase {
 module.exports = {
   BeneficiaryDatabase,
   DEFAULT_DB_PATH,
+  normalizeContactNumber,
+  normalizeFieldValue,
   normalizeRecord,
+  nowIso,
+  quoted,
+  titleCaseValue,
   todayDate
 };

@@ -2,14 +2,63 @@
   "name": "lp-database-native",
   "version": "0.1.0",
   "private": true,
-  "description": "Local desktop database app for LP beneficiary records.",
-  "main": "server.js",
+  "description": "Desktop database app for LP beneficiary records.",
+  "author": "Kerby Lloren",
+  "main": "electron-main.js",
   "scripts": {
     "start": "node server.js",
+    "electron:dev": "electron .",
+    "package:standalone": "powershell.exe -ExecutionPolicy Bypass -File scripts/build-standalone.ps1",
     "test": "node --test test/*.test.js",
-    "import:csv": "node scripts/import-masterlist-csv.js"
+    "import:csv": "node scripts/import-masterlist-csv.js",
+    "normalize:db": "node scripts/normalize-database-capitalization.js",
+    "cloud:config": "node scripts/configure-cloud.js",
+    "migrate:cloud": "node scripts/migrate-sqlite-to-turso.js"
   },
   "engines": {
     "node": ">=24"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "org.paofi.lpdatabase",
+    "productName": "PAOFI LP Database",
+    "asar": false,
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron-main.js",
+      "server.js",
+      "package.json",
+      "public/**/*",
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "runtime",
+        "to": "runtime",
+        "filter": [
+          "node.exe"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "PAOFI-LP-Database-Standalone.exe"
+    }
   }
 }

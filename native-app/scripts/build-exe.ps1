@@ -37,9 +37,15 @@ New-Item -ItemType Directory -Force -Path $payloadAppDir, $payloadRuntimeDir | O
 
 Copy-Item -LiteralPath (Join-Path $root "server.js") -Destination $payloadAppDir -Force
 Copy-Item -LiteralPath (Join-Path $root "package.json") -Destination $payloadAppDir -Force
+if (Test-Path (Join-Path $root "package-lock.json")) {
+  Copy-Item -LiteralPath (Join-Path $root "package-lock.json") -Destination $payloadAppDir -Force
+}
 Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination $payloadAppDir -Force
 Copy-Item -LiteralPath (Join-Path $root "public") -Destination $payloadAppDir -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $root "src") -Destination $payloadAppDir -Recurse -Force
+if (Test-Path (Join-Path $root "node_modules")) {
+  Copy-Item -LiteralPath (Join-Path $root "node_modules") -Destination $payloadAppDir -Recurse -Force
+}
 
 $nodeCommand = Get-Command "node.exe" -ErrorAction Stop
 Copy-Item -LiteralPath $nodeCommand.Source -Destination (Join-Path $payloadRuntimeDir "node.exe") -Force

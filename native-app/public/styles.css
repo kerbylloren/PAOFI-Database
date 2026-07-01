@@ -66,25 +66,27 @@ svg {
 
 .brand-lockup {
   display: grid;
-  grid-template-columns: 44px 1fr;
-  gap: 10px;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 12px;
   align-items: center;
   padding: 6px;
 }
 
 .brand-mark {
-  width: 44px;
-  height: 44px;
+  width: 54px;
+  height: 54px;
   display: grid;
   place-items: center;
   border-radius: 8px;
-  background: #eaf6ef;
-  color: var(--green);
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #dbe3dd;
+  overflow: hidden;
 }
 
-.brand-mark svg {
-  width: 30px;
-  height: 30px;
+.brand-mark img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
 }
 
 .brand-lockup strong,
@@ -93,12 +95,16 @@ svg {
 }
 
 .brand-lockup strong {
-  font-size: 16px;
+  color: #143d33;
+  font-size: 14px;
+  line-height: 1.18;
 }
 
 .brand-lockup span {
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.25;
+  margin-top: 3px;
 }
 
 .app-nav {
@@ -578,6 +584,11 @@ textarea:focus {
   border-color: var(--green);
 }
 
+input[data-capitalize="words"],
+textarea[data-capitalize="words"] {
+  text-transform: capitalize;
+}
+
 .application-paper {
   max-width: 1180px;
   margin: 0 auto;
@@ -635,6 +646,7 @@ textarea:focus {
   background: #f4f7f5;
   color: var(--muted);
   overflow: hidden;
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
 }
 
 .photo-preview {
@@ -650,6 +662,12 @@ textarea:focus {
   object-fit: cover;
 }
 
+.editable-photo.drag-over {
+  border-color: var(--green);
+  background: #eaf6ef;
+  box-shadow: 0 0 0 3px rgba(31, 122, 79, 0.16);
+}
+
 .photo-actions {
   position: absolute;
   left: 6px;
@@ -658,6 +676,26 @@ textarea:focus {
   display: flex;
   gap: 6px;
   justify-content: center;
+}
+
+.photo-choose-button {
+  min-width: 80px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.photo-remove-button {
+  color: #ffffff;
+  border-color: var(--red);
+  background: var(--red);
+}
+
+.photo-remove-button:hover {
+  background: var(--red-dark);
+}
+
+.photo-remove-button[hidden],
+.editable-photo:not(.has-photo) .photo-remove-button {
+  display: none;
 }
 
 .editable-photo input[type="file"] {
@@ -689,6 +727,31 @@ textarea:focus {
   border-radius: 6px;
   background: #edf7f0;
   font-size: 15px;
+}
+
+.family-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.family-section-header h3 {
+  flex: 1;
+}
+
+.family-add-button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  color: var(--green-dark);
+  background: #eaf6ef;
+  border-color: #bee0ca;
+}
+
+.family-add-button:hover {
+  background: #dff0e6;
+  border-color: #8fc7a7;
 }
 
 .paper-grid {
@@ -728,25 +791,49 @@ textarea:focus {
   gap: 7px;
 }
 
-.choice-pill {
+.paper-field .choice-pill {
   min-height: 34px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 10px;
+  justify-content: center;
+  min-width: 92px;
+  position: relative;
+  margin: 0;
+  padding: 0 14px;
   border: 1px solid #cfd8d2;
   border-radius: 7px;
   background: #ffffff;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  text-align: center;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
-.choice-pill input {
-  width: 14px;
+.paper-field .choice-pill input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.choice-pill:has(input:checked) {
+.paper-field .choice-pill span {
+  width: 100%;
+}
+
+.paper-field .choice-pill:hover,
+.paper-field .choice-pill:focus-within {
+  border-color: #8fc7a7;
+  background: #f1f8f4;
+  color: var(--green-dark);
+}
+
+.paper-field .choice-pill:has(input:checked) {
   border-color: var(--green);
   background: #eaf6ef;
   color: var(--green-dark);
+  box-shadow: inset 0 0 0 1px rgba(31, 122, 79, 0.16);
 }
 
 .family-table-wrap,
@@ -788,14 +875,22 @@ textarea:focus {
   background: #ffffff;
 }
 
-.family-table input {
+.family-empty-row td {
+  color: var(--muted);
+  text-align: center;
+  background: #fbfcfd;
+}
+
+.family-table input,
+.family-table select {
   min-width: 128px;
   border-color: transparent;
   background: transparent;
   padding: 6px;
 }
 
-.family-table input:focus {
+.family-table input:focus,
+.family-table select:focus {
   background: #ffffff;
   border-color: var(--green);
 }

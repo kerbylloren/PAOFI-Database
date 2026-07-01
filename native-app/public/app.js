@@ -12,11 +12,49 @@ const FAMILY_FIELDS = [
 const CHOICE_OPTIONS = {
   paofi_active: ["Mayroon", "Wala"],
   with_business: ["Mayroon", "Wala"],
-  business_duration: ["0 experience", "< 1 year", "1-3 years", "> 3 years"],
+  business_duration: ["0 Experience", "< 1 Year", "1-3 Years", "> 3 Years"],
   livelihood_interest: ["Rag Making", "Dishwashing", "Sewing"],
   seminar: ["Oo", "Hindi"],
   willingness: ["Oo", "Hindi"],
-  commit_days: ["1-2 days", "3-4 days"]
+  commit_days: ["1-2 Days", "3-4 Days"]
+};
+
+const DROPDOWN_OPTIONS = {
+  field_h11: ["Female", "Male"],
+  field_k30: ["None", "Feeding Program", "Scholarship Program", "Scholarship Program, Feeding Program"]
+};
+
+const FAMILY_DROPDOWN_OPTIONS = {
+  list_d18: ["F", "M"],
+  list_f18: [
+    "Self",
+    "Husband",
+    "Wife",
+    "Live-In Partner",
+    "Parent",
+    "Son",
+    "Daughter",
+    "Brother",
+    "Sister",
+    "Grandson",
+    "Granddaughter",
+    "Nephew",
+    "Niece",
+    "Uncle",
+    "Aunt"
+  ],
+  list_h18: ["Single", "Married", "Widowed", "Separated"],
+  list_j18: [
+    "No. Formal Education",
+    "Kindergarten",
+    "Elementary Undergraduate",
+    "Elementary Graduate",
+    "High School Undergraduate",
+    "High School Graduate",
+    "College Undergraduate",
+    "Bachelor's Degree",
+    "TVET/TESDA Graduate"
+  ]
 };
 
 const DATABASE_TABLE_FIELDS = [
@@ -46,6 +84,62 @@ const DATABASE_TABLE_FIELDS = [
   "willingness",
   "commit_days"
 ];
+
+const PRINT_WIDE_FIELDS = new Set([
+  "field_c13",
+  "livelihood_interest",
+  "field_c38",
+  "field_f39",
+  "seminar",
+  "field_k43"
+]);
+
+const CAPITALIZE_FIELD_EXCLUSIONS = new Set([
+  "date_updated",
+  "control_no",
+  "picture_data",
+  "field_c11",
+  "field_l11",
+  "list_c18",
+  "list_m18"
+]);
+const UPPERCASE_TERMS = new Set([
+  "ALS",
+  "BPI",
+  "LP",
+  "MDPP",
+  "N/A",
+  "OFW",
+  "PAOFI",
+  "PWD",
+  "TESDA",
+  "TVET"
+]);
+const ABBREVIATIONS = new Map([
+  ["apt", "Apt."],
+  ["apt.", "Apt."],
+  ["blk", "Blk."],
+  ["blk.", "Blk."],
+  ["brgy", "Brgy."],
+  ["brgy.", "Brgy."],
+  ["dr", "Dr."],
+  ["dr.", "Dr."],
+  ["jr", "Jr."],
+  ["jr.", "Jr."],
+  ["lot", "Lot"],
+  ["mr", "Mr."],
+  ["mr.", "Mr."],
+  ["mrs", "Mrs."],
+  ["mrs.", "Mrs."],
+  ["ms", "Ms."],
+  ["ms.", "Ms."],
+  ["no", "No."],
+  ["no.", "No."],
+  ["sr", "Sr."],
+  ["sr.", "Sr."],
+  ["st", "St."],
+  ["st.", "St."]
+]);
 
 const ICONS = {
   home: '<svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V10Z"></path></svg>',
@@ -105,6 +199,70 @@ function splitLines(value) {
     .split("\n")
     .map(item => item.trim())
     .filter(Boolean);
+}
+
+function normalizeContactNumber(value) {
+  let digits = String(value || "").replace(/\D/g, "");
+
+  if (digits.startsWith("63") && digits.length === 12) {
+    digits = `0${digits.slice(2)}`;
+  }
+
+  if (digits.startsWith("9") && digits.length === 10) {
+    digits = `0${digits}`;
+  }
+
+  return digits.slice(0, 11);
+}
+
+function titleCaseValue(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[A-Za-z]+(?:'[A-Za-z]+)*\.?/g, word => {
+      const abbreviation = ABBREVIATIONS.get(word.toLowerCase());
+      if (abbreviation) return abbreviation;
+
+      const hasTrailingPeriod = word.endsWith(".");
+      const base = hasTrailingPeriod ? word.slice(0, -1) : word;
+      const uppercaseBase = base.toUpperCase();
+
+      if (UPPERCASE_TERMS.has(uppercaseBase)) {
+        return `${uppercaseBase}${hasTrailingPeriod ? "." : ""}`;
+      }
+
+      if (/^[A-Za-z]$/.test(base)) {
+        return `${base.toUpperCase()}${hasTrailingPeriod ? "." : ""}`;
+      }
+
+      const capitalized = base
+        .split(/([-'])/)
+        .map((part, index, parts) => {
+          if (part === "-" || part === "'") return part;
+          if (parts[index - 1] === "'" && ["s", "t", "d", "m"].includes(part.toLowerCase())) {
+            return part.toLowerCase();
+          }
+          return part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part;
+        })
+        .join("");
+
+      return `${capitalized}${hasTrailingPeriod ? "." : ""}`;
+    });
+}
+
+function shouldCapitalizeField(name) {
+  return !CAPITALIZE_FIELD_EXCLUSIONS.has(name);
+}
+
+function normalizeFieldValue(name, value) {
+  if (name === "field_l11") return normalizeContactNumber(value);
+  if (shouldCapitalizeField(name)) return titleCaseValue(value);
+  return value;
+}
+
+function fieldValue(name, value) {
+  if (name === "field_l11") return normalizeContactNumber(value);
+  if (shouldCapitalizeField(name)) return titleCaseValue(value);
+  return String(value || "").trim();
 }
 
 function fullName(record = {}) {
@@ -287,8 +445,8 @@ async function renderMenuPage() {
   elements.pageRoot.innerHTML = `
     <section class="menu-hero">
       <div class="menu-hero-copy">
-        <p class="eyebrow">Livelihood Program Application Form</p>
-        <h2>PAYATAS ORIONE FOUNDATION INC.</h2>
+        <p class="eyebrow">Payatas Orione Foundation Inc.</p>
+        <h2>Livelihood Program Database</h2>
         <span>"A simple effort can make a great impact"</span>
       </div>
       <div class="form-miniature" aria-hidden="true">
@@ -519,11 +677,13 @@ function renderPictureBlock(record, readonly) {
   }
 
   return `
-    <div class="photo-box editable-photo">
+    <div class="photo-box editable-photo ${source ? "has-photo" : ""}" id="photoDropZone">
       <div id="photoPreview" class="photo-preview">${preview}</div>
       <div class="photo-actions">
-        <label for="pictureInput" class="text-button">Choose</label>
-        <button id="removePictureButton" type="button" class="text-button">Remove</button>
+        <label for="pictureInput" class="text-button photo-choose-button">Choose</label>
+        <button id="removePictureButton" type="button" class="icon-button photo-remove-button" title="Remove picture" aria-label="Remove picture" ${source ? "" : "hidden"}>
+          ${icon("bin")}
+        </button>
       </div>
       <input id="pictureInput" type="file" accept="image/*">
     </div>
@@ -542,8 +702,9 @@ function formSection(title, names, record, readonly) {
 }
 
 function renderField(meta, record, readonly) {
-  const value = record[meta.name] || "";
+  const value = fieldValue(meta.name, record[meta.name]);
   const isWide = meta.input === "textarea" || meta.label.length > 42 || meta.name === "field_c13";
+  const capitalize = shouldCapitalizeField(meta.name) ? ' data-capitalize="words" autocapitalize="words"' : "";
 
   if (readonly) {
     return `
@@ -558,22 +719,28 @@ function renderField(meta, record, readonly) {
     return renderChoiceField(meta, value, isWide);
   }
 
+  if (meta.name in DROPDOWN_OPTIONS) {
+    return renderDropdownField(meta, value, isWide, DROPDOWN_OPTIONS[meta.name], true);
+  }
+
   if (meta.input === "select") {
-    return `
-      <div class="paper-field ${isWide ? "wide" : ""}">
-        <label for="${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
-        <select id="${escapeHtml(meta.name)}" data-field="${escapeHtml(meta.name)}">
-          ${(meta.options || []).map(option => `<option value="${escapeHtml(option)}" ${option === value ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
-        </select>
-      </div>
-    `;
+    return renderDropdownField(meta, value, isWide, meta.options || [], false);
   }
 
   if (meta.input === "textarea") {
     return `
       <div class="paper-field ${isWide ? "wide" : ""}">
         <label for="${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
-        <textarea id="${escapeHtml(meta.name)}" rows="${meta.rows || 3}" data-field="${escapeHtml(meta.name)}">${escapeHtml(value)}</textarea>
+        <textarea id="${escapeHtml(meta.name)}" rows="${meta.rows || 3}" data-field="${escapeHtml(meta.name)}"${capitalize}>${escapeHtml(value)}</textarea>
+      </div>
+    `;
+  }
+
+  if (meta.name === "field_l11") {
+    return `
+      <div class="paper-field ${isWide ? "wide" : ""}">
+        <label for="${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
+        <input id="${escapeHtml(meta.name)}" type="text" inputmode="numeric" autocomplete="tel" maxlength="11" pattern="[0-9]{11}" data-field="${escapeHtml(meta.name)}" value="${escapeHtml(value)}">
       </div>
     `;
   }
@@ -581,7 +748,29 @@ function renderField(meta, record, readonly) {
   return `
     <div class="paper-field ${isWide ? "wide" : ""}">
       <label for="${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
-      <input id="${escapeHtml(meta.name)}" type="${meta.input || "text"}" data-field="${escapeHtml(meta.name)}" value="${escapeHtml(value)}" ${meta.required ? "required" : ""}>
+      <input id="${escapeHtml(meta.name)}" type="${meta.input || "text"}" data-field="${escapeHtml(meta.name)}" value="${escapeHtml(value)}"${capitalize} ${meta.required ? "required" : ""}>
+    </div>
+  `;
+}
+
+function selectOptions(name, value, options, includeBlank) {
+  const normalizedValue = fieldValue(name, value);
+  const choices = [...options];
+  if (normalizedValue && !choices.includes(normalizedValue)) choices.push(normalizedValue);
+
+  return `
+    ${includeBlank ? `<option value="" ${normalizedValue ? "" : "selected"}></option>` : ""}
+    ${choices.map(option => `<option value="${escapeHtml(option)}" ${option === normalizedValue ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+  `;
+}
+
+function renderDropdownField(meta, value, isWide, options, includeBlank) {
+  return `
+    <div class="paper-field ${isWide ? "wide" : ""}">
+      <label for="${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
+      <select id="${escapeHtml(meta.name)}" data-field="${escapeHtml(meta.name)}">
+        ${selectOptions(meta.name, value, options, includeBlank)}
+      </select>
     </div>
   `;
 }
@@ -605,31 +794,62 @@ function renderChoiceField(meta, value, isWide) {
   `;
 }
 
+function renderFamilyCell(name, row, rowIndex, readonly) {
+  const value = fieldValue(name, row[name] || "");
+
+  if (readonly) {
+    return `<td>${escapeHtml(value)}</td>`;
+  }
+
+  if (name in FAMILY_DROPDOWN_OPTIONS) {
+    return `
+      <td>
+        <select data-family-field="${escapeHtml(name)}" data-family-row="${rowIndex}">
+          ${selectOptions(name, value, FAMILY_DROPDOWN_OPTIONS[name], true)}
+        </select>
+      </td>
+    `;
+  }
+
+  return `
+    <td>
+      <input type="text" data-family-field="${escapeHtml(name)}" data-family-row="${rowIndex}" value="${escapeHtml(value)}"${shouldCapitalizeField(name) ? ' data-capitalize="words" autocapitalize="words"' : ""}>
+    </td>
+  `;
+}
+
+function renderFamilyRow(row, rowIndex, readonly) {
+  return `
+    <tr>
+      ${FAMILY_FIELDS.map(name => renderFamilyCell(name, row, rowIndex, readonly)).join("")}
+    </tr>
+  `;
+}
+
 function renderFamilySection(record, readonly) {
-  const rows = familyRows(record, readonly ? null : 10);
+  const rows = familyRows(record);
   const headers = FAMILY_FIELDS.map(name => field(name).label);
+  const bodyRows = rows.length
+    ? rows.map((row, rowIndex) => renderFamilyRow(row, rowIndex, readonly)).join("")
+    : `<tr class="family-empty-row"><td colspan="${FAMILY_FIELDS.length}">No family members added.</td></tr>`;
 
   return `
     <section class="paper-section">
-      <h3>II. Family Composition</h3>
+      <div class="family-section-header">
+        <h3>II. Family Composition</h3>
+        ${readonly ? "" : `
+          <button type="button" id="addFamilyMemberButton" class="icon-button family-add-button" title="Add family member" aria-label="Add family member">
+            ${icon("plus")}
+          </button>
+        `}
+      </div>
       <div class="family-table-wrap">
         <table class="family-table">
           <thead>
             <tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
           </thead>
-          <tbody>
-            ${rows.map((row, rowIndex) => `
-              <tr>
-                ${FAMILY_FIELDS.map(name => `
-                  <td>
-                    ${readonly
-                      ? escapeHtml(row[name] || "")
-                      : `<input type="text" data-family-field="${escapeHtml(name)}" data-family-row="${rowIndex}" value="${escapeHtml(row[name] || "")}">`
-                    }
-                  </td>
-                `).join("")}
-              </tr>
-            `).join("")}
+          <tbody id="familyTableBody">
+            ${bodyRows}
           </tbody>
         </table>
       </div>
@@ -637,12 +857,12 @@ function renderFamilySection(record, readonly) {
   `;
 }
 
-function familyRows(record, fixedRows) {
+function familyRows(record) {
   const columns = FAMILY_FIELDS.reduce((items, name) => {
     items[name] = splitLines(record[name]);
     return items;
   }, {});
-  const rowCount = fixedRows || Math.max(1, ...FAMILY_FIELDS.map(name => columns[name].length));
+  const rowCount = Math.max(0, ...FAMILY_FIELDS.map(name => columns[name].length));
 
   return Array.from({ length: rowCount }, (_, index) => {
     return FAMILY_FIELDS.reduce((row, name) => {
@@ -652,28 +872,106 @@ function familyRows(record, fixedRows) {
   });
 }
 
+function nextFamilyRowIndex() {
+  const rowIndexes = [...elements.pageRoot.querySelectorAll("[data-family-row]")]
+    .map(input => Number(input.dataset.familyRow))
+    .filter(Number.isFinite);
+
+  return rowIndexes.length ? Math.max(...rowIndexes) + 1 : 0;
+}
+
+function attachCapitalizationHandlers(root) {
+  root.querySelectorAll('[data-capitalize="words"]').forEach(input => {
+    input.addEventListener("blur", () => {
+      input.value = titleCaseValue(input.value);
+    });
+  });
+}
+
+function addFamilyMemberRow() {
+  const body = document.getElementById("familyTableBody");
+  if (!body) return;
+
+  body.querySelector(".family-empty-row")?.remove();
+  const rowIndex = nextFamilyRowIndex();
+  body.insertAdjacentHTML("beforeend", renderFamilyRow({}, rowIndex, false));
+  attachCapitalizationHandlers(body.rows[body.rows.length - 1]);
+}
+
+function setPictureData(data) {
+  state.pictureData = data;
+
+  const preview = document.getElementById("photoPreview");
+  if (preview) {
+    preview.innerHTML = data
+      ? `<img src="${escapeHtml(data)}" alt="Beneficiary picture">`
+      : "<span>Picture</span>";
+  }
+
+  const dropZone = document.getElementById("photoDropZone");
+  dropZone?.classList.toggle("has-photo", Boolean(data));
+  dropZone?.classList.remove("drag-over");
+
+  const removeButton = document.getElementById("removePictureButton");
+  if (removeButton) removeButton.hidden = !data;
+}
+
+function readPictureFile(file) {
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    showToast("Choose an image file.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => setPictureData(String(reader.result || ""));
+  reader.readAsDataURL(file);
+}
+
 function attachEditorFormHandlers() {
   const fileInput = document.getElementById("pictureInput");
   fileInput?.addEventListener("change", () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      state.pictureData = String(reader.result || "");
-      const preview = document.getElementById("photoPreview");
-      if (preview) {
-        preview.innerHTML = `<img src="${escapeHtml(state.pictureData)}" alt="Beneficiary picture">`;
-      }
-    };
-    reader.readAsDataURL(file);
+    readPictureFile(fileInput.files?.[0]);
   });
+
+  const dropZone = document.getElementById("photoDropZone");
+  dropZone?.addEventListener("dragenter", event => {
+    event.preventDefault();
+    dropZone.classList.add("drag-over");
+  });
+  dropZone?.addEventListener("dragover", event => {
+    event.preventDefault();
+    dropZone.classList.add("drag-over");
+  });
+  dropZone?.addEventListener("dragleave", event => {
+    if (!dropZone.contains(event.relatedTarget)) {
+      dropZone.classList.remove("drag-over");
+    }
+  });
+  dropZone?.addEventListener("drop", event => {
+    event.preventDefault();
+    dropZone.classList.remove("drag-over");
+    readPictureFile(event.dataTransfer?.files?.[0]);
+  });
+
+  elements.pageRoot.querySelectorAll('[data-field="field_l11"]').forEach(input => {
+    input.addEventListener("input", () => {
+      input.value = normalizeContactNumber(input.value);
+    });
+    input.addEventListener("blur", () => {
+      input.value = normalizeContactNumber(input.value);
+    });
+  });
+
+  attachCapitalizationHandlers(elements.pageRoot);
 
   document.getElementById("removePictureButton")?.addEventListener("click", () => {
-    state.pictureData = "";
-    const preview = document.getElementById("photoPreview");
-    if (preview) preview.innerHTML = "<span>Picture</span>";
+    setPictureData("");
+    if (fileInput) fileInput.value = "";
   });
+
+  document.getElementById("addFamilyMemberButton")?.addEventListener("click", addFamilyMemberRow);
 }
 
 function collectRecord() {
@@ -689,14 +987,35 @@ function collectRecord() {
       if (input.checked) record[name] = input.value;
       return;
     }
-    record[name] = input.value;
+    record[name] = normalizeFieldValue(name, input.value);
+  });
+
+  const familyRowIndexes = [...new Set([...elements.pageRoot.querySelectorAll("[data-family-row]")]
+    .map(input => Number(input.dataset.familyRow))
+    .filter(Number.isFinite))]
+    .sort((left, right) => left - right);
+  const familyValues = FAMILY_FIELDS.reduce((values, name) => {
+    values[name] = [];
+    return values;
+  }, {});
+
+  familyRowIndexes.forEach(rowIndex => {
+    const rowValues = FAMILY_FIELDS.reduce((values, name) => {
+      const input = elements.pageRoot.querySelector(`[data-family-field="${name}"][data-family-row="${rowIndex}"]`);
+      values[name] = normalizeFieldValue(name, input?.value || "").trim();
+      return values;
+    }, {});
+    const hasValue = FAMILY_FIELDS.some(name => rowValues[name]);
+
+    if (!hasValue) return;
+
+    FAMILY_FIELDS.forEach(name => {
+      familyValues[name].push(rowValues[name] || "-");
+    });
   });
 
   FAMILY_FIELDS.forEach(name => {
-    const values = [...elements.pageRoot.querySelectorAll(`[data-family-field="${name}"]`)]
-      .map(input => input.value.trim())
-      .filter(Boolean);
-    record[name] = values.join("\n");
+    record[name] = familyValues[name].join("\n");
   });
 
   record.picture_data = state.pictureData || "";
@@ -707,6 +1026,11 @@ async function saveCurrentRecord() {
   const record = collectRecord();
   if (!record.control_no.trim()) {
     showToast("Control No. is required.");
+    return;
+  }
+
+  if (record.field_l11 && !/^\d{11}$/.test(record.field_l11)) {
+    showToast("Contact No. must be 11 digits.");
     return;
   }
 
@@ -800,7 +1124,7 @@ function renderDatabaseTable(records) {
                   <button type="button" class="icon-button" title="Edit" data-edit-id="${record.id}">${icon("edit")}</button>
                 </div>
               </td>
-              ${columns.map(column => `<td>${escapeHtml(record[column.name] || "")}</td>`).join("")}
+              ${columns.map(column => `<td>${escapeHtml(fieldValue(column.name, record[column.name]))}</td>`).join("")}
             </tr>
           `).join("")}
         </tbody>
@@ -854,28 +1178,39 @@ async function renderBinPage() {
   });
 }
 
-function printableSections(record) {
-  const sectionNames = [
-    "I. Personal Information",
-    "PAOFI Beneficiary",
-    "III. Livelihood Information",
-    "IV. Livelihood Project Interest",
-    "V. Skills and Experience",
-    "VI. Availability and Commitment"
+function printableSections(record, familySectionHtml) {
+  const sectionGroups = [
+    { title: "I. Personal Information", className: "personal-grid" },
+    { title: "PAOFI Beneficiary", className: "two-grid" },
+    { title: "III. Livelihood Information", className: "two-grid" },
+    { title: "IV. Livelihood Project Interest", className: "two-grid" },
+    { title: "V. Skills and Experience", className: "two-grid" },
+    { title: "VI. Availability and Commitment", className: "two-grid" }
   ];
 
-  return sectionNames.map(sectionName => {
-    const rows = (state.sections[sectionName] || [])
+  return sectionGroups.map(group => {
+    const cells = (state.sections[group.title] || [])
       .filter(item => item.name !== "picture_data" && !FAMILY_FIELDS.includes(item.name))
-      .map(item => `
-        <tr>
-          <th>${escapeHtml(item.label)}</th>
-          <td>${escapeHtml(record[item.name] || "").replaceAll("\n", "<br>")}</td>
-        </tr>
-      `)
+      .map(item => {
+        const value = fieldValue(item.name, record[item.name] || "");
+        const isLong = PRINT_WIDE_FIELDS.has(item.name);
+        return `
+          <div class="print-field${isLong ? " wide" : ""}">
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${escapeHtml(value || "-").replaceAll("\n", "<br>")}</strong>
+          </div>
+        `;
+      })
       .join("");
 
-    return `<h2>${escapeHtml(sectionName)}</h2><table>${rows}</table>`;
+    const sectionHtml = `
+      <section class="print-section ${escapeHtml(group.className)}">
+        <h2>${escapeHtml(group.title)}</h2>
+        <div class="field-grid">${cells}</div>
+      </section>
+    `;
+
+    return group.title === "I. Personal Information" ? `${sectionHtml}${familySectionHtml}` : sectionHtml;
   }).join("");
 }
 
@@ -887,9 +1222,21 @@ function printRecord(record) {
   }
 
   const family = familyRows(record, null);
+  const familySectionHtml = `
+    <section class="print-section family-section">
+      <h2>II. Family Composition</h2>
+      <table class="family">
+        <thead><tr>${FAMILY_FIELDS.map(name => `<th>${escapeHtml(field(name).label)}</th>`).join("")}</tr></thead>
+        <tbody>
+          ${family.map(row => `<tr>${FAMILY_FIELDS.map(name => `<td>${escapeHtml(fieldValue(name, row[name] || ""))}</td>`).join("")}</tr>`).join("")}
+        </tbody>
+      </table>
+    </section>
+  `;
   const picture = record.picture_data
     ? `<img class="picture" src="${escapeHtml(record.picture_data)}" alt="">`
-    : "";
+    : `<div class="picture picture-placeholder">Photo</div>`;
+  const logoSrc = `${window.location.origin}/assets/paofi-logo.png`;
 
   printWindow.document.write(`
     <!doctype html>
@@ -897,39 +1244,223 @@ function printRecord(record) {
       <head>
         <title>${escapeHtml(record.control_no || "LP Record")}</title>
         <style>
-          body { font-family: Arial, sans-serif; color: #1f2933; margin: 24px; }
+          @page { size: letter; margin: 7mm; }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            background: #edf3ef;
+            color: #1d2520;
+            font-family: "Segoe UI", Arial, sans-serif;
+            font-size: 8.2px;
+            line-height: 1.16;
+          }
+          button {
+            margin: 12px;
+            border: 1px solid #bdd3c6;
+            border-radius: 7px;
+            background: #ffffff;
+            padding: 8px 12px;
+            color: #155b3c;
+            font-weight: 700;
+          }
+          .sheet {
+            width: 8.5in;
+            min-height: 11in;
+            margin: 0 auto;
+            padding: 0.24in 0.28in;
+            background: #ffffff;
+          }
           h1, h2, h3, p { margin: 0; }
-          header { display: grid; grid-template-columns: 1fr 120px; gap: 18px; align-items: start; border-bottom: 2px solid #1f7a4f; padding-bottom: 14px; }
-          h1 { font-size: 18px; }
-          h2 { margin: 18px 0 7px; font-size: 14px; color: #1f7a4f; }
-          .picture { width: 120px; height: 120px; object-fit: cover; border: 1px solid #9aa5a0; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-          th, td { border: 1px solid #d6ded7; padding: 6px 8px; text-align: left; vertical-align: top; font-size: 11px; }
-          th { width: 220px; background: #eef7f1; }
-          .family th { width: auto; }
-          button { margin-bottom: 18px; }
-          @media print { button { display: none; } body { margin: 10mm; } }
+          .print-header {
+            display: grid;
+            grid-template-columns: 56px 1fr 78px;
+            gap: 10px;
+            align-items: center;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #16784f;
+          }
+          .logo {
+            width: 54px;
+            height: 54px;
+            object-fit: contain;
+          }
+          .header-title {
+            display: grid;
+            gap: 2px;
+          }
+          .header-title h1 {
+            color: #143d33;
+            font-size: 14.5px;
+            line-height: 1;
+            letter-spacing: 0;
+            text-transform: uppercase;
+          }
+          .tagline {
+            color: #55625b;
+            font-size: 8.6px;
+          }
+          .form-title {
+            display: inline-flex;
+            width: fit-content;
+            margin-top: 2px;
+            border-radius: 4px;
+            background: #1f7a4f;
+            color: #ffffff;
+            padding: 4px 8px;
+            font-size: 10px;
+            line-height: 1;
+            text-transform: uppercase;
+          }
+          .record-line {
+            color: #243029;
+            font-size: 9px;
+            font-weight: 700;
+          }
+          .picture {
+            width: 74px;
+            height: 74px;
+            justify-self: end;
+            border: 1px solid #93b7a3;
+            object-fit: cover;
+            background: #f4f8f6;
+          }
+          .picture-placeholder {
+            display: grid;
+            place-items: center;
+            color: #80908a;
+            font-weight: 700;
+          }
+          .print-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            column-gap: 8px;
+            row-gap: 7px;
+            padding-top: 8px;
+          }
+          .print-section {
+            break-inside: avoid;
+          }
+          .print-section h2 {
+            margin-bottom: 3px;
+            border-left: 4px solid #1f7a4f;
+            border-radius: 4px;
+            background: #eaf6ef;
+            color: #143d33;
+            padding: 4px 6px;
+            font-size: 9.2px;
+            line-height: 1;
+          }
+          .print-section.personal-grid,
+          .print-section.family-section {
+            grid-column: 1 / -1;
+          }
+          .field-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            border-top: 1px solid #cddbd2;
+            border-left: 1px solid #cddbd2;
+          }
+          .personal-grid .field-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+          .print-field {
+            min-height: 29px;
+            border-right: 1px solid #cddbd2;
+            border-bottom: 1px solid #cddbd2;
+            padding: 3px 5px;
+            overflow-wrap: anywhere;
+          }
+          .print-field.wide {
+            grid-column: span 2;
+          }
+          .personal-grid .print-field.wide {
+            grid-column: span 3;
+          }
+          .print-field span {
+            display: block;
+            margin-bottom: 2px;
+            color: #5b6861;
+            font-size: 6.8px;
+            font-weight: 700;
+            text-transform: uppercase;
+          }
+          .print-field strong {
+            display: block;
+            color: #1d2520;
+            font-size: 8.4px;
+            font-weight: 650;
+          }
+          .family {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          .family th,
+          .family td {
+            border: 1px solid #cddbd2;
+            padding: 3px 4px;
+            text-align: left;
+            vertical-align: top;
+            overflow-wrap: anywhere;
+          }
+          .family th {
+            background: #f2f7f4;
+            color: #243029;
+            font-size: 6.8px;
+            line-height: 1.05;
+            font-weight: 800;
+          }
+          .family td {
+            font-size: 7.2px;
+            line-height: 1.08;
+          }
+          .family th:nth-child(1),
+          .family td:nth-child(1) { width: 19%; }
+          .family th:nth-child(2),
+          .family td:nth-child(2) { width: 6%; text-align: center; }
+          .family th:nth-child(3),
+          .family td:nth-child(3) { width: 7%; text-align: center; }
+          .family th:nth-child(4),
+          .family td:nth-child(4) { width: 16%; }
+          .family th:nth-child(5),
+          .family td:nth-child(5) { width: 10%; }
+          .family th:nth-child(6),
+          .family td:nth-child(6) { width: 18%; }
+          .family th:nth-child(7),
+          .family td:nth-child(7) { width: 14%; }
+          .family th:nth-child(8),
+          .family td:nth-child(8) { width: 10%; }
+          @media print {
+            body { background: #ffffff; }
+            button { display: none; }
+            .sheet {
+              width: auto;
+              min-height: auto;
+              margin: 0;
+              padding: 0;
+            }
+          }
         </style>
       </head>
       <body>
         <button onclick="window.print()">Print</button>
-        <header>
+        <main class="sheet">
+        <header class="print-header">
+          <img class="logo" src="${escapeHtml(logoSrc)}" alt="">
           <div>
-            <h1>PAYATAS ORIONE FOUNDATION INC.</h1>
-            <p>"A simple effort can make a great impact"</p>
-            <h3>LIVELIHOOD PROGRAM APPLICATION FORM</h3>
-            <p>${escapeHtml(record.control_no || "")} | ${escapeHtml(fullName(record))} | ${escapeHtml(record.status || "")}</p>
+            <div class="header-title">
+              <h1>Payatas Orione Foundation Inc.</h1>
+              <p class="tagline">"A simple effort can make a great impact"</p>
+              <h3 class="form-title">Livelihood Program Application Form</h3>
+              <p class="record-line">${escapeHtml(record.control_no || "")} | ${escapeHtml(fullName(record))} | ${escapeHtml(fieldValue("status", record.status || ""))}</p>
+            </div>
           </div>
           ${picture}
         </header>
-        ${printableSections(record)}
-        <h2>II. Family Composition</h2>
-        <table class="family">
-          <thead><tr>${FAMILY_FIELDS.map(name => `<th>${escapeHtml(field(name).label)}</th>`).join("")}</tr></thead>
-          <tbody>
-            ${family.map(row => `<tr>${FAMILY_FIELDS.map(name => `<td>${escapeHtml(row[name] || "")}</td>`).join("")}</tr>`).join("")}
-          </tbody>
-        </table>
+        <div class="print-body">
+          ${printableSections(record, familySectionHtml)}
+        </div>
+        </main>
       </body>
     </html>
   `);

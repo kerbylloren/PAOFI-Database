@@ -8,7 +8,7 @@ const BENEFICIARY_FIELDS = [
   { name: "first_name", label: "First Name", section: "I. Personal Information", input: "text" },
   { name: "middle_name", label: "Middle Name", section: "I. Personal Information", input: "text" },
   { name: "field_c11", label: "Age", section: "I. Personal Information", input: "text" },
-  { name: "field_h11", label: "Gender", section: "I. Personal Information", input: "text" },
+  { name: "field_h11", label: "Gender", section: "I. Personal Information", input: "select", options: ["Female", "Male"] },
   { name: "field_l11", label: "Contact No.", section: "I. Personal Information", input: "text" },
   { name: "field_c12", label: "Chapel", section: "I. Personal Information", input: "text" },
   { name: "field_c13", label: "Address", section: "I. Personal Information", input: "textarea", rows: 2 },
@@ -24,7 +24,7 @@ const BENEFICIARY_FIELDS = [
   { name: "list_m18", label: "Monthly Income", section: "II. Family Composition", input: "textarea", rows: 3 },
 
   { name: "paofi_active", label: "May Registered PAOFI Beneficiary ba sa mga kasama mo sa bahay?", section: "PAOFI Beneficiary", input: "text" },
-  { name: "field_k30", label: "Kung Mayroon, Sa anong Program ng PAOFI", section: "PAOFI Beneficiary", input: "text" },
+  { name: "field_k30", label: "Kung Mayroon, Sa anong Program ng PAOFI", section: "PAOFI Beneficiary", input: "select", options: ["None", "Feeding Program", "Scholarship Program", "Scholarship Program, Feeding Program"] },
 
   { name: "field_e32", label: "Kasalukuyang pangkabuhayan o negosyo", section: "III. Livelihood Information", input: "text" },
   { name: "with_business", label: "Mayroon ka bang maliit na negosyo?", section: "III. Livelihood Information", input: "text" },

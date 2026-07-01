@@ -1,6 +1,7 @@
 # LP Database Native App
 
-Local desktop-style database app for LP beneficiary records.
+Desktop-style database app for LP beneficiary records. It can run against the
+local SQLite file or a configured Turso cloud database.
 
 ## Start
 
@@ -10,16 +11,55 @@ Double-click:
 start-lp-database.cmd
 ```
 
+The standalone Windows package is built with Electron and does not use the
+user's Edge or Chrome installation.
+
+```powershell
+npm run package:standalone
+```
+
+The output is:
+
+```text
+dist-electron\PAOFI-LP-Database-Standalone.exe
+```
+
 Or run:
 
 ```powershell
 npm start
 ```
 
-The app stores data in:
+Without cloud config, the app stores data in:
 
 ```text
 data\lp_database.sqlite
+```
+
+## Cloud Database
+
+For Turso cloud mode, create:
+
+```text
+%LOCALAPPDATA%\PAOFI-LP-Database-Data\cloud-database.json
+```
+
+with this shape:
+
+```json
+{
+  "provider": "turso",
+  "url": "<TURSO_DATABASE_URL>",
+  "authToken": "<TURSO_AUTH_TOKEN>"
+}
+```
+
+From the source folder, you can also set `TURSO_DATABASE_URL` and
+`TURSO_AUTH_TOKEN`, then run:
+
+```powershell
+npm run cloud:config
+npm run migrate:cloud
 ```
 
 ## Import From Google Sheets CSV

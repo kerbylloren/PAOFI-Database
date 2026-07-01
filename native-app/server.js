@@ -2,7 +2,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { BeneficiaryDatabase } = require("./src/database");
+const { createDatabase } = require("./src/database-factory");
 const { BENEFICIARY_FIELDS, fieldSectionMap } = require("./src/metadata");
 
 const HOST = process.env.HOST || "127.0.0.1";
@@ -97,7 +97,7 @@ function recordIdFromPath(pathname, prefix) {
   return Number.isInteger(id) && id > 0 ? id : 0;
 }
 
-function createServer(database = new BeneficiaryDatabase()) {
+function createServer(database) {
   return http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
@@ -112,19 +112,19 @@ function createServer(database = new BeneficiaryDatabase()) {
       }
 
       if (pathname === "/api/stats" && req.method === "GET") {
-        sendJson(res, 200, database.stats());
+        sendJson(res, 200, await database.stats());
         return;
       }
 
       if (pathname === "/api/next-control-no" && req.method === "GET") {
         const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
-        sendJson(res, 200, { controlNo: database.nextControlNo(year) });
+        sendJson(res, 200, { controlNo: await database.nextControlNo(year) });
         return;
       }
 
       if (pathname === "/api/records" && req.method === "GET") {
         sendJson(res, 200, {
-          records: database.listRecords({
+          records: await database.listRecords({
             search: url.searchParams.get("search") || "",
             limit: url.searchParams.get("limit") || 50,
             detail: url.searchParams.get("detail") || "summary"
@@ -135,13 +135,13 @@ function createServer(database = new BeneficiaryDatabase()) {
 
       if (pathname === "/api/records" && req.method === "POST") {
         const payload = await readJsonBody(req);
-        sendJson(res, 200, { record: database.saveRecord(payload) });
+        sendJson(res, 200, { record: await database.saveRecord(payload) });
         return;
       }
 
       if (pathname.startsWith("/api/records/") && req.method === "GET") {
         const id = recordIdFromPath(pathname, "/api/records/");
-        const record = id ? database.getRecord(id) : null;
+        const record = id ? await database.getRecord(id) : null;
 
         if (!record) {
           sendError(res, 404, "Record was not found.");
@@ -154,7 +154,7 @@ function createServer(database = new BeneficiaryDatabase()) {
 
       if (pathname.startsWith("/api/records/") && req.method === "DELETE") {
         const id = recordIdFromPath(pathname, "/api/records/");
-        const record = id ? database.deleteRecord(id) : null;
+        const record = id ? await database.deleteRecord(id) : null;
 
         if (!record) {
           sendError(res, 404, "Record was not found.");
@@ -166,18 +166,18 @@ function createServer(database = new BeneficiaryDatabase()) {
       }
 
       if (pathname === "/api/bin" && req.method === "GET") {
-        sendJson(res, 200, { records: database.listDeletedRecords() });
+        sendJson(res, 200, { records: await database.listDeletedRecords() });
         return;
       }
 
       if (pathname.startsWith("/api/bin/") && pathname.endsWith("/restore") && req.method === "POST") {
         const id = recordIdFromPath(pathname, "/api/bin/");
-        sendJson(res, 200, { record: database.restoreDeletedRecord(id) });
+        sendJson(res, 200, { record: await database.restoreDeletedRecord(id) });
         return;
       }
 
       if (pathname === "/api/export" && req.method === "GET") {
-        sendJson(res, 200, database.exportData());
+        sendJson(res, 200, await database.exportData());
         return;
       }
 
@@ -205,20 +205,28 @@ function openBrowser(url) {
   }
 }
 
-if (require.main === module) {
-  const database = new BeneficiaryDatabase();
+async function main() {
+  const database = await createDatabase();
   const server = createServer(database);
 
   server.listen(PORT, HOST, () => {
     const url = `http://${HOST}:${PORT}`;
     console.log(`LP Database is running at ${url}`);
-    console.log(`Database file: ${database.dbPath}`);
+    console.log(`Database: ${database.dbPath}`);
     openBrowser(url);
   });
 
   process.on("SIGINT", () => {
-    database.close();
-    server.close(() => process.exit(0));
+    Promise.resolve(database.close()).finally(() => {
+      server.close(() => process.exit(0));
+    });
+  });
+}
+
+if (require.main === module) {
+  main().catch(error => {
+    console.error(error.message || error);
+    process.exit(1);
   });
 }
 

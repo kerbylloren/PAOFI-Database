@@ -26,12 +26,14 @@ node_modules/
 
 # Local database/runtime data
 native-app/data/
+native-app/runtime/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
 
 # Generated desktop packages and temporary build payloads
 native-app/dist/
+native-app/dist-electron/
 
 # Spreadsheet/import scratch files and real data exports
 native-app/.spreadsheet-work/
