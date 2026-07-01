@@ -497,6 +497,12 @@ async function renderMenuPage() {
         </div>
       </div>
     </section>
+
+    <footer class="dashboard-copyright">
+      <span>&copy; 2026 Kerby Lloren</span>
+      <span>&copy; Payatas Orione Foundation Inc.</span>
+      <span>Livelihood Program Database</span>
+    </footer>
   `;
 
   const next = await api("/api/next-control-no");

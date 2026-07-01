@@ -418,6 +418,30 @@ svg {
   margin-top: 14px;
 }
 
+.dashboard-copyright {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 16px;
+  padding: 12px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.dashboard-copyright span:not(:last-child)::after {
+  content: "";
+  width: 4px;
+  height: 4px;
+  display: inline-block;
+  margin-left: 14px;
+  border-radius: 999px;
+  background: #c3ccc5;
+  vertical-align: middle;
+}
+
 .tool-panel,
 .search-page,
 .database-page {
