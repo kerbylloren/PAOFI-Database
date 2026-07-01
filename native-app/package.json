@@ -1,6 +1,6 @@
 {
   "name": "lp-database-native",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Desktop database app for LP beneficiary records.",
   "author": {
@@ -44,6 +44,7 @@
       "src/**/*"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",

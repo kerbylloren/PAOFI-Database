@@ -122,6 +122,25 @@ function createWindow() {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (!url || url === "about:blank") {
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          width: 940,
+          height: 760,
+          title: "Print Record",
+          autoHideMenuBar: true,
+          backgroundColor: "#ffffff",
+          icon: path.join(appRoot(), "public", "assets", "paofi-logo.png"),
+          webPreferences: {
+            contextIsolation: false,
+            nodeIntegration: false,
+            sandbox: false
+          }
+        }
+      };
+    }
+
     shell.openExternal(url);
     return { action: "deny" };
   });
