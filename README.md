@@ -87,20 +87,23 @@ cannot be reliably removed with package metadata alone.
 $env:CSC_LINK = "C:\path\to\kerby-lloren-code-signing.pfx"
 $env:CSC_KEY_PASSWORD = "<certificate-password>"
 npm run package:installer
-Get-AuthenticodeSignature .\dist-electron\PAOFI-LP-Database-Setup-0.1.1-x64.exe
+Get-AuthenticodeSignature .\dist-electron\PAOFI-LP-Database-Setup-0.1.2-x64.exe
 ```
 
 The installer output is:
 
 ```text
-native-app\dist-electron\PAOFI-LP-Database-Setup-0.1.1-x64.exe
+native-app\dist-electron\PAOFI-LP-Database-Setup-0.1.2-x64.exe
 ```
 
 The portable standalone build output is:
 
 ```text
-native-app\dist-electron\PAOFI-LP-Database-Standalone-0.1.1-x64.exe
+native-app\dist-electron\PAOFI-LP-Database-Standalone-0.1.2-x64.exe
 ```
+
+During install/update, the installer removes old generated preview/runtime
+folders while preserving Turso config and database data.
 
 ## Repository Layout
 

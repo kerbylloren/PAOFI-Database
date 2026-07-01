@@ -1,6 +1,6 @@
 {
   "name": "lp-database-native",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Desktop database app for LP beneficiary records.",
   "author": {
@@ -55,6 +55,7 @@
     },
     "nsis": {
       "artifactName": "PAOFI-LP-Database-Setup-${version}-x64.${ext}",
+      "include": "build/installer.nsh",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

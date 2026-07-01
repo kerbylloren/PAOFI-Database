@@ -26,7 +26,7 @@ npm run package:installer
 The output is:
 
 ```text
-dist-electron\PAOFI-LP-Database-Setup-0.1.1-x64.exe
+dist-electron\PAOFI-LP-Database-Setup-0.1.2-x64.exe
 ```
 
 Portable build:
@@ -38,8 +38,11 @@ npm run package:standalone
 The output is:
 
 ```text
-dist-electron\PAOFI-LP-Database-Standalone-0.1.1-x64.exe
+dist-electron\PAOFI-LP-Database-Standalone-0.1.2-x64.exe
 ```
+
+The installer also removes old generated preview/runtime folders during
+install/update while preserving Turso config and database data.
 
 Or run:
 
