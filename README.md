@@ -25,6 +25,9 @@ It provides separate pages for:
 The packaged Windows app opens as a standalone desktop application window and
 does not depend on the user's Edge or Chrome installation.
 
+Download the Windows installer from the
+[latest GitHub Release](https://github.com/kerbylloren/LP-Database/releases/latest).
+
 ## Cloud Database
 
 The app supports Turso cloud database mode so records can be accessed from
