@@ -70,10 +70,22 @@ Build the standalone Windows executable:
 npm run package:standalone
 ```
 
-The standalone build output is:
+Build the Windows x64 installer:
+
+```powershell
+npm run package:installer
+```
+
+The installer output is:
 
 ```text
-native-app\dist-electron\PAOFI-LP-Database-Standalone.exe
+native-app\dist-electron\PAOFI-LP-Database-Setup-0.1.0-x64.exe
+```
+
+The portable standalone build output is:
+
+```text
+native-app\dist-electron\PAOFI-LP-Database-Standalone-0.1.0-x64.exe
 ```
 
 ## Repository Layout

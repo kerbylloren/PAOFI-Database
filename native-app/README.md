@@ -8,6 +8,20 @@ local SQLite file or a configured Turso cloud database.
 The standalone Windows package is built with Electron and does not use the
 user's Edge or Chrome installation.
 
+Installer:
+
+```powershell
+npm run package:installer
+```
+
+The output is:
+
+```text
+dist-electron\PAOFI-LP-Database-Setup-0.1.0-x64.exe
+```
+
+Portable build:
+
 ```powershell
 npm run package:standalone
 ```
@@ -15,7 +29,7 @@ npm run package:standalone
 The output is:
 
 ```text
-dist-electron\PAOFI-LP-Database-Standalone.exe
+dist-electron\PAOFI-LP-Database-Standalone-0.1.0-x64.exe
 ```
 
 Or run:

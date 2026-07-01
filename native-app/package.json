@@ -9,6 +9,7 @@
     "start": "node server.js",
     "electron:dev": "electron .",
     "package:standalone": "powershell.exe -ExecutionPolicy Bypass -File scripts/build-standalone.ps1",
+    "package:installer": "powershell.exe -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
     "test": "node --test test/*.test.js",
     "import:csv": "node scripts/import-masterlist-csv.js",
     "normalize:db": "node scripts/normalize-database-capitalization.js",
@@ -37,28 +38,30 @@
       "server.js",
       "package.json",
       "public/**/*",
-      "src/**/*",
-      "node_modules/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "runtime",
-        "to": "runtime",
-        "filter": [
-          "node.exe"
-        ]
-      }
+      "src/**/*"
     ],
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
             "x64"
           ]
         }
-      ],
-      "artifactName": "PAOFI-LP-Database-Standalone.exe"
+      ]
+    },
+    "nsis": {
+      "artifactName": "PAOFI-LP-Database-Setup-${version}-x64.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PAOFI LP Database",
+      "uninstallDisplayName": "PAOFI LP Database"
+    },
+    "portable": {
+      "artifactName": "PAOFI-LP-Database-Standalone-${version}-x64.${ext}"
     }
   }
 }

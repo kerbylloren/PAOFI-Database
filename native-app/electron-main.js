@@ -1,16 +1,17 @@
 const http = require("node:http");
-const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
 const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
+const { createDatabase } = require("./src/database-factory");
+const { createServer } = require("./server");
 
 const APP_NAME = "PAOFI LP Database";
 const DATA_FOLDER_NAME = "PAOFI-LP-Database-Data";
 const PREFERRED_PORT = 3417;
 
 let mainWindow = null;
-let serverProcess = null;
+let backendDatabase = null;
+let backendServer = null;
 let appBaseUrl = "";
 
 function dataRoot() {
@@ -20,15 +21,6 @@ function dataRoot() {
 
 function appRoot() {
   return app.getAppPath();
-}
-
-function bundledNodePath() {
-  const packagedNode = path.join(process.resourcesPath, "runtime", "node.exe");
-  if (app.isPackaged) return packagedNode;
-
-  const localNode = path.join(__dirname, "runtime", "node.exe");
-  if (process.env.NODE_EXE) return process.env.NODE_EXE;
-  return fs.existsSync(localNode) ? localNode : "node.exe";
 }
 
 function canListen(port) {
@@ -89,27 +81,22 @@ async function waitForBackend(baseUrl) {
 
 async function startBackend() {
   const port = await availablePort(PREFERRED_PORT);
-  const serverFile = path.join(appRoot(), "server.js");
-  const nodeExe = bundledNodePath();
   const localDataRoot = dataRoot();
   appBaseUrl = `http://127.0.0.1:${port}/`;
 
-  serverProcess = spawn(nodeExe, [serverFile, "--no-open"], {
-    cwd: appRoot(),
-    env: {
-      ...process.env,
-      LPDB_DB_PATH: path.join(localDataRoot, "lp_database.sqlite"),
-      NO_OPEN: "1",
-      PORT: String(port)
-    },
-    stdio: "ignore",
-    windowsHide: true
-  });
+  process.env.LPDB_DB_PATH = path.join(localDataRoot, "lp_database.sqlite");
+  process.env.NO_OPEN = "1";
+  process.env.PORT = String(port);
 
-  serverProcess.once("exit", code => {
-    if (code !== 0 && mainWindow) {
-      dialog.showErrorBox(APP_NAME, "The application backend stopped unexpectedly.");
-    }
+  backendDatabase = await createDatabase();
+  backendServer = createServer(backendDatabase);
+
+  await new Promise((resolve, reject) => {
+    backendServer.once("error", reject);
+    backendServer.listen(port, "127.0.0.1", () => {
+      backendServer.off("error", reject);
+      resolve();
+    });
   });
 
   await waitForBackend(appBaseUrl);
@@ -154,10 +141,15 @@ function createWindow() {
 }
 
 function stopBackend() {
-  if (serverProcess && !serverProcess.killed) {
-    serverProcess.kill();
+  if (backendServer) {
+    backendServer.close();
+    backendServer = null;
   }
-  serverProcess = null;
+
+  if (backendDatabase) {
+    Promise.resolve(backendDatabase.close()).catch(() => {});
+    backendDatabase = null;
+  }
 }
 
 const singleInstanceLock = app.requestSingleInstanceLock();
