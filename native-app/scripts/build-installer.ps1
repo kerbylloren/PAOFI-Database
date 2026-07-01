@@ -4,6 +4,11 @@ $root = Split-Path -Parent $PSScriptRoot
 
 Push-Location $root
 try {
+  if (-not $env:CSC_LINK -and -not $env:CSC_NAME) {
+    Write-Warning "No trusted code-signing certificate is configured. The installer will build, but Microsoft Defender SmartScreen can still warn because the installer is unsigned."
+    Write-Warning "Set CSC_LINK and CSC_KEY_PASSWORD, or CSC_NAME for an installed certificate, before building a public release."
+  }
+
   & npm.cmd test
   if ($LASTEXITCODE -ne 0) {
     throw "Tests failed with exit code $LASTEXITCODE."

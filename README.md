@@ -79,6 +79,17 @@ Build the Windows x64 installer:
 npm run package:installer
 ```
 
+For public distribution, sign the installer with a trusted Windows code-signing
+certificate issued to `Kerby Lloren`. Microsoft Defender SmartScreen warnings
+cannot be reliably removed with package metadata alone.
+
+```powershell
+$env:CSC_LINK = "C:\path\to\kerby-lloren-code-signing.pfx"
+$env:CSC_KEY_PASSWORD = "<certificate-password>"
+npm run package:installer
+Get-AuthenticodeSignature .\dist-electron\PAOFI-LP-Database-Setup-0.1.0-x64.exe
+```
+
 The installer output is:
 
 ```text

@@ -14,6 +14,15 @@ Installer:
 npm run package:installer
 ```
 
+For a public installer, configure a trusted code-signing certificate issued to
+`Kerby Lloren` before building:
+
+```powershell
+$env:CSC_LINK = "C:\path\to\kerby-lloren-code-signing.pfx"
+$env:CSC_KEY_PASSWORD = "<certificate-password>"
+npm run package:installer
+```
+
 The output is:
 
 ```text

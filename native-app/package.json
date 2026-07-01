@@ -29,6 +29,7 @@
   "build": {
     "appId": "org.paofi.lpdatabase",
     "productName": "PAOFI LP Database",
+    "copyright": "Copyright (c) 2026 Kerby Lloren",
     "asar": false,
     "directories": {
       "output": "dist-electron"
@@ -41,6 +42,7 @@
       "src/**/*"
     ],
     "win": {
+      "publisherName": "Kerby Lloren",
       "target": [
         {
           "target": "nsis",
