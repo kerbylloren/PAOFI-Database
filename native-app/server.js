@@ -1,6 +1,7 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { createDatabase } = require("./src/database-factory");
 const { BENEFICIARY_FIELDS, fieldSectionMap } = require("./src/metadata");
@@ -9,6 +10,8 @@ const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 3417);
 const PUBLIC_DIR = path.join(__dirname, "public");
 const BODY_LIMIT_BYTES = 20 * 1024 * 1024;
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const sessions = new Map();
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -32,6 +35,63 @@ function sendJson(res, statusCode, payload) {
 
 function sendError(res, statusCode, message) {
   sendJson(res, statusCode, { error: message });
+}
+
+function createSession(user) {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const session = {
+    token,
+    user,
+    expiresAt: Date.now() + SESSION_TTL_MS
+  };
+
+  sessions.set(token, session);
+  return session;
+}
+
+function readBearerToken(req) {
+  const header = req.headers.authorization || "";
+  const match = /^Bearer\s+(.+)$/i.exec(header);
+  return match ? match[1] : "";
+}
+
+function getSession(req) {
+  const token = readBearerToken(req);
+  if (!token) return null;
+
+  const session = sessions.get(token);
+  if (!session) return null;
+
+  if (session.expiresAt < Date.now()) {
+    sessions.delete(token);
+    return null;
+  }
+
+  session.expiresAt = Date.now() + SESSION_TTL_MS;
+  return session;
+}
+
+function requireSession(req, res) {
+  const session = getSession(req);
+
+  if (!session) {
+    sendError(res, 401, "Please sign in to continue.");
+    return null;
+  }
+
+  return session;
+}
+
+function requireSuperadmin(req, res) {
+  const session = requireSession(req, res);
+  if (!session) return null;
+
+  if (session.user.role !== "superadmin") {
+    sendError(res, 403, "Only the superadmin can manage accounts.");
+    return null;
+  }
+
+  return session;
 }
 
 function readJsonBody(req) {
@@ -102,6 +162,50 @@ function createServer(database) {
     try {
       const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
       const pathname = url.pathname;
+
+      if (pathname === "/api/health" && req.method === "GET") {
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (pathname === "/api/auth/login" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        const user = await database.authenticateUser(payload.username, payload.password);
+        const session = createSession(user);
+        sendJson(res, 200, { token: session.token, user: session.user });
+        return;
+      }
+
+      if (pathname === "/api/auth/logout" && req.method === "POST") {
+        const token = readBearerToken(req);
+        if (token) sessions.delete(token);
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (pathname === "/api/auth/me" && req.method === "GET") {
+        const session = requireSession(req, res);
+        if (!session) return;
+        sendJson(res, 200, { user: session.user });
+        return;
+      }
+
+      if (pathname === "/api/users" && req.method === "GET") {
+        if (!requireSuperadmin(req, res)) return;
+        sendJson(res, 200, { users: await database.listUsers() });
+        return;
+      }
+
+      if (pathname === "/api/users" && req.method === "POST") {
+        if (!requireSuperadmin(req, res)) return;
+        const payload = await readJsonBody(req);
+        sendJson(res, 200, { user: await database.saveUser(payload) });
+        return;
+      }
+
+      if (pathname.startsWith("/api/") && !requireSession(req, res)) {
+        return;
+      }
 
       if (pathname === "/api/metadata" && req.method === "GET") {
         sendJson(res, 200, {

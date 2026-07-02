@@ -46,7 +46,7 @@ async function availablePort(preferredPort) {
 
 function requestStats(baseUrl) {
   return new Promise((resolve, reject) => {
-    const request = http.get(`${baseUrl}api/stats`, response => {
+    const request = http.get(`${baseUrl}api/health`, response => {
       response.resume();
       response.on("end", () => {
         if (response.statusCode >= 200 && response.statusCode < 300) {

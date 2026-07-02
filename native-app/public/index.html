@@ -48,9 +48,15 @@
             <span class="nav-icon" data-icon="bin"></span>
             <span>Record Bin</span>
           </button>
+          <button type="button" data-route="accounts" class="nav-item nav-admin hidden">
+            <span class="nav-icon" data-icon="users"></span>
+            <span>Accounts</span>
+          </button>
         </nav>
 
         <div class="sidebar-footer">
+          <span id="currentUser"></span>
+          <button type="button" id="logoutButton" class="sidebar-logout">Sign Out</button>
           <span id="databaseLocation">Local SQLite database</span>
         </div>
       </aside>
@@ -69,6 +75,23 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <section id="loginScreen" class="login-screen hidden" aria-label="Sign in">
+      <form id="loginForm" class="login-panel">
+        <img src="/assets/paofi-logo.png" alt="">
+        <p class="eyebrow">Payatas Orione Foundation Inc.</p>
+        <h1>Livelihood Program Database</h1>
+        <label>
+          Username
+          <input id="loginUsername" name="username" autocomplete="username" required>
+        </label>
+        <label>
+          Password
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <button type="submit" class="action-button primary">Sign In</button>
+        <p id="loginMessage" class="login-message"></p>
+      </form>
+    </section>
     <script src="/app.js"></script>
   </body>
 </html>

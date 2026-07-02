@@ -27,6 +27,14 @@ body {
   font-family: "Segoe UI", Arial, sans-serif;
 }
 
+body.is-locked {
+  overflow: hidden;
+}
+
+.hidden {
+  display: none !important;
+}
+
 button,
 input,
 select,
@@ -153,6 +161,26 @@ svg {
   word-break: break-word;
 }
 
+.sidebar-footer span {
+  display: block;
+}
+
+#currentUser {
+  color: var(--green-dark);
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+
+.sidebar-logout {
+  width: 100%;
+  min-height: 32px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
 .app-main {
   min-width: 0;
   min-height: 100vh;
@@ -199,6 +227,121 @@ svg {
   min-width: 0;
   overflow: auto;
   padding: 18px;
+}
+
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background:
+    linear-gradient(135deg, rgba(31, 122, 79, 0.10), rgba(47, 104, 177, 0.08)),
+    var(--bg);
+}
+
+.login-panel {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow);
+}
+
+.login-panel img {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+}
+
+.login-panel h1 {
+  margin: -6px 0 4px;
+  font-size: 26px;
+  line-height: 1.12;
+}
+
+.login-panel label,
+.account-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.login-panel input,
+.account-form input {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid #cdd8d0;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  padding: 0 12px;
+}
+
+.login-message {
+  min-height: 18px;
+  margin: 0;
+  color: var(--red);
+  font-size: 13px;
+}
+
+.accounts-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.account-form {
+  display: grid;
+  gap: 12px;
+}
+
+.checkbox-row {
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+}
+
+.checkbox-row input {
+  min-height: auto;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.account-list {
+  display: grid;
+  gap: 10px;
+}
+
+.account-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.account-card strong,
+.account-card span {
+  display: block;
+}
+
+.account-card span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .action-button,

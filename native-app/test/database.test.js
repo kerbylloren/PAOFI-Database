@@ -133,3 +133,30 @@ test("creates, updates, lists, exports, and deletes monitoring reports", () => {
 
   db.close();
 });
+
+test("seeds a superadmin and creates standard user accounts", () => {
+  const db = new BeneficiaryDatabase(tempDbPath());
+
+  const superadmin = db.authenticateUser("superadmin", "ChangeMe123!");
+  assert.equal(superadmin.role, "superadmin");
+  assert.equal(superadmin.active, true);
+
+  const user = db.saveUser({
+    username: "staff.user",
+    display_name: "staff member",
+    password: "StaffPass123"
+  });
+
+  assert.equal(user.username, "staff.user");
+  assert.equal(user.display_name, "Staff Member");
+  assert.equal(user.role, "user");
+  assert.equal(user.active, true);
+
+  const authenticated = db.authenticateUser("staff.user", "StaffPass123");
+  assert.equal(authenticated.role, "user");
+  assert.equal(db.listUsers().length, 2);
+
+  assert.throws(() => db.authenticateUser("staff.user", "wrong-password"), /Invalid username or password/);
+
+  db.close();
+});

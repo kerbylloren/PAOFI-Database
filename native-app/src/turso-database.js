@@ -1,6 +1,17 @@
 const { FIELD_NAMES, SUMMARY_FIELDS } = require("./metadata");
 const { cloudLocationLabel } = require("./cloud-config");
-const { normalizeMonitoringReport, normalizeRecord, nowIso, quoted } = require("./database");
+const {
+  normalizeMonitoringReport,
+  normalizeRecord,
+  nowIso,
+  quoted,
+  titleCaseValue,
+  hashPassword,
+  verifyPassword
+} = require("./database");
+
+const DEFAULT_SUPERADMIN_USERNAME = process.env.LPDB_SUPERADMIN_USERNAME || "superadmin";
+const DEFAULT_SUPERADMIN_PASSWORD = process.env.LPDB_SUPERADMIN_PASSWORD || "ChangeMe123!";
 
 function plainRow(row) {
   if (!row) return null;
@@ -143,12 +154,50 @@ class TursoBeneficiaryDatabase {
       `,
       "CREATE INDEX IF NOT EXISTS idx_monitoring_materials_report ON monitoring_materials(report_id)",
       "CREATE INDEX IF NOT EXISTS idx_monitoring_sales_report ON monitoring_sales(report_id)",
-      "CREATE INDEX IF NOT EXISTS idx_monitoring_expenses_report ON monitoring_expenses(report_id)"
+      "CREATE INDEX IF NOT EXISTS idx_monitoring_expenses_report ON monitoring_expenses(report_id)",
+      `
+        CREATE TABLE IF NOT EXISTS app_users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL UNIQUE,
+          display_name TEXT NOT NULL DEFAULT '',
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'user',
+          active INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `,
+      "CREATE INDEX IF NOT EXISTS idx_app_users_username ON app_users(username)"
     ];
 
     for (const sql of statements) {
       await this.execute(sql);
     }
+
+    await this.ensureSuperadmin();
+  }
+
+  async ensureSuperadmin() {
+    const existing = plainRow((await this.execute(
+      "SELECT id FROM app_users WHERE role = 'superadmin' LIMIT 1"
+    )).rows[0]);
+
+    if (existing) return;
+
+    const timestamp = nowIso();
+    await this.execute(
+      `
+        INSERT INTO app_users (username, display_name, password_hash, role, active, created_at, updated_at)
+        VALUES (?, ?, ?, 'superadmin', 1, ?, ?)
+      `,
+      [
+        DEFAULT_SUPERADMIN_USERNAME,
+        "Superadmin",
+        hashPassword(DEFAULT_SUPERADMIN_PASSWORD),
+        timestamp,
+        timestamp
+      ]
+    );
   }
 
   async close() {
@@ -168,6 +217,107 @@ class TursoBeneficiaryDatabase {
       monitoringReports: Number(monitoringReports.rows[0].count || 0),
       databasePath: this.dbPath
     };
+  }
+
+  sanitizeUser(user) {
+    if (!user) return null;
+
+    return {
+      id: user.id,
+      username: user.username,
+      display_name: user.display_name,
+      role: user.role,
+      active: Boolean(user.active),
+      created_at: user.created_at,
+      updated_at: user.updated_at
+    };
+  }
+
+  async authenticateUser(username, password) {
+    const user = plainRow((await this.execute(
+      "SELECT * FROM app_users WHERE lower(username) = lower(?)",
+      [String(username || "").trim()]
+    )).rows[0]);
+
+    if (!user || !user.active || !verifyPassword(password, user.password_hash)) {
+      throw new Error("Invalid username or password.");
+    }
+
+    return this.sanitizeUser(user);
+  }
+
+  async listUsers() {
+    return rows(await this.execute("SELECT * FROM app_users ORDER BY role DESC, username"))
+      .map(user => this.sanitizeUser(user));
+  }
+
+  async saveUser(input = {}) {
+    const username = String(input.username || "").trim();
+    const password = String(input.password || "");
+    const displayName = titleCaseValue(input.display_name || input.displayName || username);
+    const active = input.active === false || input.active === 0 ? 0 : 1;
+    const id = Number(input.id || 0);
+
+    if (!username) throw new Error("Username is required.");
+    if (!/^[a-z0-9._-]{3,32}$/i.test(username)) {
+      throw new Error("Username must be 3-32 characters using letters, numbers, dots, dashes, or underscores.");
+    }
+
+    const existing = id
+      ? plainRow((await this.execute("SELECT * FROM app_users WHERE id = ?", [id])).rows[0])
+      : plainRow((await this.execute("SELECT * FROM app_users WHERE lower(username) = lower(?)", [username])).rows[0]);
+
+    if (!existing && password.length < 8) {
+      throw new Error("Password must be at least 8 characters.");
+    }
+
+    if (existing?.role === "superadmin" && active === 0) {
+      throw new Error("The starter superadmin account cannot be deactivated.");
+    }
+
+    const duplicate = plainRow((await this.execute(
+      "SELECT id FROM app_users WHERE lower(username) = lower(?) AND id <> ?",
+      [username, id || 0]
+    )).rows[0]);
+
+    if (duplicate) throw new Error("Username already exists.");
+
+    const timestamp = nowIso();
+
+    if (existing) {
+      if (password) {
+        await this.execute(
+          `
+            UPDATE app_users
+            SET username = ?, display_name = ?, password_hash = ?, active = ?, updated_at = ?
+            WHERE id = ?
+          `,
+          [username, displayName, hashPassword(password), active, timestamp, existing.id]
+        );
+      } else {
+        await this.execute(
+          `
+            UPDATE app_users
+            SET username = ?, display_name = ?, active = ?, updated_at = ?
+            WHERE id = ?
+          `,
+          [username, displayName, active, timestamp, existing.id]
+        );
+      }
+
+      return this.sanitizeUser(plainRow((await this.execute("SELECT * FROM app_users WHERE id = ?", [existing.id])).rows[0]));
+    }
+
+    const result = await this.execute(
+      `
+        INSERT INTO app_users (username, display_name, password_hash, role, active, created_at, updated_at)
+        VALUES (?, ?, ?, 'user', ?, ?, ?)
+      `,
+      [username, displayName, hashPassword(password), active, timestamp, timestamp]
+    );
+    const newId = result.lastInsertRowid ? Number(result.lastInsertRowid) : 0;
+
+    return this.sanitizeUser(plainRow((await this.execute("SELECT * FROM app_users WHERE id = ?", [newId])).rows[0]));
   }
 
   async nextControlNo(year = new Date().getFullYear()) {

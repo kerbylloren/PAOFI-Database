@@ -191,6 +191,8 @@ const ICONS = {
   table: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 10h18M9 4v16M15 4v16"></path></svg>',
   monitoring: '<svg viewBox="0 0 24 24"><path d="M9 3h6l1 3h3v15H5V6h3l1-3Z"></path><path d="M9 13l2 2 4-5"></path><path d="M8 18h8"></path></svg>',
   bin: '<svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M10 11v6M14 11v6"></path><path d="m6 7 1 14h10l1-14"></path><path d="M9 7V4h6v3"></path></svg>',
+  users: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path><path d="M16 3.1a4 4 0 0 1 0 7.8"></path></svg>',
+  logout: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>',
   save: '<svg viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5V3Z"></path><path d="M8 3v6h8V3"></path><path d="M8 21v-7h8v7"></path></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>',
   print: '<svg viewBox="0 0 24 24"><path d="M7 9V3h10v6"></path><path d="M7 17H5a2 2 0 0 1-2-2v-4h18v4a2 2 0 0 1-2 2h-2"></path><path d="M7 14h10v7H7z"></path></svg>',
@@ -208,6 +210,8 @@ const state = {
   currentMonitoringReport: null,
   monitoringBeneficiaries: [],
   pictureData: "",
+  authToken: localStorage.getItem("lpdbAuthToken") || "",
+  currentUser: null,
   route: "menu",
   routeId: "",
   toastTimer: null
@@ -218,6 +222,13 @@ const elements = {
   pageRoot: document.getElementById("pageRoot"),
   topbarActions: document.getElementById("topbarActions"),
   databaseLocation: document.getElementById("databaseLocation"),
+  currentUser: document.getElementById("currentUser"),
+  logoutButton: document.getElementById("logoutButton"),
+  loginScreen: document.getElementById("loginScreen"),
+  loginForm: document.getElementById("loginForm"),
+  loginUsername: document.getElementById("loginUsername"),
+  loginPassword: document.getElementById("loginPassword"),
+  loginMessage: document.getElementById("loginMessage"),
   toast: document.getElementById("toast"),
   navItems: [...document.querySelectorAll(".nav-item")]
 };
@@ -339,6 +350,7 @@ async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: {
       "Content-Type": "application/json",
+      ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {}),
       ...(options.headers || {})
     },
     ...options
@@ -350,6 +362,74 @@ async function api(path, options = {}) {
   }
 
   return payload;
+}
+
+function setAuthenticatedSession(token, user) {
+  state.authToken = token || "";
+  state.currentUser = user || null;
+
+  if (state.authToken) {
+    localStorage.setItem("lpdbAuthToken", state.authToken);
+  } else {
+    localStorage.removeItem("lpdbAuthToken");
+  }
+
+  document.body.classList.toggle("is-locked", !state.currentUser);
+  elements.loginScreen.classList.toggle("hidden", Boolean(state.currentUser));
+  document.querySelectorAll(".nav-admin").forEach(item => {
+    item.classList.toggle("hidden", state.currentUser?.role !== "superadmin");
+  });
+  elements.currentUser.textContent = state.currentUser
+    ? `${state.currentUser.display_name || state.currentUser.username} (${state.currentUser.role})`
+    : "";
+}
+
+async function restoreSession() {
+  if (!state.authToken) {
+    setAuthenticatedSession("", null);
+    return false;
+  }
+
+  try {
+    const payload = await api("/api/auth/me");
+    setAuthenticatedSession(state.authToken, payload.user);
+    return true;
+  } catch {
+    setAuthenticatedSession("", null);
+    return false;
+  }
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  elements.loginMessage.textContent = "";
+
+  try {
+    const payload = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        username: elements.loginUsername.value,
+        password: elements.loginPassword.value
+      })
+    });
+    setAuthenticatedSession(payload.token, payload.user);
+    elements.loginPassword.value = "";
+    await loadApplication();
+  } catch (error) {
+    elements.loginMessage.textContent = error.message;
+  }
+}
+
+async function logout() {
+  try {
+    if (state.authToken) {
+      await api("/api/auth/logout", { method: "POST" });
+    }
+  } catch {
+    // The local session is cleared even if the server is already gone.
+  }
+
+  setAuthenticatedSession("", null);
 }
 
 async function refreshStats() {
@@ -419,7 +499,14 @@ function navigate(route, id = "") {
 }
 
 async function renderRoute() {
+  if (!state.currentUser) return;
+
   const parsed = parseRoute();
+  if (parsed.route === "accounts" && state.currentUser.role !== "superadmin") {
+    navigate("menu");
+    return;
+  }
+
   state.route = parsed.route;
   state.routeId = parsed.id;
   setActiveNav(parsed.route);
@@ -431,6 +518,7 @@ async function renderRoute() {
     else if (parsed.route === "database") await renderDatabasePage();
     else if (parsed.route === "monitoring") await renderMonitoringPage(parsed.id);
     else if (parsed.route === "bin") await renderBinPage();
+    else if (parsed.route === "accounts") await renderAccountsPage();
     else await renderMenuPage();
   } catch (error) {
     showToast(error.message);
@@ -2502,6 +2590,122 @@ async function renderBinPage() {
   });
 }
 
+async function renderAccountsPage() {
+  setTitle("Accounts");
+  setTopbarActions([
+    { id: "accountsRefresh", label: "Refresh", icon: "refresh", onClick: () => renderAccountsPage().catch(error => showToast(error.message)) }
+  ]);
+
+  const payload = await api("/api/users");
+  elements.pageRoot.innerHTML = `
+    <section class="accounts-layout">
+      <form id="accountForm" class="tool-panel account-form">
+        <div class="panel-title-row">
+          <h3>Add User Account</h3>
+          <span>Standard users cannot create accounts</span>
+        </div>
+        <input type="hidden" id="accountId">
+        <label>
+          Display Name
+          <input id="accountDisplayName" autocomplete="name" required>
+        </label>
+        <label>
+          Username
+          <input id="accountUsername" autocomplete="username" required>
+        </label>
+        <label>
+          Password
+          <input id="accountPassword" type="password" autocomplete="new-password" placeholder="Required for new users">
+        </label>
+        <label class="checkbox-row">
+          <input id="accountActive" type="checkbox" checked>
+          <span>Active account</span>
+        </label>
+        <div class="form-actions">
+          <button type="button" id="accountReset" class="action-button">Clear</button>
+          <button type="submit" class="action-button primary">
+            <span class="button-icon">${icon("save")}</span>
+            <span>Save Account</span>
+          </button>
+        </div>
+      </form>
+      <section class="tool-panel">
+        <div class="panel-title-row">
+          <h3>User Accounts</h3>
+          <span>${payload.users.length} total</span>
+        </div>
+        <div class="account-list">
+          ${payload.users.map(user => `
+            <article class="account-card">
+              <div>
+                <strong>${escapeHtml(user.display_name || user.username)}</strong>
+                <span>${escapeHtml(user.username)} | ${escapeHtml(user.role)} | ${user.active ? "Active" : "Inactive"}</span>
+              </div>
+              <button type="button" class="icon-button" title="Edit account" data-account-id="${user.id}">
+                ${icon("edit")}
+              </button>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    </section>
+  `;
+
+  const form = document.getElementById("accountForm");
+  const accountId = document.getElementById("accountId");
+  const displayName = document.getElementById("accountDisplayName");
+  const username = document.getElementById("accountUsername");
+  const password = document.getElementById("accountPassword");
+  const active = document.getElementById("accountActive");
+
+  function resetForm() {
+    accountId.value = "";
+    displayName.value = "";
+    username.value = "";
+    password.value = "";
+    password.placeholder = "Required for new users";
+    active.checked = true;
+  }
+
+  document.getElementById("accountReset").addEventListener("click", resetForm);
+
+  elements.pageRoot.querySelectorAll("[data-account-id]").forEach(button => {
+    button.addEventListener("click", () => {
+      const user = payload.users.find(item => String(item.id) === button.dataset.accountId);
+      if (!user) return;
+
+      accountId.value = user.id;
+      displayName.value = user.display_name || "";
+      username.value = user.username || "";
+      password.value = "";
+      password.placeholder = "Leave blank to keep current password";
+      active.checked = Boolean(user.active);
+      displayName.focus();
+    });
+  });
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    try {
+      await api("/api/users", {
+        method: "POST",
+        body: JSON.stringify({
+          id: accountId.value,
+          display_name: displayName.value,
+          username: username.value,
+          password: password.value,
+          active: active.checked
+        })
+      });
+      showToast("Account saved.");
+      await renderAccountsPage();
+    } catch (error) {
+      showToast(error.message);
+    }
+  });
+}
+
 function printableSections(record, familySectionHtml) {
   const sectionGroups = [
     { title: "I. Personal Information", className: "personal-grid" },
@@ -2891,6 +3095,19 @@ function hydrateStaticIcons() {
 
 async function initialize() {
   hydrateStaticIcons();
+  elements.loginForm.addEventListener("submit", handleLogin);
+  elements.logoutButton.addEventListener("click", logout);
+
+  const restored = await restoreSession();
+  if (!restored) {
+    elements.loginUsername.focus();
+    return;
+  }
+
+  await loadApplication();
+}
+
+async function loadApplication() {
   const metadata = await api("/api/metadata");
   state.fields = metadata.fields;
   state.sections = metadata.sections;
@@ -2900,12 +3117,17 @@ async function initialize() {
   }, {});
 
   elements.navItems.forEach(item => {
+    if (item.dataset.lpdbBound === "1") return;
+    item.dataset.lpdbBound = "1";
     item.addEventListener("click", () => navigate(item.dataset.route));
   });
-  window.addEventListener("lpdb:update-status", event => {
-    showToast(event.detail || "Downloading update...");
-  });
-  window.addEventListener("hashchange", renderRoute);
+  if (!window.lpdbStaticListenersBound) {
+    window.lpdbStaticListenersBound = true;
+    window.addEventListener("lpdb:update-status", event => {
+      showToast(event.detail || "Downloading update...");
+    });
+    window.addEventListener("hashchange", renderRoute);
+  }
 
   if (!location.hash) {
     history.replaceState(null, "", "#/menu");

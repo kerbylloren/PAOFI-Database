@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
 const { FIELD_NAMES, SUMMARY_FIELDS } = require("./metadata");
 
@@ -51,6 +52,11 @@ const ABBREVIATIONS = new Map([
   ["st", "St."],
   ["st.", "St."]
 ]);
+const DEFAULT_SUPERADMIN_USERNAME = process.env.LPDB_SUPERADMIN_USERNAME || "superadmin";
+const DEFAULT_SUPERADMIN_PASSWORD = process.env.LPDB_SUPERADMIN_PASSWORD || "ChangeMe123!";
+const PASSWORD_ITERATIONS = 210000;
+const PASSWORD_KEY_LENGTH = 32;
+const PASSWORD_DIGEST = "sha256";
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -132,6 +138,26 @@ function todayDate() {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = crypto
+    .pbkdf2Sync(String(password || ""), salt, PASSWORD_ITERATIONS, PASSWORD_KEY_LENGTH, PASSWORD_DIGEST)
+    .toString("hex");
+
+  return `pbkdf2:${PASSWORD_DIGEST}:${PASSWORD_ITERATIONS}:${salt}:${hash}`;
+}
+
+function verifyPassword(password, storedHash) {
+  const [scheme, digest, iterations, salt, expected] = String(storedHash || "").split(":");
+
+  if (scheme !== "pbkdf2" || !digest || !iterations || !salt || !expected) return false;
+
+  const candidate = crypto
+    .pbkdf2Sync(String(password || ""), salt, Number(iterations), Buffer.from(expected, "hex").length, digest)
+    .toString("hex");
+
+  return crypto.timingSafeEqual(Buffer.from(candidate, "hex"), Buffer.from(expected, "hex"));
 }
 
 function normalizeRecord(input = {}) {
@@ -351,7 +377,42 @@ class BeneficiaryDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_monitoring_expenses_report
         ON monitoring_expenses(report_id);
+
+      CREATE TABLE IF NOT EXISTS app_users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL DEFAULT '',
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_app_users_username
+        ON app_users(username);
     `);
+
+    this.ensureSuperadmin();
+  }
+
+  ensureSuperadmin() {
+    const existing = this.db.prepare("SELECT id FROM app_users WHERE role = 'superadmin' LIMIT 1").get();
+    if (existing) return;
+
+    const timestamp = nowIso();
+    this.db
+      .prepare(`
+        INSERT INTO app_users (username, display_name, password_hash, role, active, created_at, updated_at)
+        VALUES (?, ?, ?, 'superadmin', 1, ?, ?)
+      `)
+      .run(
+        DEFAULT_SUPERADMIN_USERNAME,
+        "Superadmin",
+        hashPassword(DEFAULT_SUPERADMIN_PASSWORD),
+        timestamp,
+        timestamp
+      );
   }
 
   close() {
@@ -369,6 +430,103 @@ class BeneficiaryDatabase {
       monitoringReports,
       databasePath: this.dbPath
     };
+  }
+
+  sanitizeUser(user) {
+    if (!user) return null;
+
+    return {
+      id: user.id,
+      username: user.username,
+      display_name: user.display_name,
+      role: user.role,
+      active: Boolean(user.active),
+      created_at: user.created_at,
+      updated_at: user.updated_at
+    };
+  }
+
+  authenticateUser(username, password) {
+    const user = this.db.prepare("SELECT * FROM app_users WHERE lower(username) = lower(?)").get(
+      String(username || "").trim()
+    );
+
+    if (!user || !user.active || !verifyPassword(password, user.password_hash)) {
+      throw new Error("Invalid username or password.");
+    }
+
+    return this.sanitizeUser(user);
+  }
+
+  listUsers() {
+    return this.db
+      .prepare("SELECT * FROM app_users ORDER BY role DESC, username")
+      .all()
+      .map(user => this.sanitizeUser(user));
+  }
+
+  saveUser(input = {}) {
+    const username = String(input.username || "").trim();
+    const password = String(input.password || "");
+    const displayName = titleCaseValue(input.display_name || input.displayName || username);
+    const active = input.active === false || input.active === 0 ? 0 : 1;
+    const id = Number(input.id || 0);
+
+    if (!username) throw new Error("Username is required.");
+    if (!/^[a-z0-9._-]{3,32}$/i.test(username)) {
+      throw new Error("Username must be 3-32 characters using letters, numbers, dots, dashes, or underscores.");
+    }
+
+    const existing = id
+      ? this.db.prepare("SELECT * FROM app_users WHERE id = ?").get(id)
+      : this.db.prepare("SELECT * FROM app_users WHERE lower(username) = lower(?)").get(username);
+
+    if (!existing && password.length < 8) {
+      throw new Error("Password must be at least 8 characters.");
+    }
+
+    if (existing?.role === "superadmin" && active === 0) {
+      throw new Error("The starter superadmin account cannot be deactivated.");
+    }
+
+    const duplicate = this.db
+      .prepare("SELECT id FROM app_users WHERE lower(username) = lower(?) AND id <> ?")
+      .get(username, id || 0);
+
+    if (duplicate) throw new Error("Username already exists.");
+
+    const timestamp = nowIso();
+
+    if (existing) {
+      if (password) {
+        this.db
+          .prepare(`
+            UPDATE app_users
+            SET username = ?, display_name = ?, password_hash = ?, active = ?, updated_at = ?
+            WHERE id = ?
+          `)
+          .run(username, displayName, hashPassword(password), active, timestamp, existing.id);
+      } else {
+        this.db
+          .prepare(`
+            UPDATE app_users
+            SET username = ?, display_name = ?, active = ?, updated_at = ?
+            WHERE id = ?
+          `)
+          .run(username, displayName, active, timestamp, existing.id);
+      }
+
+      return this.sanitizeUser(this.db.prepare("SELECT * FROM app_users WHERE id = ?").get(existing.id));
+    }
+
+    const result = this.db
+      .prepare(`
+        INSERT INTO app_users (username, display_name, password_hash, role, active, created_at, updated_at)
+        VALUES (?, ?, ?, 'user', ?, ?, ?)
+      `)
+      .run(username, displayName, hashPassword(password), active, timestamp, timestamp);
+
+    return this.sanitizeUser(this.db.prepare("SELECT * FROM app_users WHERE id = ?").get(Number(result.lastInsertRowid)));
   }
 
   nextControlNo(year = new Date().getFullYear()) {
@@ -799,12 +957,14 @@ class BeneficiaryDatabase {
 module.exports = {
   BeneficiaryDatabase,
   DEFAULT_DB_PATH,
+  hashPassword,
   normalizeContactNumber,
   normalizeFieldValue,
   normalizeMonitoringReport,
   normalizeRecord,
   nowIso,
   quoted,
+  verifyPassword,
   titleCaseValue,
   todayDate
 };
