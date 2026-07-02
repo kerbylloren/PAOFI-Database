@@ -213,12 +213,104 @@ const ICONS = {
   bin: '<svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M10 11v6M14 11v6"></path><path d="m6 7 1 14h10l1-14"></path><path d="M9 7V4h6v3"></path></svg>',
   users: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path><path d="M16 3.1a4 4 0 0 1 0 7.8"></path></svg>',
   logout: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>',
+  book: '<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z"></path><path d="M8 6h8"></path></svg>',
+  finance: '<svg viewBox="0 0 24 24"><path d="M3 21h18"></path><path d="M6 21V9"></path><path d="M12 21V4"></path><path d="M18 21v-7"></path><path d="M8 9l4-5 4 10 3-3"></path></svg>',
+  heart: '<svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.4 5.4 0 0 0-7.6 0L12 5.8l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.8a5.4 5.4 0 0 0 0-7.6Z"></path></svg>',
+  inventory: '<svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8l9 5 9-5Z"></path><path d="M3 8v8l9 5 9-5V8"></path><path d="M12 13v8"></path></svg>',
   save: '<svg viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5V3Z"></path><path d="M8 3v6h8V3"></path><path d="M8 21v-7h8v7"></path></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>',
   print: '<svg viewBox="0 0 24 24"><path d="M7 9V3h10v6"></path><path d="M7 17H5a2 2 0 0 1-2-2v-4h18v4a2 2 0 0 1-2 2h-2"></path><path d="M7 14h10v7H7z"></path></svg>',
   export: '<svg viewBox="0 0 24 24"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>',
   arrow: '<svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>',
   refresh: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v6h-6"></path></svg>'
+};
+
+const COMING_SOON_PAGES = {
+  "nutrition-profiles": {
+    program: "Nutrition Program - Supplemental Feeding",
+    title: "Beneficiary Profile Database",
+    description: "Child and household profiles for supplemental feeding beneficiaries."
+  },
+  "nutrition-growth": {
+    program: "Nutrition Program - Supplemental Feeding",
+    title: "Growth Monitoring",
+    description: "Height, weight, weight gain, and child growth standard tracking."
+  },
+  "nutrition-menu": {
+    program: "Nutrition Program - Supplemental Feeding",
+    title: "Monthly Menu & Weekly Costing",
+    description: "Monthly menus connected to weekly menu costing and center schedules."
+  },
+  "nutrition-recipes": {
+    program: "Nutrition Program - Supplemental Feeding",
+    title: "Recipe Book",
+    description: "Recipes, ingredients, serving sizes, and costing references."
+  },
+  "nutrition-centers": {
+    program: "Nutrition Program - Supplemental Feeding",
+    title: "Feeding Center Profiles & Analytics",
+    description: "Feeding center records, beneficiaries served, and center-level analytics."
+  },
+  "nutrition-budget": {
+    program: "Nutrition Program - Supplemental Feeding",
+    title: "Budget vs Actual",
+    description: "Budget planning, actual expenses, and variance monitoring."
+  },
+  "scholarship-scholars": {
+    program: "Scholarship Program",
+    title: "Scholar Profiles",
+    description: "Scholar records, school details, sponsor links, and academic status."
+  },
+  "scholarship-sponsors": {
+    program: "Scholarship Program",
+    title: "Sponsor Profiles",
+    description: "Sponsor records, commitments, scholar assignments, and giving history."
+  },
+  "scholarship-donations": {
+    program: "Scholarship Program",
+    title: "Donations, Service Invoices & Official Receipts",
+    description: "Donation tracking with printable service invoices and official receipts."
+  },
+  "scholarship-grades": {
+    program: "Scholarship Program",
+    title: "Grades Monitoring",
+    description: "Academic performance tracking by grading period, term, and school year."
+  },
+  "scholarship-attendance": {
+    program: "Scholarship Program",
+    title: "Attendance Monitoring",
+    description: "Attendance tracking for classes, PAOFI sessions, and required activities."
+  },
+  "scholarship-renewals": {
+    program: "Scholarship Program",
+    title: "Renewal Checklist",
+    description: "Compliance and submission checklist for every scholar renewal cycle."
+  },
+  "scholarship-evaluations": {
+    program: "Scholarship Program",
+    title: "Scholar Evaluation",
+    description: "Evaluation records, notes, scores, and renewal recommendations."
+  },
+  "health-patients": {
+    program: "Health Program - Fr. Angelo Falardi Clinic",
+    title: "Patient Profiles",
+    description: "Patient records, demographic details, history, and clinic identifiers."
+  },
+  "health-monitoring": {
+    program: "Health Program - Fr. Angelo Falardi Clinic",
+    title: "Patient Monitoring",
+    description: "Clinic visit records, follow-ups, and patient progress monitoring."
+  },
+  "health-supplies": {
+    program: "Health Program - Fr. Angelo Falardi Clinic",
+    title: "Supplies & Medicine Inventory",
+    description: "Medicine and supplies inventory with stock movement and low-stock tracking."
+  },
+  "health-equipment": {
+    program: "Health Program - Fr. Angelo Falardi Clinic",
+    title: "Equipment Inventory",
+    description: "Clinic equipment records, status, condition, and maintenance tracking."
+  }
 };
 
 const state = {
@@ -509,7 +601,12 @@ function setTopbarActions(actions = []) {
 
 function setActiveNav(route) {
   elements.navItems.forEach(item => {
-    item.classList.toggle("active", item.dataset.route === route);
+    const isActive = item.dataset.route === route;
+    item.classList.toggle("active", isActive);
+    if (isActive) {
+      const group = item.closest(".nav-program");
+      if (group) group.open = true;
+    }
   });
 }
 
@@ -544,10 +641,32 @@ async function renderRoute() {
     else if (parsed.route === "monitoring") await renderMonitoringPage(parsed.id);
     else if (parsed.route === "bin") await renderBinPage();
     else if (parsed.route === "accounts") await renderAccountsPage();
+    else if (COMING_SOON_PAGES[parsed.route]) await renderComingSoonPage(parsed.route);
     else await renderMenuPage();
   } catch (error) {
     showToast(error.message);
   }
+}
+
+function renderComingSoonPage(route) {
+  const page = COMING_SOON_PAGES[route];
+  setTitle(page.title);
+  setTopbarActions([
+    { id: "comingSoonBack", label: "Dashboard", icon: "home", onClick: () => navigate("menu") }
+  ]);
+
+  elements.pageRoot.innerHTML = `
+    <section class="coming-soon-page">
+      <div class="coming-soon-mark">${icon("monitoring")}</div>
+      <p class="eyebrow">${escapeHtml(page.program)}</p>
+      <h2>${escapeHtml(page.title)}</h2>
+      <strong>Under Development</strong>
+      <p>${escapeHtml(page.description)}</p>
+      <div class="coming-soon-note">
+        This section is reserved for the next PAOFI Database program modules. Its sidebar entry is available now so the navigation structure reflects the full organization roadmap.
+      </div>
+    </section>
+  `;
 }
 
 function recordAvatar(record) {
@@ -1030,7 +1149,7 @@ function renderDatabaseAnalytics(analytics) {
 }
 
 async function renderMenuPage() {
-  setTitle("Main Menu");
+  setTitle("Programs Dashboard");
   setTopbarActions([
     { id: "menuExport", label: "Export", icon: "export", onClick: () => exportData().catch(error => showToast(error.message)) }
   ]);
@@ -1047,7 +1166,8 @@ async function renderMenuPage() {
     <section class="menu-hero">
       <div class="menu-hero-copy">
         <p class="eyebrow">Payatas Orione Foundation Inc.</p>
-        <h2>Livelihood Program Database</h2>
+        <h2>Payatas Orione Foundation Inc.</h2>
+        <strong>Programs Database</strong>
         <span>"A simple effort can make a great impact"</span>
       </div>
       <div class="form-miniature" aria-hidden="true">
@@ -1109,7 +1229,7 @@ async function renderMenuPage() {
     <footer class="dashboard-copyright">
       <span>&copy; 2026 Kerby Lloren</span>
       <span>&copy; Payatas Orione Foundation Inc.</span>
-      <span>Livelihood Program Database</span>
+      <span>PAOFI Programs Database</span>
     </footer>
   `;
 

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Payatas Orione Foundation Inc. Livelihood Program Database</title>
+    <title>Payatas Orione Foundation Inc. Programs Database</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
@@ -15,43 +15,126 @@
           </div>
           <div>
             <strong>Payatas Orione Foundation Inc.</strong>
-            <span>Livelihood Program Database</span>
+            <span>Programs Database</span>
           </div>
         </div>
 
         <nav class="app-nav" aria-label="Main navigation">
           <button type="button" data-route="menu" class="nav-item active">
             <span class="nav-icon" data-icon="home"></span>
-            <span>Main Menu</span>
+            <span>Programs Dashboard</span>
           </button>
-          <button type="button" data-route="search" class="nav-item">
-            <span class="nav-icon" data-icon="search"></span>
-            <span>Search</span>
-          </button>
-          <button type="button" data-route="editor" class="nav-item">
-            <span class="nav-icon" data-icon="edit"></span>
-            <span>Editor</span>
-          </button>
-          <button type="button" data-route="viewer" class="nav-item">
-            <span class="nav-icon" data-icon="view"></span>
-            <span>Record Viewer</span>
-          </button>
-          <button type="button" data-route="database" class="nav-item">
-            <span class="nav-icon" data-icon="table"></span>
-            <span>Database</span>
-          </button>
-          <button type="button" data-route="monitoring" class="nav-item">
-            <span class="nav-icon" data-icon="monitoring"></span>
-            <span>Monitoring</span>
-          </button>
-          <button type="button" data-route="bin" class="nav-item">
-            <span class="nav-icon" data-icon="bin"></span>
-            <span>Record Bin</span>
-          </button>
-          <button type="button" data-route="accounts" class="nav-item nav-admin hidden">
-            <span class="nav-icon" data-icon="users"></span>
-            <span>Accounts</span>
-          </button>
+          <details class="nav-program" open>
+            <summary>Livelihood Program</summary>
+            <button type="button" data-route="search" class="nav-item">
+              <span class="nav-icon" data-icon="search"></span>
+              <span>Search</span>
+            </button>
+            <button type="button" data-route="editor" class="nav-item">
+              <span class="nav-icon" data-icon="edit"></span>
+              <span>Application Editor</span>
+            </button>
+            <button type="button" data-route="viewer" class="nav-item">
+              <span class="nav-icon" data-icon="view"></span>
+              <span>Record Viewer</span>
+            </button>
+            <button type="button" data-route="database" class="nav-item">
+              <span class="nav-icon" data-icon="table"></span>
+              <span>Database & Analytics</span>
+            </button>
+            <button type="button" data-route="monitoring" class="nav-item">
+              <span class="nav-icon" data-icon="monitoring"></span>
+              <span>Monitoring Reports</span>
+            </button>
+            <button type="button" data-route="bin" class="nav-item">
+              <span class="nav-icon" data-icon="bin"></span>
+              <span>Record Bin</span>
+            </button>
+          </details>
+          <details class="nav-program">
+            <summary>Nutrition Program</summary>
+            <button type="button" data-route="nutrition-profiles" class="nav-item">
+              <span class="nav-icon" data-icon="users"></span>
+              <span>Beneficiary Profiles</span>
+            </button>
+            <button type="button" data-route="nutrition-growth" class="nav-item">
+              <span class="nav-icon" data-icon="monitoring"></span>
+              <span>Growth Monitoring</span>
+            </button>
+            <button type="button" data-route="nutrition-menu" class="nav-item">
+              <span class="nav-icon" data-icon="table"></span>
+              <span>Monthly Menu & Costing</span>
+            </button>
+            <button type="button" data-route="nutrition-recipes" class="nav-item">
+              <span class="nav-icon" data-icon="book"></span>
+              <span>Recipe Book</span>
+            </button>
+            <button type="button" data-route="nutrition-centers" class="nav-item">
+              <span class="nav-icon" data-icon="home"></span>
+              <span>Feeding Centers</span>
+            </button>
+            <button type="button" data-route="nutrition-budget" class="nav-item">
+              <span class="nav-icon" data-icon="finance"></span>
+              <span>Budget vs Actual</span>
+            </button>
+          </details>
+          <details class="nav-program">
+            <summary>Scholarship Program</summary>
+            <button type="button" data-route="scholarship-scholars" class="nav-item">
+              <span class="nav-icon" data-icon="users"></span>
+              <span>Scholar Profiles</span>
+            </button>
+            <button type="button" data-route="scholarship-sponsors" class="nav-item">
+              <span class="nav-icon" data-icon="heart"></span>
+              <span>Sponsor Profiles</span>
+            </button>
+            <button type="button" data-route="scholarship-donations" class="nav-item">
+              <span class="nav-icon" data-icon="finance"></span>
+              <span>Donations & Receipts</span>
+            </button>
+            <button type="button" data-route="scholarship-grades" class="nav-item">
+              <span class="nav-icon" data-icon="book"></span>
+              <span>Grades Monitoring</span>
+            </button>
+            <button type="button" data-route="scholarship-attendance" class="nav-item">
+              <span class="nav-icon" data-icon="monitoring"></span>
+              <span>Attendance Monitoring</span>
+            </button>
+            <button type="button" data-route="scholarship-renewals" class="nav-item">
+              <span class="nav-icon" data-icon="view"></span>
+              <span>Renewal Checklist</span>
+            </button>
+            <button type="button" data-route="scholarship-evaluations" class="nav-item">
+              <span class="nav-icon" data-icon="edit"></span>
+              <span>Scholar Evaluation</span>
+            </button>
+          </details>
+          <details class="nav-program">
+            <summary>Health Program</summary>
+            <button type="button" data-route="health-patients" class="nav-item">
+              <span class="nav-icon" data-icon="users"></span>
+              <span>Patient Profiles</span>
+            </button>
+            <button type="button" data-route="health-monitoring" class="nav-item">
+              <span class="nav-icon" data-icon="monitoring"></span>
+              <span>Patient Monitoring</span>
+            </button>
+            <button type="button" data-route="health-supplies" class="nav-item">
+              <span class="nav-icon" data-icon="inventory"></span>
+              <span>Supplies & Medicine</span>
+            </button>
+            <button type="button" data-route="health-equipment" class="nav-item">
+              <span class="nav-icon" data-icon="table"></span>
+              <span>Equipment Inventory</span>
+            </button>
+          </details>
+          <details class="nav-program nav-admin hidden">
+            <summary>System</summary>
+            <button type="button" data-route="accounts" class="nav-item">
+              <span class="nav-icon" data-icon="users"></span>
+              <span>Accounts</span>
+            </button>
+          </details>
         </nav>
 
         <div class="sidebar-footer">
@@ -79,7 +162,8 @@
       <form id="loginForm" class="login-panel">
         <img src="/assets/paofi-logo.png" alt="">
         <p class="eyebrow">Payatas Orione Foundation Inc.</p>
-        <h1>Livelihood Program Database</h1>
+        <h1>Payatas Orione Foundation Inc.</h1>
+        <p class="login-subtitle">Programs Database</p>
         <label>
           Username
           <input id="loginUsername" name="username" autocomplete="username" required>

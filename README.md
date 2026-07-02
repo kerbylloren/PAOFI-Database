@@ -12,7 +12,7 @@ Download the Windows installer from the
 
 ## Current Release
 
-Latest version: `0.1.11`
+Latest version: `1.0.0`
 
 The release includes:
 
