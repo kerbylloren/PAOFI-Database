@@ -174,7 +174,30 @@ class TursoBeneficiaryDatabase {
       await this.execute(sql);
     }
 
+    await this.ensureBeneficiaryColumns();
+    await this.backfillCurrentGroup();
     await this.ensureSuperadmin();
+  }
+
+  async ensureBeneficiaryColumns() {
+    const existingColumns = new Set(
+      rows(await this.execute("PRAGMA table_info(beneficiaries)")).map(column => column.name)
+    );
+
+    for (const fieldName of FIELD_NAMES) {
+      if (!existingColumns.has(fieldName)) {
+        await this.execute(`ALTER TABLE beneficiaries ADD COLUMN ${quoted(fieldName)} TEXT NOT NULL DEFAULT ''`);
+      }
+    }
+  }
+
+  async backfillCurrentGroup() {
+    await this.execute(`
+      UPDATE beneficiaries
+      SET current_group = livelihood_interest
+      WHERE trim(COALESCE(current_group, '')) = ''
+        AND trim(COALESCE(livelihood_interest, '')) <> ''
+    `);
   }
 
   async ensureSuperadmin() {

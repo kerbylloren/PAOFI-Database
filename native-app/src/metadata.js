@@ -32,6 +32,7 @@ const BENEFICIARY_FIELDS = [
   { name: "business_duration", label: "Gaano ka na katagal sa iyong negosyo o livelihood?", section: "III. Livelihood Information", input: "text" },
 
   { name: "livelihood_interest", label: "Livelihood na gustong salihan", section: "IV. Livelihood Project Interest", input: "text" },
+  { name: "current_group", label: "Current Group", section: "IV. Livelihood Project Interest", input: "select", options: ["Dishwashing", "Sewing", "Rag Making"] },
   { name: "field_c38", label: "Bakit gusto mo itong salihan?", section: "IV. Livelihood Project Interest", input: "textarea", rows: 2 },
   { name: "field_f39", label: "Ano ang gusto mong matutunan sa proyektong ito?", section: "IV. Livelihood Project Interest", input: "textarea", rows: 2 },
 

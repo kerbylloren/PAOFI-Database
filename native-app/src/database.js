@@ -167,6 +167,7 @@ function normalizeRecord(input = {}) {
     output[fieldName] = normalizeFieldValue(fieldName, input[fieldName]);
   });
 
+  if (!output.current_group) output.current_group = output.livelihood_interest;
   if (!output.date_updated) output.date_updated = todayDate();
   if (!output.status) output.status = "Active";
   output.control_no = output.control_no.trim();
@@ -393,7 +394,32 @@ class BeneficiaryDatabase {
         ON app_users(username);
     `);
 
+    this.ensureBeneficiaryColumns();
+    this.backfillCurrentGroup();
     this.ensureSuperadmin();
+  }
+
+  ensureBeneficiaryColumns() {
+    const existingColumns = new Set(
+      this.db.prepare("PRAGMA table_info(beneficiaries)").all().map(column => column.name)
+    );
+
+    FIELD_NAMES.forEach(fieldName => {
+      if (!existingColumns.has(fieldName)) {
+        this.db.exec(`ALTER TABLE beneficiaries ADD COLUMN ${quoted(fieldName)} TEXT NOT NULL DEFAULT '';`);
+      }
+    });
+  }
+
+  backfillCurrentGroup() {
+    this.db
+      .prepare(`
+        UPDATE beneficiaries
+        SET current_group = livelihood_interest
+        WHERE trim(COALESCE(current_group, '')) = ''
+          AND trim(COALESCE(livelihood_interest, '')) <> ''
+      `)
+      .run();
   }
 
   ensureSuperadmin() {

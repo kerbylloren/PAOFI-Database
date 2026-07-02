@@ -21,6 +21,7 @@ const CHOICE_OPTIONS = {
 
 const DROPDOWN_OPTIONS = {
   field_h11: ["Female", "Male"],
+  current_group: ["Dishwashing", "Sewing", "Rag Making"],
   field_k30: ["None", "Feeding Program", "Scholarship Program", "Scholarship Program, Feeding Program"]
 };
 
@@ -77,10 +78,28 @@ const DATABASE_TABLE_FIELDS = [
   "field_j33",
   "business_duration",
   "livelihood_interest",
+  "current_group",
   "field_c38",
   "field_f39",
   "seminar",
   "field_k43",
+  "willingness",
+  "commit_days"
+];
+const DATABASE_FILTER_FIELDS = [
+  "status",
+  "current_group",
+  "field_h11",
+  "field_c12",
+  "field_c14",
+  "paofi_active",
+  "field_k30",
+  "field_e32",
+  "with_business",
+  "field_j33",
+  "business_duration",
+  "livelihood_interest",
+  "seminar",
   "willingness",
   "commit_days"
 ];
@@ -91,6 +110,7 @@ const MONITORING_PROJECT_OPTIONS = [
   "Sewing",
   "Other"
 ];
+const LIVELIHOOD_GROUP_OPTIONS = ["Dishwashing", "Sewing", "Rag Making"];
 
 const MONITORING_TABLES = {
   materials: {
@@ -210,6 +230,11 @@ const state = {
   currentMonitoringReport: null,
   monitoringBeneficiaries: [],
   pictureData: "",
+  databaseFilters: null,
+  databaseFilterVisibility: {
+    analytics: false,
+    table: false
+  },
   authToken: localStorage.getItem("lpdbAuthToken") || "",
   currentUser: null,
   route: "menu",
@@ -679,10 +704,147 @@ function buildAnalytics(records = []) {
     existingBusinessCounts: countBy(activeRecords, record => analyticsValue(record, "field_j33", "None")),
     durationCounts: countBy(activeRecords, record => analyticsValue(record, "business_duration")),
     interestCounts: countBy(activeRecords, record => analyticsTokens(record, "livelihood_interest")),
+    groupCounts: countBy(activeRecords, record => livelihoodGroups(record)),
     seminarCounts: countBy(activeRecords, record => analyticsValue(record, "seminar")),
     willingnessCounts: countBy(activeRecords, record => analyticsValue(record, "willingness")),
     commitmentCounts: countBy(activeRecords, record => analyticsValue(record, "commit_days"))
   };
+}
+
+function livelihoodGroups(record = {}) {
+  const group = fieldValue("current_group", record.current_group);
+  return group ? [group] : ["Not Specified"];
+}
+
+function recordMatchesLivelihoodGroup(record, selectedGroup) {
+  if (!selectedGroup) return true;
+  return livelihoodGroups(record).some(group => group.toLowerCase() === selectedGroup.toLowerCase());
+}
+
+function uniqueFieldOptions(records, name) {
+  return [...new Set(records
+    .map(record => fieldValue(name, record[name]))
+    .filter(value => value && value !== "-" && !/^n\/?a$/i.test(value)))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function renderOptionList(options, selected = "") {
+  return options.map(option => `
+    <option value="${escapeHtml(option)}"${option === selected ? " selected" : ""}>${escapeHtml(option)}</option>
+  `).join("");
+}
+
+function databaseFilterState() {
+  return state.databaseFilters || {
+    search: "",
+    minAge: "",
+    maxAge: "",
+    fields: {}
+  };
+}
+
+function setDatabaseFilterState(partial = {}) {
+  state.databaseFilters = {
+    ...databaseFilterState(),
+    ...partial,
+    fields: {
+      ...databaseFilterState().fields,
+      ...(partial.fields || {})
+    }
+  };
+}
+
+function databaseSearchMatches(record, search) {
+  const query = search.trim().toLowerCase();
+  if (!query) return true;
+
+  const values = [
+    fullName(record),
+    ...DATABASE_TABLE_FIELDS.map(name => fieldValue(name, record[name]))
+  ];
+
+  return values.some(value => String(value || "").toLowerCase().includes(query));
+}
+
+function renderDatabaseFilterPanel(records, idPrefix, title) {
+  const filters = databaseFilterState();
+  const isOpen = state.databaseFilterVisibility[idPrefix] !== false;
+
+  return `
+    <section class="database-filter-panel${isOpen ? "" : " collapsed"}" data-filter-panel="${escapeHtml(idPrefix)}">
+      <div class="panel-title-row">
+        <h3>${escapeHtml(title)}</h3>
+        <div class="filter-panel-actions">
+          <button type="button" class="text-button" data-toggle-database-filters="${escapeHtml(idPrefix)}">
+            ${isOpen ? "Hide Filters" : "Show Filters"}
+          </button>
+          <button type="button" class="text-button" data-clear-database-filters>Clear Filters</button>
+        </div>
+      </div>
+      <div class="search-band compact database-filter-search">
+        <span class="search-icon">${icon("search")}</span>
+        <input data-db-filter-search type="search" value="${escapeHtml(filters.search)}" placeholder="Search any visible database field">
+      </div>
+      <div class="database-filter-body">
+        <div class="database-filter-grid">
+          <label>
+            Min Age
+            <input data-db-filter-min-age type="number" min="0" max="120" inputmode="numeric" value="${escapeHtml(filters.minAge)}">
+          </label>
+          <label>
+            Max Age
+            <input data-db-filter-max-age type="number" min="0" max="120" inputmode="numeric" value="${escapeHtml(filters.maxAge)}">
+          </label>
+          ${DATABASE_FILTER_FIELDS.map(name => {
+            const meta = field(name);
+            const options = uniqueFieldOptions(records, name);
+            return `
+              <label>
+                ${escapeHtml(meta.label)}
+                <select data-db-filter-field="${escapeHtml(name)}">
+                  <option value="">All</option>
+                  ${renderOptionList(options, filters.fields[name] || "")}
+                </select>
+              </label>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    </section>
+  `;
+}
+function filterDatabaseRecords(records, filters) {
+  const minAge = filters.minAge === "" ? null : Number(filters.minAge);
+  const maxAge = filters.maxAge === "" ? null : Number(filters.maxAge);
+
+  return records.filter(record => {
+    const age = parseAnalyticsNumber(record.field_c11);
+
+    if (!databaseSearchMatches(record, filters.search)) return false;
+    if (minAge !== null && (age === null || age < minAge)) return false;
+    if (maxAge !== null && (age === null || age > maxAge)) return false;
+    if (Object.entries(filters.fields || {}).some(([name, value]) => {
+      if (!value) return false;
+      return fieldValue(name, record[name]) !== value;
+    })) return false;
+
+    return true;
+  });
+}
+
+function renderDatabaseFilterSummary(filters) {
+  const chips = [
+    filters.minAge && `Min Age: ${filters.minAge}`,
+    filters.maxAge && `Max Age: ${filters.maxAge}`,
+    filters.search.trim() && `Search: ${filters.search.trim()}`,
+    ...Object.entries(filters.fields || {})
+      .filter(([, value]) => value)
+      .map(([name, value]) => `${field(name).label}: ${value}`)
+  ].filter(Boolean);
+
+  return chips.length
+    ? chips.map(chip => `<span>${escapeHtml(chip)}</span>`).join("")
+    : "<span>All active records</span>";
 }
 
 function topAnalyticsEntry(entries) {
@@ -816,6 +978,7 @@ function renderMenuAnalytics(analytics) {
 
 function renderDatabaseAnalytics(analytics) {
   const topInterest = topAnalyticsEntry(analytics.interestCounts);
+  const topGroup = topAnalyticsEntry(analytics.groupCounts);
   const hasBusiness = analyticsCount(analytics.businessCounts, "Mayroon");
   const paofiBeneficiary = analyticsCount(analytics.beneficiaryCounts, "Mayroon");
   const attendedSeminar = analyticsCount(analytics.seminarCounts, "Oo");
@@ -832,7 +995,7 @@ function renderDatabaseAnalytics(analytics) {
       </div>
       <div class="analytics-kpi-grid detailed">
         ${renderAnalyticsKpi("Records Analyzed", String(analytics.total), "Current active database", "green")}
-        ${renderAnalyticsKpi("Top Interest", topInterest.label, analyticsPlural(topInterest.count, "record"), "blue")}
+        ${renderAnalyticsKpi("Top Group", topGroup.label, analyticsPlural(topGroup.count, "record"), "blue")}
         ${renderAnalyticsKpi("Has Small Business", String(hasBusiness), `${analyticsPercent(hasBusiness, analytics.total)}% of applicants`, "amber")}
         ${renderAnalyticsKpi("PAOFI Beneficiary", String(paofiBeneficiary), `${analyticsPercent(paofiBeneficiary, analytics.total)}% of households`, "violet")}
         ${renderAnalyticsKpi("Attended Seminar", String(attendedSeminar), `${analyticsPercent(attendedSeminar, analytics.total)}% of applicants`, "red")}
@@ -841,6 +1004,7 @@ function renderDatabaseAnalytics(analytics) {
       <div class="analytics-chart-grid">
         ${renderAnalyticsCard("Gender Distribution", "Applicant profile", renderDonutChart(analytics.genderCounts, analytics.total), "wide")}
         ${renderAnalyticsCard("Age Groups", `Average age: ${analytics.averageAge || "N/A"}`, renderBarList(analytics.ageCounts, analytics.total, 6))}
+        ${renderAnalyticsCard("Livelihood Groups", "Dishwashing, Sewing, and Rag Making", renderBarList(analytics.groupCounts, analytics.total, 4))}
         ${renderAnalyticsCard("Livelihood Interest", `Top: ${topInterest.label}`, renderBarList(analytics.interestCounts, analytics.total, 6))}
         ${renderAnalyticsCard("Chapel Distribution", "Top represented chapels", renderBarList(analytics.chapelCounts, analytics.total, 7))}
         ${renderAnalyticsCard("PAOFI Beneficiary", "Household affiliation", renderDonutChart(analytics.beneficiaryCounts, analytics.total, 4))}
@@ -1264,7 +1428,7 @@ async function renderMonitoringPage(id = "") {
     ${renderMonitoringOverview(reports)}
     <section class="monitoring-page">
       <div class="table-toolbar">
-        <div class="search-band compact">
+        <div class="search-band compact with-button">
           <span class="search-icon">${icon("search")}</span>
           <input id="monitoringSearchInput" type="search" placeholder="Filter monitoring reports">
           <button id="monitoringSearchButton" type="button" class="action-button">
@@ -2059,7 +2223,7 @@ function renderApplicationForm(record, mode, monitoringReports = []) {
 
       ${formSection("PAOFI Beneficiary", ["paofi_active", "field_k30"], record, readonly)}
       ${formSection("III. Livelihood Information", ["field_e32", "with_business", "field_j33", "business_duration"], record, readonly)}
-      ${formSection("IV. Livelihood Project Interest", ["livelihood_interest", "field_c38", "field_f39"], record, readonly)}
+      ${formSection("IV. Livelihood Project Interest", ["livelihood_interest", "current_group", "field_c38", "field_f39"], record, readonly)}
       ${formSection("V. Skills and Experience", ["seminar", "field_k43"], record, readonly)}
       ${formSection("VI. Availability and Commitment", ["willingness", "commit_days"], record, readonly)}
       ${record.id ? renderBeneficiaryMonitoringSummary(monitoringReports) : ""}
@@ -2471,42 +2635,114 @@ async function renderDatabasePage() {
   ]);
 
   const exportPayload = await api("/api/export");
-  const analytics = buildAnalytics(exportPayload.records || []);
+  const allRecords = exportPayload.records || [];
+  setDatabaseFilterState(databaseFilterState());
 
   elements.pageRoot.innerHTML = `
-    ${renderDatabaseAnalytics(analytics)}
+    <div id="databaseAnalyticsFilters"></div>
+    <div id="databaseAnalyticsHost"></div>
 
     <section class="database-page">
       <div class="table-toolbar">
-        <div class="search-band compact">
-          <span class="search-icon">${icon("search")}</span>
-          <input id="databaseSearchInput" type="search" placeholder="Filter table">
-          <button id="databaseSearchButton" type="button" class="action-button">
-            <span class="button-icon">${icon("search")}</span>
-            <span>Search</span>
-          </button>
+        <div id="databaseTableFilters"></div>
+        <div class="table-toolbar-footer">
+          <div id="databaseFilterSummary" class="filter-summary"></div>
+          <span id="databaseCount" class="table-count"></span>
         </div>
-        <span id="databaseCount" class="table-count"></span>
       </div>
       <div id="databaseTableHost" class="database-table-host"></div>
     </section>
   `;
 
-  async function loadTable() {
-    const search = encodeURIComponent(document.getElementById("databaseSearchInput").value.trim());
-    const payload = await api(`/api/records?search=${search}&limit=200&detail=full`);
-    renderDatabaseTable(payload.records);
+  function bindDatabaseFilterPanel(scope) {
+    scope.querySelectorAll("[data-db-filter-search]").forEach(input => {
+      input.addEventListener("input", () => {
+        setDatabaseFilterState({ search: input.value });
+        applyFilters();
+      });
+    });
+    scope.querySelectorAll("[data-db-filter-min-age]").forEach(input => {
+      input.addEventListener("input", () => {
+        setDatabaseFilterState({ minAge: input.value });
+        applyFilters();
+      });
+    });
+    scope.querySelectorAll("[data-db-filter-max-age]").forEach(input => {
+      input.addEventListener("input", () => {
+        setDatabaseFilterState({ maxAge: input.value });
+        applyFilters();
+      });
+    });
+    scope.querySelectorAll("[data-db-filter-field]").forEach(input => {
+      input.addEventListener("change", () => {
+        setDatabaseFilterState({ fields: { [input.dataset.dbFilterField]: input.value } });
+        applyFilters();
+      });
+    });
+    scope.querySelectorAll("[data-clear-database-filters]").forEach(button => {
+      button.addEventListener("click", () => {
+        state.databaseFilters = {
+          search: "",
+          minAge: "",
+          maxAge: "",
+          fields: {}
+        };
+        applyFilters();
+      });
+    });
+    scope.querySelectorAll("[data-toggle-database-filters]").forEach(button => {
+      button.addEventListener("click", () => {
+        const key = button.dataset.toggleDatabaseFilters;
+        state.databaseFilterVisibility[key] = state.databaseFilterVisibility[key] === false;
+        renderFilterPanels();
+        applyFilters();
+      });
+    });
   }
 
-  document.getElementById("databaseSearchButton").addEventListener("click", () => loadTable().catch(error => showToast(error.message)));
-  document.getElementById("databaseSearchInput").addEventListener("keydown", event => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      loadTable().catch(error => showToast(error.message));
-    }
-  });
+  function renderFilterPanels() {
+    document.getElementById("databaseAnalyticsFilters").innerHTML = renderDatabaseFilterPanel(
+      allRecords,
+      "analytics",
+      "Analytics Filters"
+    );
+    document.getElementById("databaseTableFilters").innerHTML = renderDatabaseFilterPanel(
+      allRecords,
+      "table",
+      "Table Filters"
+    );
+    bindDatabaseFilterPanel(document.getElementById("databaseAnalyticsFilters"));
+    bindDatabaseFilterPanel(document.getElementById("databaseTableFilters"));
+  }
 
-  await loadTable();
+  function syncDatabaseFilterPanels() {
+    const filters = databaseFilterState();
+    document.querySelectorAll("[data-db-filter-search]").forEach(input => {
+      if (input.value !== filters.search) input.value = filters.search;
+    });
+    document.querySelectorAll("[data-db-filter-min-age]").forEach(input => {
+      if (input.value !== filters.minAge) input.value = filters.minAge;
+    });
+    document.querySelectorAll("[data-db-filter-max-age]").forEach(input => {
+      if (input.value !== filters.maxAge) input.value = filters.maxAge;
+    });
+    document.querySelectorAll("[data-db-filter-field]").forEach(input => {
+      const value = filters.fields[input.dataset.dbFilterField] || "";
+      if (input.value !== value) input.value = value;
+    });
+  }
+
+  function applyFilters() {
+    const filters = databaseFilterState();
+    const filteredRecords = filterDatabaseRecords(allRecords, filters);
+    syncDatabaseFilterPanels();
+    document.getElementById("databaseAnalyticsHost").innerHTML = renderDatabaseAnalytics(buildAnalytics(filteredRecords));
+    document.getElementById("databaseFilterSummary").innerHTML = renderDatabaseFilterSummary(filters);
+    renderDatabaseTable(filteredRecords);
+  }
+
+  renderFilterPanels();
+  applyFilters();
 }
 
 function renderDatabaseTable(records) {

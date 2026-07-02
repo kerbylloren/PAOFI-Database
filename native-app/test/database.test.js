@@ -160,3 +160,24 @@ test("seeds a superadmin and creates standard user accounts", () => {
 
   db.close();
 });
+
+test("backfills current group from livelihood interest", () => {
+  const db = new BeneficiaryDatabase(tempDbPath());
+  const beneficiary = db.saveRecord({
+    control_no: "LP-2026-020",
+    last_name: "Group",
+    first_name: "Member",
+    livelihood_interest: "Rag Making"
+  });
+
+  assert.equal(beneficiary.current_group, "Rag Making");
+
+  const updated = db.saveRecord({
+    ...beneficiary,
+    current_group: "Sewing"
+  });
+
+  assert.equal(updated.current_group, "Sewing");
+
+  db.close();
+});
