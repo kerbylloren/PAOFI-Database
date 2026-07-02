@@ -36,17 +36,11 @@ manually.
 - Beneficiary-level monitoring summary in profiles and print output
 - JSON export for backup
 
-## Starter Login
+## Account Access
 
-The first seeded admin account is:
-
-```text
-Username: superadmin
-Password: ChangeMe123!
-```
-
-The superadmin can create standard user accounts in the Accounts page. Standard
-users can use the database but cannot create or manage accounts.
+A starter superadmin account is seeded during setup. The superadmin can create
+standard user accounts in the Accounts page. Standard users can use the database
+but cannot create or manage accounts.
 
 Passwords are stored as PBKDF2 hashes, not as plain text.
 
