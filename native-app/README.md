@@ -1,7 +1,8 @@
-# LP Database Native App
+# PAOFI Database Native App
 
-Desktop-style database app for LP beneficiary records. It can run against the
-local SQLite file or a configured Turso cloud database.
+Electron desktop application for PAOFI program records. The current production
+module covers the Livelihood Program and runs against either a local SQLite file
+or a configured Turso cloud database.
 
 ## Start
 
@@ -26,7 +27,7 @@ npm run package:installer
 The output is:
 
 ```text
-dist-electron\PAOFI-LP-Database-Setup-0.1.4-x64.exe
+dist-electron\PAOFI-Database-Setup-<version>-x64.exe
 ```
 
 Portable build:
@@ -38,13 +39,13 @@ npm run package:standalone
 The output is:
 
 ```text
-dist-electron\PAOFI-LP-Database-Standalone-0.1.4-x64.exe
+dist-electron\PAOFI-Database-Standalone-<version>-x64.exe
 ```
 
-The installer also removes old generated preview/runtime folders during
-install/update while preserving Turso config and database data.
-Release builds can include packaged Turso defaults so fresh installs connect to
-the cloud database immediately. Local config still takes priority.
+The installer removes old generated preview/runtime folders during
+install/update while preserving Turso config and database data. Existing data
+from the legacy `PAOFI-LP-Database-Data` folder is copied into
+`PAOFI-Database-Data` when the app starts.
 
 Or run:
 
@@ -69,7 +70,7 @@ data\lp_database.sqlite
 For Turso cloud mode, create:
 
 ```text
-%LOCALAPPDATA%\PAOFI-LP-Database-Data\cloud-database.json
+%LOCALAPPDATA%\PAOFI-Database-Data\cloud-database.json
 ```
 
 with this shape:
@@ -110,8 +111,8 @@ npm test
 
 ## Notes
 
-- New records use the same `LP-YYYY-###` control number format.
+- New Livelihood Program records use the same `LP-YYYY-###` control number format.
 - Deleting a record moves it to the Record Bin.
 - The Export button downloads a JSON backup of active and deleted records.
-- The app now has separate pages for Main Menu, Search, Editor, Record Viewer,
-  Database Table, and Record Bin.
+- The app has separate pages for Main Menu, Search, Editor, Record Viewer,
+  Database Table, Monitoring, and Record Bin.

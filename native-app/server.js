@@ -358,7 +358,7 @@ async function main() {
 
   server.listen(PORT, HOST, () => {
     const url = `http://${HOST}:${PORT}`;
-    console.log(`LP Database is running at ${url}`);
+    console.log(`PAOFI Database is running at ${url}`);
     console.log(`Database: ${database.dbPath}`);
     openBrowser(url);
   });

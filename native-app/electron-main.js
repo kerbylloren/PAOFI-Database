@@ -1,13 +1,15 @@
 const http = require("node:http");
 const net = require("node:net");
+const fs = require("node:fs");
 const path = require("node:path");
 const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { createDatabase } = require("./src/database-factory");
 const { createServer } = require("./server");
 
-const APP_NAME = "PAOFI LP Database";
-const DATA_FOLDER_NAME = "PAOFI-LP-Database-Data";
+const APP_NAME = "PAOFI Database";
+const DATA_FOLDER_NAME = "PAOFI-Database-Data";
+const LEGACY_DATA_FOLDER_NAME = "PAOFI-LP-Database-Data";
 const PREFERRED_PORT = 3417;
 
 let mainWindow = null;
@@ -18,6 +20,38 @@ let appBaseUrl = "";
 function dataRoot() {
   const base = process.env.LOCALAPPDATA || app.getPath("userData");
   return path.join(base, DATA_FOLDER_NAME);
+}
+
+function legacyDataRoot() {
+  const base = process.env.LOCALAPPDATA || app.getPath("userData");
+  return path.join(base, LEGACY_DATA_FOLDER_NAME);
+}
+
+function copyIfMissing(sourcePath, targetPath) {
+  if (!fs.existsSync(sourcePath) || fs.existsSync(targetPath)) return;
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.cpSync(sourcePath, targetPath, { recursive: true });
+}
+
+function migrateLegacyDataRoot() {
+  const currentRoot = dataRoot();
+  const oldRoot = legacyDataRoot();
+
+  if (!fs.existsSync(oldRoot)) {
+    fs.mkdirSync(currentRoot, { recursive: true });
+    return currentRoot;
+  }
+
+  if (!fs.existsSync(currentRoot)) {
+    fs.cpSync(oldRoot, currentRoot, { recursive: true });
+    return currentRoot;
+  }
+
+  copyIfMissing(path.join(oldRoot, "cloud-database.json"), path.join(currentRoot, "cloud-database.json"));
+  copyIfMissing(path.join(oldRoot, "lp_database.sqlite"), path.join(currentRoot, "lp_database.sqlite"));
+  copyIfMissing(path.join(oldRoot, "lp_database.sqlite-wal"), path.join(currentRoot, "lp_database.sqlite-wal"));
+  copyIfMissing(path.join(oldRoot, "lp_database.sqlite-shm"), path.join(currentRoot, "lp_database.sqlite-shm"));
+  return currentRoot;
 }
 
 function appRoot() {
@@ -82,7 +116,7 @@ async function waitForBackend(baseUrl) {
 
 async function startBackend() {
   const port = await availablePort(PREFERRED_PORT);
-  const localDataRoot = dataRoot();
+  const localDataRoot = migrateLegacyDataRoot();
   appBaseUrl = `http://127.0.0.1:${port}/`;
 
   process.env.LPDB_DB_PATH = path.join(localDataRoot, "lp_database.sqlite");
@@ -187,7 +221,7 @@ function setupAutoUpdates() {
       defaultId: 0,
       cancelId: 1,
       title: "Update Ready",
-      message: `PAOFI LP Database ${info.version} has been downloaded.`,
+      message: `PAOFI Database ${info.version} has been downloaded.`,
       detail: "Restart the application now to install the update, or install it automatically when you close the app."
     });
 

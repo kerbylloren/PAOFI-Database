@@ -1,8 +1,8 @@
 {
-  "name": "lp-database-native",
+  "name": "paofi-database-native",
   "version": "0.1.10",
   "private": true,
-  "description": "Desktop database app for LP beneficiary records.",
+  "description": "Desktop database app for PAOFI program records.",
   "author": {
     "name": "Kerby Lloren"
   },
@@ -30,8 +30,8 @@
     "electron-builder": "^26.15.3"
   },
   "build": {
-    "appId": "org.paofi.lpdatabase",
-    "productName": "PAOFI LP Database",
+    "appId": "org.paofi.database",
+    "productName": "PAOFI Database",
     "copyright": "Copyright (c) 2026 Kerby Lloren",
     "asar": false,
     "publish": [
@@ -70,18 +70,18 @@
       ]
     },
     "nsis": {
-      "artifactName": "PAOFI-LP-Database-Setup-${version}-x64.${ext}",
+      "artifactName": "PAOFI-Database-Setup-${version}-x64.${ext}",
       "include": "build/installer.nsh",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "PAOFI LP Database",
-      "uninstallDisplayName": "PAOFI LP Database"
+      "shortcutName": "PAOFI Database",
+      "uninstallDisplayName": "PAOFI Database"
     },
     "portable": {
-      "artifactName": "PAOFI-LP-Database-Standalone-${version}-x64.${ext}"
+      "artifactName": "PAOFI-Database-Standalone-${version}-x64.${ext}"
     }
   }
 }

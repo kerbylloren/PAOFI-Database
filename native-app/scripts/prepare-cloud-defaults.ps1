@@ -2,7 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $targetPath = Join-Path $root "build\cloud-defaults.json"
-$localAppDataConfig = Join-Path $env:LOCALAPPDATA "PAOFI-LP-Database-Data\cloud-database.json"
+$localAppDataConfig = Join-Path $env:LOCALAPPDATA "PAOFI-Database-Data\cloud-database.json"
+$legacyLocalAppDataConfig = Join-Path $env:LOCALAPPDATA "PAOFI-LP-Database-Data\cloud-database.json"
 
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $targetPath) | Out-Null
 
@@ -27,6 +28,12 @@ if ($env:LPDB_CLOUD_CONFIG -and (Test-Path -LiteralPath $env:LPDB_CLOUD_CONFIG))
 if (Test-Path -LiteralPath $localAppDataConfig) {
   Copy-Item -LiteralPath $localAppDataConfig -Destination $targetPath -Force
   Write-Host "Cloud defaults prepared from the local app cloud config."
+  exit 0
+}
+
+if (Test-Path -LiteralPath $legacyLocalAppDataConfig) {
+  Copy-Item -LiteralPath $legacyLocalAppDataConfig -Destination $targetPath -Force
+  Write-Host "Cloud defaults prepared from the legacy local app cloud config."
   exit 0
 }
 

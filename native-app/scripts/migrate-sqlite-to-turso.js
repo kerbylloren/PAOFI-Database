@@ -6,6 +6,12 @@ const { TursoBeneficiaryDatabase } = require("../src/turso-database");
 
 function packagedDbPath() {
   return process.env.LOCALAPPDATA
+    ? path.join(process.env.LOCALAPPDATA, "PAOFI-Database-Data", "lp_database.sqlite")
+    : "";
+}
+
+function legacyPackagedDbPath() {
+  return process.env.LOCALAPPDATA
     ? path.join(process.env.LOCALAPPDATA, "PAOFI-LP-Database-Data", "lp_database.sqlite")
     : "";
 }
@@ -15,6 +21,7 @@ function sourceDbPath() {
     process.env.LPDB_SOURCE_DB_PATH,
     process.env.LPDB_DB_PATH,
     packagedDbPath(),
+    legacyPackagedDbPath(),
     DEFAULT_DB_PATH
   ].filter(Boolean);
 

@@ -16,7 +16,7 @@ Latest version: `0.1.10`
 
 The release includes:
 
-- Windows x64 installer: `PAOFI-LP-Database-Setup-<version>-x64.exe`
+- Windows x64 installer: `PAOFI-Database-Setup-<version>-x64.exe`
 - Auto-update metadata: `latest.yml`
 - Differential update map: `.exe.blockmap`
 
@@ -68,7 +68,7 @@ configured Turso database immediately. A local config file can also be used and
 takes priority:
 
 ```text
-%LOCALAPPDATA%\PAOFI-LP-Database-Data\cloud-database.json
+%LOCALAPPDATA%\PAOFI-Database-Data\cloud-database.json
 ```
 
 Expected shape:
@@ -88,7 +88,7 @@ Without cloud config, the app falls back to a local SQLite database.
 Run the installer from the latest release:
 
 ```text
-PAOFI-LP-Database-Setup-<version>-x64.exe
+PAOFI-Database-Setup-<version>-x64.exe
 ```
 
 The installer preserves Turso configuration and database data while removing old
@@ -146,7 +146,7 @@ fixed with package metadata alone.
 $env:CSC_LINK = "C:\path\to\kerby-lloren-code-signing.pfx"
 $env:CSC_KEY_PASSWORD = "<certificate-password>"
 npm run package:installer
-Get-AuthenticodeSignature .\dist-electron\PAOFI-LP-Database-Setup-<version>-x64.exe
+Get-AuthenticodeSignature .\dist-electron\PAOFI-Database-Setup-<version>-x64.exe
 ```
 
 ## Repository Layout

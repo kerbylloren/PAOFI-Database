@@ -1,7 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const DATA_FOLDER_NAME = "PAOFI-LP-Database-Data";
+const DATA_FOLDER_NAME = "PAOFI-Database-Data";
+const LEGACY_DATA_FOLDER_NAME = "PAOFI-LP-Database-Data";
 const CLOUD_CONFIG_FILE = "cloud-database.json";
 const CLOUD_DEFAULTS_FILE = "cloud-defaults.json";
 
@@ -14,6 +15,11 @@ function appDataDir() {
 
 function cloudConfigPath() {
   return process.env.LPDB_CLOUD_CONFIG || path.join(appDataDir(), CLOUD_CONFIG_FILE);
+}
+
+function legacyCloudConfigPath() {
+  if (!process.env.LOCALAPPDATA) return "";
+  return path.join(process.env.LOCALAPPDATA, LEGACY_DATA_FOLDER_NAME, CLOUD_CONFIG_FILE);
 }
 
 function packagedCloudConfigPaths() {
@@ -48,6 +54,12 @@ function readCloudConfig() {
   const configPath = cloudConfigPath();
   if (fs.existsSync(configPath)) {
     const parsed = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    return normalizeConfig(parsed);
+  }
+
+  const oldConfigPath = legacyCloudConfigPath();
+  if (oldConfigPath && fs.existsSync(oldConfigPath)) {
+    const parsed = JSON.parse(fs.readFileSync(oldConfigPath, "utf8"));
     return normalizeConfig(parsed);
   }
 
@@ -87,6 +99,7 @@ module.exports = {
   appDataDir,
   cloudConfigPath,
   cloudLocationLabel,
+  legacyCloudConfigPath,
   packagedCloudConfigPaths,
   readCloudConfig,
   writeCloudConfig
