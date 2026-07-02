@@ -38,7 +38,7 @@
       {
         "provider": "github",
         "owner": "kerbylloren",
-        "repo": "LP-Database",
+        "repo": "PAOFI-Database",
         "releaseType": "release"
       }
     ],

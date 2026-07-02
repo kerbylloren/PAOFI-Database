@@ -8,7 +8,7 @@ The current production module focuses on the Livelihood Program. Future major
 release lines will expand the same system to other PAOFI programs.
 
 Download the Windows installer from the
-[latest GitHub Release](https://github.com/kerbylloren/LP-Database/releases/latest).
+[latest GitHub Release](https://github.com/kerbylloren/PAOFI-Database/releases/latest).
 
 ## Current Release
 
