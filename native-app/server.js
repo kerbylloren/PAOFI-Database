@@ -5,11 +5,12 @@ const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { createDatabase } = require("./src/database-factory");
 const { BENEFICIARY_FIELDS, fieldSectionMap } = require("./src/metadata");
+const { recognizeNutritionProfile } = require("./src/nutrition-ocr");
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 3417);
 const PUBLIC_DIR = path.join(__dirname, "public");
-const BODY_LIMIT_BYTES = 20 * 1024 * 1024;
+const BODY_LIMIT_BYTES = 40 * 1024 * 1024;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const sessions = new Map();
 
@@ -309,6 +310,108 @@ function createServer(database) {
         }
 
         sendJson(res, 200, { report });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/overview" && req.method === "GET") {
+        sendJson(res, 200, await database.nutritionOverview());
+        return;
+      }
+
+      if (pathname === "/api/nutrition/next-beneficiary-no" && req.method === "GET") {
+        const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
+        sendJson(res, 200, { beneficiaryNo: await database.nextNutritionBeneficiaryNo(year) });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/ocr-profile" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        sendJson(res, 200, await recognizeNutritionProfile(payload.imageData));
+        return;
+      }
+
+      if (pathname === "/api/nutrition/centers" && req.method === "GET") {
+        sendJson(res, 200, {
+          centers: await database.listNutritionCenters({
+            search: url.searchParams.get("search") || "",
+            limit: url.searchParams.get("limit") || 200
+          })
+        });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/centers" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        sendJson(res, 200, { center: await database.saveNutritionCenter(payload) });
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/centers/") && req.method === "GET") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/centers/");
+        const center = id ? await database.getNutritionCenter(id) : null;
+
+        if (!center) {
+          sendError(res, 404, "Feeding center was not found.");
+          return;
+        }
+
+        sendJson(res, 200, { center });
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/centers/") && req.method === "DELETE") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/centers/");
+        const center = id ? await database.deleteNutritionCenter(id) : null;
+
+        if (!center) {
+          sendError(res, 404, "Feeding center was not found.");
+          return;
+        }
+
+        sendJson(res, 200, { center });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/beneficiaries" && req.method === "GET") {
+        sendJson(res, 200, {
+          beneficiaries: await database.listNutritionBeneficiaries({
+            search: url.searchParams.get("search") || "",
+            centerId: url.searchParams.get("centerId") || "",
+            limit: url.searchParams.get("limit") || 200
+          })
+        });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/beneficiaries" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        sendJson(res, 200, { beneficiary: await database.saveNutritionBeneficiary(payload) });
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/beneficiaries/") && req.method === "GET") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/beneficiaries/");
+        const beneficiary = id ? await database.getNutritionBeneficiary(id) : null;
+
+        if (!beneficiary) {
+          sendError(res, 404, "Nutrition beneficiary was not found.");
+          return;
+        }
+
+        sendJson(res, 200, { beneficiary });
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/beneficiaries/") && req.method === "DELETE") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/beneficiaries/");
+        const beneficiary = id ? await database.deleteNutritionBeneficiary(id) : null;
+
+        if (!beneficiary) {
+          sendError(res, 404, "Nutrition beneficiary was not found.");
+          return;
+        }
+
+        sendJson(res, 200, { beneficiary });
         return;
       }
 

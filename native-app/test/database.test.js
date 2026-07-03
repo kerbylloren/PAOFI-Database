@@ -181,3 +181,113 @@ test("backfills current group from livelihood interest", () => {
 
   db.close();
 });
+
+test("creates, updates, lists, exports, and deletes nutrition core records", () => {
+  const db = new BeneficiaryDatabase(tempDbPath());
+
+  assert.equal(db.nextNutritionBeneficiaryNo(2026), "NP-2026-001");
+
+  const center = db.saveNutritionCenter({
+    center_name: "molave feeding center",
+    location: "st. payatas b, q.c.",
+    coordinator: "kristine salde",
+    contact_no: "9707054085",
+    capacity: "45",
+    notes: "pilot center"
+  });
+
+  assert.equal(center.center_name, "Molave Feeding Center");
+  assert.equal(center.contact_no, "09707054085");
+  assert.equal(db.stats().nutritionCenters, 1);
+
+  const created = db.saveNutritionBeneficiary({
+    beneficiary_no: "NP-2026-001",
+    center_id: center.id,
+    child_last_name: "abot",
+    child_first_name: "joan",
+    birth_date: "2016-09-16",
+    age: "8",
+    gender: "female",
+    home_address: "diamond hills molave st., st. payatas b, q.c.",
+    school: "payatas b elementary school",
+    grade_level: "grade 2",
+    mother_name: "kristine salde",
+    mother_occupation: "service crew",
+    father_name: "jonathan abot",
+    father_occupation: "garbage collector",
+    contact_no: "9707054085",
+    sibling_count: "3",
+    birth_order: "4th",
+    admission_date: "2018-01-08",
+    profile_status: "old",
+    remarks: "active",
+    initial_age_months: "16",
+    initial_weight_kg: "7",
+    initial_height_cm: "72",
+    initial_nutrition_status: "underweight",
+    current_update_date: "2026-08-04",
+    current_age_months: "101",
+    current_weight_kg: "22.1",
+    current_height_cm: "127",
+    current_nutrition_status: "normal",
+    household_members: [
+      { member_name: "jonathan abot", age: "30", relationship: "father", occupation: "garbage collector" },
+      { member_name: "", age: "", relationship: "", occupation: "" },
+      { member_name: "kristine salde", age: "34", relationship: "mother", occupation: "house keeper" }
+    ]
+  });
+
+  assert.equal(created.beneficiary_no, "NP-2026-001");
+  assert.equal(created.feeding_center, "Molave Feeding Center");
+  assert.equal(created.child_last_name, "Abot");
+  assert.equal(created.child_first_name, "Joan");
+  assert.equal(created.birth_date, "09/16/2016");
+  assert.equal(created.gender, "Female");
+  assert.equal(created.contact_no, "09707054085");
+  assert.equal(created.admission_date, "01/08/2018");
+  assert.equal(created.current_update_date, "08/04/2026");
+  assert.equal(created.current_nutrition_status, "Normal");
+  assert.equal(created.household_members.length, 2);
+  assert.equal(created.household_members[0].relationship, "Father");
+  assert.equal(db.stats().nutritionBeneficiaries, 1);
+  assert.equal(db.nextNutritionBeneficiaryNo(2026), "NP-2026-002");
+  assert.equal(db.listNutritionBeneficiaries({ search: "abot" }).length, 1);
+  assert.equal(db.listNutritionBeneficiaries({ centerId: center.id }).length, 1);
+
+  const renamedCenter = db.saveNutritionCenter({
+    ...center,
+    center_name: "molave supplemental feeding center"
+  });
+  assert.equal(renamedCenter.center_name, "Molave Supplemental Feeding Center");
+  assert.equal(db.getNutritionBeneficiary(created.id).feeding_center, "Molave Supplemental Feeding Center");
+
+  const updated = db.saveNutritionBeneficiary({
+    ...created,
+    current_weight_kg: "23.4",
+    current_nutrition_status: "normal",
+    household_members: [
+      ...created.household_members,
+      { member_name: "kenneth abot", age: "2", relationship: "brother", occupation: "n/a" }
+    ]
+  });
+
+  assert.equal(updated.id, created.id);
+  assert.equal(updated.current_weight_kg, "23.4");
+  assert.equal(updated.household_members.length, 3);
+
+  const overview = db.nutritionOverview();
+  assert.equal(overview.stats.centers, 1);
+  assert.equal(overview.stats.activeBeneficiaries, 1);
+
+  const exported = db.exportData();
+  assert.equal(exported.nutritionCenters.length, 1);
+  assert.equal(exported.nutritionBeneficiaries.length, 1);
+  assert.equal(exported.nutritionBeneficiaries[0].household_members.length, 3);
+
+  db.deleteNutritionBeneficiary(created.id);
+  assert.equal(db.stats().nutritionBeneficiaries, 0);
+  db.deleteNutritionCenter(center.id);
+  assert.equal(db.stats().nutritionCenters, 0);
+
+  db.close();
+});

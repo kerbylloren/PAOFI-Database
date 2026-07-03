@@ -1,7 +1,10 @@
 const { FIELD_NAMES, SUMMARY_FIELDS } = require("./metadata");
 const { cloudLocationLabel } = require("./cloud-config");
 const {
+  NUTRITION_BENEFICIARY_FIELDS,
   normalizeMonitoringReport,
+  normalizeNutritionBeneficiary,
+  normalizeNutritionCenter,
   normalizeRecord,
   nowIso,
   quoted,
@@ -156,6 +159,77 @@ class TursoBeneficiaryDatabase {
       "CREATE INDEX IF NOT EXISTS idx_monitoring_sales_report ON monitoring_sales(report_id)",
       "CREATE INDEX IF NOT EXISTS idx_monitoring_expenses_report ON monitoring_expenses(report_id)",
       `
+        CREATE TABLE IF NOT EXISTS nutrition_centers (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          center_name TEXT NOT NULL DEFAULT '',
+          location TEXT NOT NULL DEFAULT '',
+          coordinator TEXT NOT NULL DEFAULT '',
+          contact_no TEXT NOT NULL DEFAULT '',
+          capacity INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'Active',
+          notes TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `,
+      "CREATE INDEX IF NOT EXISTS idx_nutrition_centers_name ON nutrition_centers(center_name)",
+      `
+        CREATE TABLE IF NOT EXISTS nutrition_beneficiaries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          center_id INTEGER,
+          beneficiary_no TEXT NOT NULL DEFAULT '',
+          feeding_center TEXT NOT NULL DEFAULT '',
+          picture_data TEXT NOT NULL DEFAULT '',
+          child_last_name TEXT NOT NULL DEFAULT '',
+          child_first_name TEXT NOT NULL DEFAULT '',
+          child_middle_name TEXT NOT NULL DEFAULT '',
+          birth_date TEXT NOT NULL DEFAULT '',
+          age TEXT NOT NULL DEFAULT '',
+          gender TEXT NOT NULL DEFAULT '',
+          home_address TEXT NOT NULL DEFAULT '',
+          school TEXT NOT NULL DEFAULT '',
+          grade_level TEXT NOT NULL DEFAULT '',
+          mother_name TEXT NOT NULL DEFAULT '',
+          mother_occupation TEXT NOT NULL DEFAULT '',
+          father_name TEXT NOT NULL DEFAULT '',
+          father_occupation TEXT NOT NULL DEFAULT '',
+          contact_no TEXT NOT NULL DEFAULT '',
+          sibling_count TEXT NOT NULL DEFAULT '',
+          birth_order TEXT NOT NULL DEFAULT '',
+          admission_date TEXT NOT NULL DEFAULT '',
+          profile_status TEXT NOT NULL DEFAULT 'New',
+          remarks TEXT NOT NULL DEFAULT 'Active',
+          initial_age_months TEXT NOT NULL DEFAULT '',
+          initial_weight_kg TEXT NOT NULL DEFAULT '',
+          initial_height_cm TEXT NOT NULL DEFAULT '',
+          initial_nutrition_status TEXT NOT NULL DEFAULT '',
+          current_update_date TEXT NOT NULL DEFAULT '',
+          current_age_months TEXT NOT NULL DEFAULT '',
+          current_weight_kg TEXT NOT NULL DEFAULT '',
+          current_height_cm TEXT NOT NULL DEFAULT '',
+          current_nutrition_status TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (center_id) REFERENCES nutrition_centers(id) ON DELETE SET NULL
+        )
+      `,
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_nutrition_beneficiaries_no ON nutrition_beneficiaries(beneficiary_no) WHERE beneficiary_no <> ''",
+      "CREATE INDEX IF NOT EXISTS idx_nutrition_beneficiaries_name ON nutrition_beneficiaries(child_last_name, child_first_name, child_middle_name)",
+      "CREATE INDEX IF NOT EXISTS idx_nutrition_beneficiaries_center ON nutrition_beneficiaries(center_id)",
+      `
+        CREATE TABLE IF NOT EXISTS nutrition_household_members (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          beneficiary_id INTEGER NOT NULL,
+          row_order INTEGER NOT NULL DEFAULT 0,
+          member_name TEXT NOT NULL DEFAULT '',
+          age TEXT NOT NULL DEFAULT '',
+          relationship TEXT NOT NULL DEFAULT '',
+          occupation TEXT NOT NULL DEFAULT '',
+          FOREIGN KEY (beneficiary_id) REFERENCES nutrition_beneficiaries(id) ON DELETE CASCADE
+        )
+      `,
+      "CREATE INDEX IF NOT EXISTS idx_nutrition_household_beneficiary ON nutrition_household_members(beneficiary_id)",
+      `
         CREATE TABLE IF NOT EXISTS app_users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           username TEXT NOT NULL UNIQUE,
@@ -233,11 +307,15 @@ class TursoBeneficiaryDatabase {
     const active = await this.execute("SELECT COUNT(*) AS count FROM beneficiaries");
     const deleted = await this.execute("SELECT COUNT(*) AS count FROM deleted_records");
     const monitoringReports = await this.execute("SELECT COUNT(*) AS count FROM monitoring_reports");
+    const nutritionCenters = await this.execute("SELECT COUNT(*) AS count FROM nutrition_centers");
+    const nutritionBeneficiaries = await this.execute("SELECT COUNT(*) AS count FROM nutrition_beneficiaries");
 
     return {
       active: Number(active.rows[0].count || 0),
       deleted: Number(deleted.rows[0].count || 0),
       monitoringReports: Number(monitoringReports.rows[0].count || 0),
+      nutritionCenters: Number(nutritionCenters.rows[0].count || 0),
+      nutritionBeneficiaries: Number(nutritionBeneficiaries.rows[0].count || 0),
       databasePath: this.dbPath
     };
   }
@@ -772,12 +850,365 @@ class TursoBeneficiaryDatabase {
     return detailed;
   }
 
+  nutritionCenterWithCountsSelect() {
+    return `
+      SELECT c.*,
+        COUNT(b.id) AS beneficiary_count,
+        SUM(CASE
+          WHEN lower(COALESCE(b.remarks, '')) = 'active'
+            OR lower(COALESCE(b.profile_status, '')) = 'active'
+          THEN 1 ELSE 0
+        END) AS active_beneficiary_count
+      FROM nutrition_centers c
+      LEFT JOIN nutrition_beneficiaries b ON b.center_id = c.id
+    `;
+  }
+
+  async listNutritionCenters({ search = "", limit = 200 } = {}) {
+    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+    const pattern = `%${search.trim().toLowerCase()}%`;
+    const where = search.trim()
+      ? `WHERE lower(c.center_name) LIKE ?
+          OR lower(c.location) LIKE ?
+          OR lower(c.coordinator) LIKE ?
+          OR lower(c.status) LIKE ?`
+      : "";
+    const args = search.trim() ? [pattern, pattern, pattern, pattern] : [];
+
+    return rows(await this.execute(
+      `
+        ${this.nutritionCenterWithCountsSelect()}
+        ${where}
+        GROUP BY c.id
+        ORDER BY c.center_name, c.id
+        LIMIT ?
+      `,
+      [...args, max]
+    ));
+  }
+
+  async getNutritionCenter(id) {
+    const result = await this.execute(
+      `
+        ${this.nutritionCenterWithCountsSelect()}
+        WHERE c.id = ?
+        GROUP BY c.id
+      `,
+      [Number(id)]
+    );
+    return plainRow(result.rows[0]) || null;
+  }
+
+  async saveNutritionCenter(input = {}) {
+    const center = normalizeNutritionCenter(input);
+    if (!center.center_name) {
+      throw new Error("Feeding center name is required.");
+    }
+
+    const id = Number(input.id || 0);
+    const existing = id ? await this.getNutritionCenter(id) : null;
+    const timestamp = nowIso();
+
+    if (existing) {
+      await this.client.batch([
+        {
+          sql: `
+            UPDATE nutrition_centers
+            SET center_name = ?,
+                location = ?,
+                coordinator = ?,
+                contact_no = ?,
+                capacity = ?,
+                status = ?,
+                notes = ?,
+                updated_at = ?
+            WHERE id = ?
+          `,
+          args: [
+            center.center_name,
+            center.location,
+            center.coordinator,
+            center.contact_no,
+            center.capacity,
+            center.status,
+            center.notes,
+            timestamp,
+            existing.id
+          ]
+        },
+        {
+          sql: `
+            UPDATE nutrition_beneficiaries
+            SET feeding_center = ?, updated_at = ?
+            WHERE center_id = ?
+          `,
+          args: [center.center_name, timestamp, existing.id]
+        }
+      ], "write");
+      return this.getNutritionCenter(existing.id);
+    }
+
+    const result = await this.execute(
+      `
+        INSERT INTO nutrition_centers (
+          center_name, location, coordinator, contact_no, capacity, status, notes, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        center.center_name,
+        center.location,
+        center.coordinator,
+        center.contact_no,
+        center.capacity,
+        center.status,
+        center.notes,
+        timestamp,
+        timestamp
+      ]
+    );
+    const newId = result.lastInsertRowid ? Number(result.lastInsertRowid) : 0;
+
+    return this.getNutritionCenter(newId);
+  }
+
+  async deleteNutritionCenter(id) {
+    const center = await this.getNutritionCenter(id);
+    if (!center) {
+      throw new Error("Feeding center was not found.");
+    }
+
+    await this.execute("DELETE FROM nutrition_centers WHERE id = ?", [Number(id)]);
+    return center;
+  }
+
+  async nextNutritionBeneficiaryNo(year = new Date().getFullYear()) {
+    const prefix = `NP-${year}-`;
+    const items = rows(await this.execute(
+      "SELECT beneficiary_no FROM nutrition_beneficiaries WHERE beneficiary_no LIKE ?",
+      [`${prefix}%`]
+    ));
+    const highest = items.reduce((max, row) => {
+      const numberPart = Number(String(row.beneficiary_no || "").slice(prefix.length));
+      return Number.isFinite(numberPart) && numberPart > max ? numberPart : max;
+    }, 0);
+
+    return `${prefix}${String(highest + 1).padStart(3, "0")}`;
+  }
+
+  nutritionBeneficiarySelect() {
+    return `
+      SELECT b.*, c.center_name AS center_name, c.location AS center_location
+      FROM nutrition_beneficiaries b
+      LEFT JOIN nutrition_centers c ON c.id = b.center_id
+    `;
+  }
+
+  async listNutritionBeneficiaries({ search = "", centerId = "", limit = 200 } = {}) {
+    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+    const conditions = [];
+    const args = [];
+
+    if (centerId) {
+      conditions.push("b.center_id = ?");
+      args.push(Number(centerId));
+    }
+
+    if (search.trim()) {
+      const pattern = `%${search.trim().toLowerCase()}%`;
+      conditions.push(`(
+        lower(b.beneficiary_no) LIKE ?
+        OR lower(b.child_last_name) LIKE ?
+        OR lower(b.child_first_name) LIKE ?
+        OR lower(b.child_middle_name) LIKE ?
+        OR lower(b.child_last_name || ' ' || b.child_first_name || ' ' || b.child_middle_name) LIKE ?
+        OR lower(b.mother_name) LIKE ?
+        OR lower(b.father_name) LIKE ?
+        OR lower(b.home_address) LIKE ?
+        OR lower(b.school) LIKE ?
+        OR lower(b.gender) LIKE ?
+        OR lower(b.remarks) LIKE ?
+        OR lower(b.current_nutrition_status) LIKE ?
+        OR lower(b.feeding_center) LIKE ?
+        OR lower(COALESCE(c.center_name, '')) LIKE ?
+      )`);
+      args.push(
+        pattern, pattern, pattern, pattern, pattern, pattern, pattern,
+        pattern, pattern, pattern, pattern, pattern, pattern, pattern
+      );
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    return rows(await this.execute(
+      `
+        ${this.nutritionBeneficiarySelect()}
+        ${where}
+        ORDER BY b.updated_at DESC, b.id DESC
+        LIMIT ?
+      `,
+      [...args, max]
+    ));
+  }
+
+  async getNutritionBeneficiary(id) {
+    const result = await this.execute(
+      `
+        ${this.nutritionBeneficiarySelect()}
+        WHERE b.id = ?
+      `,
+      [Number(id)]
+    );
+    const beneficiary = plainRow(result.rows[0]);
+    if (!beneficiary) return null;
+
+    return {
+      ...beneficiary,
+      household_members: rows(await this.execute(
+        "SELECT * FROM nutrition_household_members WHERE beneficiary_id = ? ORDER BY row_order, id",
+        [beneficiary.id]
+      ))
+    };
+  }
+
+  async getNutritionBeneficiaryByNo(beneficiaryNo) {
+    const key = String(beneficiaryNo || "").trim();
+    if (!key) return null;
+
+    const result = await this.execute(
+      `
+        ${this.nutritionBeneficiarySelect()}
+        WHERE b.beneficiary_no = ?
+      `,
+      [key]
+    );
+    return plainRow(result.rows[0]) || null;
+  }
+
+  async saveNutritionBeneficiary(input = {}) {
+    const id = Number(input.id || 0);
+    const existing = id ? await this.getNutritionBeneficiary(id) : null;
+    const requestedCenterId = Number(input.center_id || input.centerId || existing?.center_id || 0) || 0;
+    const center = requestedCenterId ? await this.getNutritionCenter(requestedCenterId) : null;
+    const beneficiary = normalizeNutritionBeneficiary({
+      ...existing,
+      ...input,
+      center_id: requestedCenterId || null
+    }, center);
+
+    if (!beneficiary.beneficiary_no) {
+      beneficiary.beneficiary_no = await this.nextNutritionBeneficiaryNo();
+    }
+
+    if (!beneficiary.child_last_name || !beneficiary.child_first_name) {
+      throw new Error("Child first and last name are required.");
+    }
+
+    const duplicate = await this.getNutritionBeneficiaryByNo(beneficiary.beneficiary_no);
+    if (duplicate && duplicate.id !== existing?.id) {
+      throw new Error(`Nutrition beneficiary no. already exists: ${beneficiary.beneficiary_no}`);
+    }
+
+    const timestamp = nowIso();
+    const values = NUTRITION_BENEFICIARY_FIELDS.map(fieldName => beneficiary[fieldName]);
+    let beneficiaryId = existing?.id || 0;
+
+    if (existing) {
+      const assignments = NUTRITION_BENEFICIARY_FIELDS.map(fieldName => `${quoted(fieldName)} = ?`).join(", ");
+      await this.execute(
+        `UPDATE nutrition_beneficiaries SET ${assignments}, updated_at = ? WHERE id = ?`,
+        [...values, timestamp, existing.id]
+      );
+      beneficiaryId = existing.id;
+    } else {
+      const columns = NUTRITION_BENEFICIARY_FIELDS.map(quoted).join(", ");
+      const placeholders = NUTRITION_BENEFICIARY_FIELDS.map(() => "?").join(", ");
+      const result = await this.execute(
+        `
+          INSERT INTO nutrition_beneficiaries (${columns}, created_at, updated_at)
+          VALUES (${placeholders}, ?, ?)
+        `,
+        [...values, timestamp, timestamp]
+      );
+      beneficiaryId = result.lastInsertRowid ? Number(result.lastInsertRowid) : 0;
+    }
+
+    await this.client.batch([
+      { sql: "DELETE FROM nutrition_household_members WHERE beneficiary_id = ?", args: [beneficiaryId] },
+      ...beneficiary.household_members.map((member, index) => ({
+        sql: `
+          INSERT INTO nutrition_household_members (
+            beneficiary_id, row_order, member_name, age, relationship, occupation
+          )
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        args: [
+          beneficiaryId,
+          index,
+          member.member_name,
+          member.age,
+          member.relationship,
+          member.occupation
+        ]
+      }))
+    ], "write");
+
+    return this.getNutritionBeneficiary(beneficiaryId);
+  }
+
+  async deleteNutritionBeneficiary(id) {
+    const beneficiary = await this.getNutritionBeneficiary(id);
+    if (!beneficiary) {
+      throw new Error("Nutrition beneficiary was not found.");
+    }
+
+    await this.execute("DELETE FROM nutrition_beneficiaries WHERE id = ?", [Number(id)]);
+    return beneficiary;
+  }
+
+  async exportNutritionBeneficiaries() {
+    const beneficiaries = rows(await this.execute(
+      "SELECT id FROM nutrition_beneficiaries ORDER BY beneficiary_no, child_last_name, child_first_name"
+    ));
+    const detailed = [];
+
+    for (const beneficiary of beneficiaries) {
+      detailed.push(await this.getNutritionBeneficiary(beneficiary.id));
+    }
+
+    return detailed;
+  }
+
+  async nutritionOverview() {
+    const centers = await this.listNutritionCenters({ limit: 500 });
+    const beneficiaries = await this.listNutritionBeneficiaries({ limit: 500 });
+    const activeBeneficiaries = beneficiaries.filter(beneficiary => {
+      const remarks = String(beneficiary.remarks || "").toLowerCase();
+      const profileStatus = String(beneficiary.profile_status || "").toLowerCase();
+      return remarks === "active" || profileStatus === "active";
+    });
+
+    return {
+      centers,
+      beneficiaries,
+      stats: {
+        centers: centers.length,
+        activeCenters: centers.filter(center => String(center.status || "").toLowerCase() === "active").length,
+        beneficiaries: beneficiaries.length,
+        activeBeneficiaries: activeBeneficiaries.length
+      }
+    };
+  }
+
   async exportData() {
+    const nutrition = await this.nutritionOverview();
+
     return {
       exportedAt: nowIso(),
       fields: FIELD_NAMES,
       records: rows(await this.execute("SELECT * FROM beneficiaries ORDER BY control_no")),
       monitoringReports: await this.exportMonitoringReports(),
+      nutritionCenters: nutrition.centers,
+      nutritionBeneficiaries: await this.exportNutritionBeneficiaries(),
       deletedRecords: rows(await this.execute("SELECT * FROM deleted_records ORDER BY deleted_at DESC, id DESC"))
     };
   }

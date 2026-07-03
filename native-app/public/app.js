@@ -111,6 +111,124 @@ const MONITORING_PROJECT_OPTIONS = [
   "Other"
 ];
 const LIVELIHOOD_GROUP_OPTIONS = ["Dishwashing", "Sewing", "Rag Making"];
+const NUTRITION_GENDER_OPTIONS = ["Female", "Male"];
+const NUTRITION_PROFILE_STATUS_OPTIONS = ["New", "Old", "Active", "Inactive", "Graduated", "Transferred"];
+const NUTRITION_REMARK_OPTIONS = ["Active", "Inactive", "For Follow-Up", "Transferred", "Graduated"];
+const NUTRITION_STATUS_OPTIONS = ["Severely Underweight", "Underweight", "Normal", "Overweight"];
+const NUTRITION_RELATIONSHIP_OPTIONS = [
+  "Father",
+  "Mother",
+  "Brother",
+  "Sister",
+  "Grandfather",
+  "Grandmother",
+  "Guardian",
+  "Feeding Child",
+  "Other"
+];
+const NUTRITION_BASIC_GROUPS = [
+  {
+    title: "Profile Details",
+    fields: [
+      { name: "beneficiary_no", label: "Beneficiary No.", input: "text" },
+      { name: "center_id", label: "Feeding Center", input: "center" }
+    ]
+  },
+  {
+    title: "Child's Name",
+    fields: [
+      { name: "child_last_name", label: "Last Name", input: "text", required: true },
+      { name: "child_first_name", label: "First Name", input: "text", required: true },
+      { name: "child_middle_name", label: "Middle Name", input: "text" }
+    ]
+  },
+  {
+    title: "Birth & Gender",
+    fields: [
+      { name: "birth_date", label: "Birth Date", input: "date" },
+      { name: "age", label: "Age", input: "number" },
+      { name: "gender", label: "Gender", input: "select", options: NUTRITION_GENDER_OPTIONS }
+    ]
+  },
+  {
+    title: "Home & School",
+    fields: [
+      { name: "home_address", label: "Home Address", input: "textarea", wide: true },
+      { name: "school", label: "School", input: "text" },
+      { name: "grade_level", label: "Grade Level", input: "text" }
+    ]
+  }
+];
+const NUTRITION_FAMILY_GROUPS = [
+  {
+    title: "Mother's Details",
+    fields: [
+      { name: "mother_name", label: "Mother's Name", input: "text" },
+      { name: "mother_occupation", label: "Mother's Occupation", input: "text" }
+    ]
+  },
+  {
+    title: "Father's Details",
+    fields: [
+      { name: "father_name", label: "Father's Name", input: "text" },
+      { name: "father_occupation", label: "Father's Occupation", input: "text" }
+    ]
+  },
+  {
+    title: "Family Contact & Position",
+    fields: [
+      { name: "contact_no", label: "Contact No.", input: "tel" },
+      { name: "sibling_count", label: "No. of Siblings", input: "number" },
+      { name: "birth_order", label: "Birth Order", input: "text" }
+    ]
+  }
+];
+const NUTRITION_SNAPSHOT_GROUPS = [
+  {
+    title: "Admission Details",
+    fields: [
+      { name: "admission_date", label: "Admission Date", input: "date" },
+      { name: "initial_age_months", label: "Initial Age (months)", input: "number" },
+      { name: "initial_weight_kg", label: "Initial Weight (kg)", input: "decimal" },
+      { name: "initial_height_cm", label: "Initial Height (cm)", input: "decimal" },
+      { name: "initial_nutrition_status", label: "Initial Nutrition Status", input: "select", options: NUTRITION_STATUS_OPTIONS }
+    ]
+  },
+  {
+    title: "Current Nutrition Details",
+    fields: [
+      { name: "current_update_date", label: "Date Updated", input: "date" },
+      { name: "current_age_months", label: "Current Age (months)", input: "number" },
+      { name: "current_weight_kg", label: "Current Weight (kg)", input: "decimal" },
+      { name: "current_height_cm", label: "Current Height (cm)", input: "decimal" },
+      { name: "current_nutrition_status", label: "Current Nutrition Status", input: "select", options: NUTRITION_STATUS_OPTIONS }
+    ]
+  },
+  {
+    title: "Current Status & Overall Progress",
+    fields: [
+      { name: "profile_status", label: "Current Status", input: "select", options: NUTRITION_PROFILE_STATUS_OPTIONS },
+      { name: "remarks", label: "Remarks", input: "select", options: NUTRITION_REMARK_OPTIONS },
+      { name: "overall_weight_gain_kg", label: "Overall Weight Gain", input: "computed", unit: "kg" },
+      { name: "overall_height_gain_cm", label: "Overall Height Gain", input: "computed", unit: "cm" }
+    ]
+  }
+];
+const NUTRITION_CENTER_FIELDS = [
+  { name: "center_name", label: "Feeding Center Name", input: "text", required: true },
+  { name: "status", label: "Status", input: "select", options: ["Active", "Inactive", "Under Development"] },
+  { name: "location", label: "Location", input: "textarea", wide: true },
+  { name: "coordinator", label: "Coordinator", input: "text" },
+  { name: "contact_no", label: "Contact No.", input: "tel" },
+  { name: "capacity", label: "Capacity", input: "number" },
+  { name: "notes", label: "Notes", input: "textarea", wide: true }
+];
+const NUTRITION_HOUSEHOLD_FIELDS = [
+  { name: "member_name", label: "Household Member" },
+  { name: "age", label: "Age" },
+  { name: "relationship", label: "Relationship" },
+  { name: "occupation", label: "Occupation" }
+];
 
 const MONITORING_TABLES = {
   materials: {
@@ -226,11 +344,6 @@ const ICONS = {
 };
 
 const COMING_SOON_PAGES = {
-  "nutrition-profiles": {
-    program: "Nutrition Program - Supplemental Feeding",
-    title: "Beneficiary Profile Database",
-    description: "Child and household profiles for supplemental feeding beneficiaries."
-  },
   "nutrition-growth": {
     program: "Nutrition Program - Supplemental Feeding",
     title: "Growth Monitoring",
@@ -245,11 +358,6 @@ const COMING_SOON_PAGES = {
     program: "Nutrition Program - Supplemental Feeding",
     title: "Recipe Book",
     description: "Recipes, ingredients, serving sizes, and costing references."
-  },
-  "nutrition-centers": {
-    program: "Nutrition Program - Supplemental Feeding",
-    title: "Feeding Center Profiles & Analytics",
-    description: "Feeding center records, beneficiaries served, and center-level analytics."
   },
   "nutrition-budget": {
     program: "Nutrition Program - Supplemental Feeding",
@@ -320,8 +428,11 @@ const state = {
   stats: null,
   currentRecord: null,
   currentMonitoringReport: null,
+  currentNutritionBeneficiary: null,
+  currentNutritionCenter: null,
   monitoringBeneficiaries: [],
   pictureData: "",
+  nutritionPictureData: "",
   databaseFilters: null,
   databaseFilterVisibility: {
     analytics: false,
@@ -365,6 +476,74 @@ function icon(name) {
 
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function nutritionTodayDate() {
+  const date = new Date();
+  return `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}/${date.getFullYear()}`;
+}
+
+function normalizeNutritionDateValue(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+
+  const isoMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+  if (isoMatch) {
+    return `${String(Number(isoMatch[2])).padStart(2, "0")}/${String(Number(isoMatch[3])).padStart(2, "0")}/${isoMatch[1]}`;
+  }
+
+  const slashMatch = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(text);
+  if (!slashMatch) return text;
+
+  const month = Number(slashMatch[1]);
+  const day = Number(slashMatch[2]);
+  const year = Number(slashMatch[3]) < 100 ? Number(slashMatch[3]) + 2000 : Number(slashMatch[3]);
+
+  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900) return text;
+  return `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}/${year}`;
+}
+
+function parseNutritionDate(value) {
+  const normalized = normalizeNutritionDateValue(value);
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(normalized);
+  if (!match) return null;
+
+  const date = new Date(Number(match[3]), Number(match[1]) - 1, Number(match[2]));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function nutritionNumber(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+
+  const cleaned = text.replace(/[^\d.-]/g, "");
+  if (!cleaned || cleaned === "-" || cleaned === ".") return null;
+
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? number : null;
+}
+
+function formatNutritionGain(value, unit) {
+  if (!Number.isFinite(value)) return "";
+  const rounded = Math.round(value * 10) / 10;
+  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return `${formatted} ${unit}`;
+}
+
+function nutritionComputedValue(record = {}, name) {
+  if (name === "overall_weight_gain_kg") {
+    const initial = nutritionNumber(record.initial_weight_kg);
+    const current = nutritionNumber(record.current_weight_kg);
+    return initial === null || current === null ? "" : formatNutritionGain(current - initial, "kg");
+  }
+
+  if (name === "overall_height_gain_cm") {
+    const initial = nutritionNumber(record.initial_height_cm);
+    const current = nutritionNumber(record.current_height_cm);
+    return initial === null || current === null ? "" : formatNutritionGain(current - initial, "cm");
+  }
+
+  return "";
 }
 
 function splitLines(value) {
@@ -639,6 +818,8 @@ async function renderRoute() {
     else if (parsed.route === "viewer") await renderViewerPage(parsed.id);
     else if (parsed.route === "database") await renderDatabasePage();
     else if (parsed.route === "monitoring") await renderMonitoringPage(parsed.id);
+    else if (parsed.route === "nutrition-profiles") await renderNutritionProfilesPage(parsed.id);
+    else if (parsed.route === "nutrition-centers") await renderNutritionCentersPage(parsed.id);
     else if (parsed.route === "bin") await renderBinPage();
     else if (parsed.route === "accounts") await renderAccountsPage();
     else if (COMING_SOON_PAGES[parsed.route]) await renderComingSoonPage(parsed.route);
@@ -1095,6 +1276,35 @@ function renderMenuAnalytics(analytics) {
   `;
 }
 
+function renderNutritionDashboardSummary(overview = {}) {
+  const centers = overview.centers || [];
+  const beneficiaries = overview.beneficiaries || [];
+  const analytics = buildNutritionAnalytics(beneficiaries, centers);
+  const topCenter = topAnalyticsEntry(analytics.centerCounts);
+
+  return `
+    <section class="analytics-summary">
+      <div class="analytics-title-row">
+        <div>
+          <span class="analytics-eyebrow">Nutrition Program</span>
+          <h3>Supplemental Feeding Snapshot</h3>
+        </div>
+        <button type="button" class="text-button" data-menu-route="nutrition-profiles">Open Profiles</button>
+      </div>
+      <div class="analytics-kpi-grid">
+        ${renderAnalyticsKpi("Child Profiles", String(analytics.total), `${analytics.active} active`, "green")}
+        ${renderAnalyticsKpi("Feeding Centers", String(analytics.centers), `${analytics.activeCenters} active`, "blue")}
+        ${renderAnalyticsKpi("Top Center", topCenter.label, analyticsPlural(topCenter.count, "child", "children"), "amber")}
+        ${renderAnalyticsKpi("Needs Snapshot", String(analytics.total - analytics.nutritionStatusCounts.filter(entry => entry.label !== "Not Specified").reduce((sum, entry) => sum + entry.count, 0)), "missing nutrition status", "violet")}
+      </div>
+      <div class="analytics-preview-grid">
+        ${renderAnalyticsCard("Current Nutrition Status", "Profile-level snapshot", renderBarList(analytics.nutritionStatusCounts, analytics.total, 4))}
+        ${renderAnalyticsCard("Centers", "Children linked by center", renderBarList(analytics.centerCounts, analytics.total, 4))}
+      </div>
+    </section>
+  `;
+}
+
 function renderDatabaseAnalytics(analytics) {
   const topInterest = topAnalyticsEntry(analytics.interestCounts);
   const topGroup = topAnalyticsEntry(analytics.groupCounts);
@@ -1154,11 +1364,12 @@ async function renderMenuPage() {
     { id: "menuExport", label: "Export", icon: "export", onClick: () => exportData().catch(error => showToast(error.message)) }
   ]);
 
-  const [stats, recentPayload, binPayload, exportPayload] = await Promise.all([
+  const [stats, recentPayload, binPayload, exportPayload, nutritionOverview] = await Promise.all([
     refreshStats(),
     api("/api/records?limit=5"),
     api("/api/bin"),
-    api("/api/export")
+    api("/api/export"),
+    api("/api/nutrition/overview")
   ]);
   const analytics = buildAnalytics(exportPayload.records || []);
 
@@ -1193,9 +1404,18 @@ async function renderMenuPage() {
         <span>Next Control No.</span>
         <strong id="nextControlNo">...</strong>
       </button>
+      <button type="button" class="stat-card blue" data-menu-route="nutrition-profiles">
+        <span>Nutrition Profiles</span>
+        <strong>${stats.nutritionBeneficiaries || 0}</strong>
+      </button>
+      <button type="button" class="stat-card accent" data-menu-route="nutrition-centers">
+        <span>Feeding Centers</span>
+        <strong>${stats.nutritionCenters || 0}</strong>
+      </button>
     </section>
 
     ${renderMenuAnalytics(analytics)}
+    ${renderNutritionDashboardSummary(nutritionOverview)}
 
     <section class="menu-grid">
       ${menuTile("search", "search", "Search Records")}
@@ -1203,6 +1423,8 @@ async function renderMenuPage() {
       ${menuTile("viewer", "view", "Record Viewer")}
       ${menuTile("database", "table", "Database Table")}
       ${menuTile("monitoring", "monitoring", "Monitoring Reports")}
+      ${menuTile("nutrition-profiles", "users", "Nutrition Profiles")}
+      ${menuTile("nutrition-centers", "home", "Feeding Centers")}
     </section>
 
     <section class="split-layout">
@@ -1523,6 +1745,1625 @@ function renderMonitoringOverview(reports) {
       </div>
     </section>
   `;
+}
+
+function nutritionFullName(record = {}) {
+  return [record.child_last_name, record.child_first_name, record.child_middle_name]
+    .filter(Boolean)
+    .join(", ") || "Unnamed child";
+}
+
+function nutritionInitials(record = {}) {
+  const first = String(record.child_first_name || "").trim()[0] || "N";
+  const last = String(record.child_last_name || "").trim()[0] || "P";
+  return `${first}${last}`.toUpperCase();
+}
+
+function nutritionCenterName(record = {}) {
+  return record.feeding_center || record.center_name || "No Center Assigned";
+}
+
+function nutritionText(value, fallback = "") {
+  const text = String(value || "").trim();
+  return text || fallback;
+}
+
+function nutritionActiveRecords(records = []) {
+  return records.filter(record => {
+    const remarks = String(record.remarks || "").toLowerCase();
+    const profileStatus = String(record.profile_status || "").toLowerCase();
+    return remarks === "active" || profileStatus === "active";
+  });
+}
+
+function buildNutritionAnalytics(beneficiaries = [], centers = []) {
+  const active = nutritionActiveRecords(beneficiaries);
+
+  return {
+    total: beneficiaries.length,
+    active: active.length,
+    centers: centers.length,
+    activeCenters: centers.filter(center => String(center.status || "").toLowerCase() === "active").length,
+    genderCounts: countBy(beneficiaries, record => nutritionText(record.gender, "Not Specified")),
+    centerCounts: countBy(beneficiaries, record => nutritionCenterName(record)),
+    nutritionStatusCounts: countBy(beneficiaries, record => nutritionText(record.current_nutrition_status, "Not Specified")),
+    remarkCounts: countBy(beneficiaries, record => nutritionText(record.remarks, "Not Specified")),
+    gradeCounts: countBy(beneficiaries, record => nutritionText(record.grade_level, "Not Specified"))
+  };
+}
+
+function renderNutritionAnalytics(beneficiaries = [], centers = []) {
+  const analytics = buildNutritionAnalytics(beneficiaries, centers);
+  const topCenter = topAnalyticsEntry(analytics.centerCounts);
+  const topNutritionStatus = topAnalyticsEntry(analytics.nutritionStatusCounts);
+
+  return `
+    <section class="database-analytics nutrition-analytics">
+      <div class="analytics-title-row">
+        <div>
+          <span class="analytics-eyebrow">Nutrition Program</span>
+          <h3>Supplemental Feeding Overview</h3>
+        </div>
+        <span class="analytics-note">${analytics.active} active child${analytics.active === 1 ? "" : "ren"}</span>
+      </div>
+      <div class="analytics-kpi-grid">
+        ${renderAnalyticsKpi("Beneficiaries", String(analytics.total), "Child profile records", "green")}
+        ${renderAnalyticsKpi("Active Children", String(analytics.active), `${analyticsPercent(analytics.active, analytics.total)}% of profiles`, "blue")}
+        ${renderAnalyticsKpi("Feeding Centers", String(analytics.centers), `${analytics.activeCenters} active centers`, "amber")}
+        ${renderAnalyticsKpi("Top Status", topNutritionStatus.label, analyticsPlural(topNutritionStatus.count, "child", "children"), "violet")}
+      </div>
+      <div class="analytics-preview-grid">
+        ${renderAnalyticsCard("Feeding Centers", `Top: ${topCenter.label}`, renderBarList(analytics.centerCounts, analytics.total, 5))}
+        ${renderAnalyticsCard("Nutrition Status", "Current profile snapshot", renderBarList(analytics.nutritionStatusCounts, analytics.total, 5))}
+      </div>
+    </section>
+  `;
+}
+
+async function loadNutritionOverview() {
+  return api("/api/nutrition/overview");
+}
+
+async function loadNutritionCenters(search = "") {
+  const payload = await api(`/api/nutrition/centers?search=${encodeURIComponent(search)}&limit=500`);
+  return payload.centers || [];
+}
+
+async function loadNutritionBeneficiary(id) {
+  const payload = await api(`/api/nutrition/beneficiaries/${id}`);
+  return payload.beneficiary;
+}
+
+async function makeNewNutritionBeneficiary() {
+  const payload = await api("/api/nutrition/next-beneficiary-no");
+  return {
+    beneficiary_no: payload.beneficiaryNo,
+    feeding_center: "",
+    picture_data: "",
+    child_last_name: "",
+    child_first_name: "",
+    child_middle_name: "",
+    birth_date: "",
+    age: "",
+    gender: "",
+    home_address: "",
+    school: "",
+    grade_level: "",
+    mother_name: "",
+    mother_occupation: "",
+    father_name: "",
+    father_occupation: "",
+    contact_no: "",
+    sibling_count: "",
+    birth_order: "",
+    admission_date: nutritionTodayDate(),
+    profile_status: "New",
+    remarks: "Active",
+    initial_age_months: "",
+    initial_weight_kg: "",
+    initial_height_cm: "",
+    initial_nutrition_status: "",
+    current_update_date: nutritionTodayDate(),
+    current_age_months: "",
+    current_weight_kg: "",
+    current_height_cm: "",
+    current_nutrition_status: "",
+    household_members: []
+  };
+}
+
+function parseNutritionRouteId(id = "") {
+  if (!id) return { mode: "list", id: "" };
+  if (id === "new") return { mode: "new", id: "" };
+  if (id.startsWith("edit-")) return { mode: "edit", id: id.slice(5) };
+  return { mode: "view", id };
+}
+
+async function renderNutritionProfilesPage(id = "") {
+  const parsed = parseNutritionRouteId(id);
+
+  if (parsed.mode !== "list") {
+    await renderNutritionBeneficiaryDetailPage(parsed.id, parsed.mode !== "edit" && parsed.mode !== "new");
+    return;
+  }
+
+  setTitle("Nutrition Beneficiary Profiles");
+  setTopbarActions([
+    { id: "nutritionNew", label: "New Child", icon: "plus", variant: "primary", onClick: () => navigate("nutrition-profiles", "new") },
+    { id: "nutritionCenters", label: "Centers", icon: "home", onClick: () => navigate("nutrition-centers") }
+  ]);
+
+  const overview = await loadNutritionOverview();
+  const centers = overview.centers || [];
+  const beneficiaries = overview.beneficiaries || [];
+
+  elements.pageRoot.innerHTML = `
+    <div id="nutritionAnalyticsHost">${renderNutritionAnalytics(beneficiaries, centers)}</div>
+    <section class="database-page nutrition-page">
+      <div class="table-toolbar">
+        <div class="search-band compact with-button">
+          <span class="search-icon">${icon("search")}</span>
+          <input id="nutritionSearchInput" type="search" placeholder="Search child, parent, school, center, or status">
+          <button id="nutritionSearchButton" type="button" class="action-button">
+            <span class="button-icon">${icon("search")}</span>
+            <span>Search</span>
+          </button>
+        </div>
+        <div class="database-filter-grid nutrition-filter-grid">
+          <label>
+            Feeding Center
+            <select id="nutritionCenterFilter">
+              <option value="">All Centers</option>
+              ${centers.map(center => `<option value="${center.id}">${escapeHtml(center.center_name)}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="table-toolbar-footer">
+          <div class="filter-summary"><span>Nutrition beneficiary profiles</span></div>
+          <span id="nutritionCount" class="table-count"></span>
+        </div>
+      </div>
+      <div id="nutritionTableHost" class="database-table-host"></div>
+    </section>
+  `;
+
+  async function loadProfiles() {
+    const search = encodeURIComponent(document.getElementById("nutritionSearchInput").value.trim());
+    const centerId = encodeURIComponent(document.getElementById("nutritionCenterFilter").value);
+    const payload = await api(`/api/nutrition/beneficiaries?search=${search}&centerId=${centerId}&limit=500`);
+    const records = payload.beneficiaries || [];
+    document.getElementById("nutritionAnalyticsHost").innerHTML = renderNutritionAnalytics(records, centers);
+    renderNutritionProfileTable(records);
+  }
+
+  document.getElementById("nutritionSearchButton").addEventListener("click", () => loadProfiles().catch(error => showToast(error.message)));
+  document.getElementById("nutritionSearchInput").addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      loadProfiles().catch(error => showToast(error.message));
+    }
+  });
+  document.getElementById("nutritionCenterFilter").addEventListener("change", () => loadProfiles().catch(error => showToast(error.message)));
+
+  renderNutritionProfileTable(beneficiaries);
+}
+
+function renderNutritionProfileTable(records = []) {
+  document.getElementById("nutritionCount").textContent = `${records.length} shown`;
+
+  if (!records.length) {
+    document.getElementById("nutritionTableHost").innerHTML = emptyState("No nutrition beneficiary profiles found.");
+    return;
+  }
+
+  document.getElementById("nutritionTableHost").innerHTML = `
+    <div class="data-table-scroll">
+      <table class="data-table nutrition-table">
+        <thead>
+          <tr>
+            <th class="sticky-column">Actions</th>
+            <th>Beneficiary No.</th>
+            <th>Child's Name</th>
+            <th>Age</th>
+            <th>Gender</th>
+            <th>Feeding Center</th>
+            <th>School</th>
+            <th>Grade Level</th>
+            <th>Contact No.</th>
+            <th>Current Nutrition Status</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${records.map(record => `
+            <tr>
+              <td class="sticky-column">
+                <div class="table-actions">
+                  <button type="button" class="icon-button" title="View" data-nutrition-view-id="${record.id}">${icon("view")}</button>
+                  <button type="button" class="icon-button" title="Edit" data-nutrition-edit-id="${record.id}">${icon("edit")}</button>
+                </div>
+              </td>
+              <td>${escapeHtml(record.beneficiary_no || "")}</td>
+              <td>${escapeHtml(nutritionFullName(record))}</td>
+              <td>${escapeHtml(record.age || "")}</td>
+              <td>${escapeHtml(record.gender || "")}</td>
+              <td>${escapeHtml(nutritionCenterName(record))}</td>
+              <td>${escapeHtml(record.school || "")}</td>
+              <td>${escapeHtml(record.grade_level || "")}</td>
+              <td>${escapeHtml(record.contact_no || "")}</td>
+              <td>${escapeHtml(record.current_nutrition_status || "")}</td>
+              <td>${escapeHtml(record.remarks || "")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+  attachNutritionProfileTableHandlers(elements.pageRoot);
+}
+
+function attachNutritionProfileTableHandlers(scope = document) {
+  scope.querySelectorAll("[data-nutrition-view-id]").forEach(button => {
+    button.addEventListener("click", () => navigate("nutrition-profiles", button.dataset.nutritionViewId));
+  });
+  scope.querySelectorAll("[data-nutrition-edit-id]").forEach(button => {
+    button.addEventListener("click", () => navigate("nutrition-profiles", `edit-${button.dataset.nutritionEditId}`));
+  });
+}
+
+async function renderNutritionBeneficiaryDetailPage(id = "", readonly = true) {
+  const isNew = !id;
+  const [record, centers] = await Promise.all([
+    isNew ? makeNewNutritionBeneficiary() : loadNutritionBeneficiary(id),
+    loadNutritionCenters()
+  ]);
+  state.currentNutritionBeneficiary = record;
+  state.nutritionPictureData = record.picture_data || "";
+
+  setTitle(isNew ? "New Nutrition Beneficiary" : readonly ? "Nutrition Beneficiary Profile" : "Edit Nutrition Beneficiary");
+  setTopbarActions([
+    { id: "nutritionBack", label: "Profiles", icon: "table", onClick: () => navigate("nutrition-profiles") },
+    ...(readonly && record.id ? [
+      { id: "nutritionPrint", label: "Print", icon: "print", onClick: () => printNutritionBeneficiary(record) },
+      { id: "nutritionEdit", label: "Edit", icon: "edit", variant: "primary", onClick: () => navigate("nutrition-profiles", `edit-${record.id}`) }
+    ] : [
+      { id: "nutritionOcr", label: "OCR Import", icon: "search", onClick: () => document.getElementById("nutritionOcrInput")?.click() },
+      { id: "nutritionPrint", label: "Print", icon: "print", onClick: () => printNutritionBeneficiary(collectNutritionBeneficiary()) },
+      { id: "nutritionSave", label: "Save", icon: "save", variant: "primary", onClick: () => saveCurrentNutritionBeneficiary().catch(error => showToast(error.message)) }
+    ]),
+    ...(!isNew && !readonly ? [
+      { id: "nutritionDelete", label: "Delete", icon: "bin", variant: "danger", onClick: () => deleteCurrentNutritionBeneficiary(record.id).catch(error => showToast(error.message)) }
+    ] : [])
+  ]);
+
+  elements.pageRoot.innerHTML = renderNutritionBeneficiaryForm(record, centers, readonly);
+  if (!readonly) attachNutritionBeneficiaryFormHandlers();
+}
+
+function renderNutritionBeneficiaryForm(record, centers, readonly) {
+  return `
+    <section class="application-paper nutrition-paper ${readonly ? "readonly" : "editable"}">
+      <header class="form-heading nutrition-form-heading">
+        <div>
+          <p class="eyebrow">Payatas Orione Foundation Inc.</p>
+          <h2>Nutrition Program - Supplemental Feeding</h2>
+          <p>${escapeHtml(nutritionCenterName(record))}</p>
+          <h3>Beneficiary Profile</h3>
+        </div>
+        ${renderNutritionPictureBlock(record, readonly)}
+      </header>
+      ${readonly ? "" : renderNutritionOcrPanel()}
+      ${nutritionGroupedFormSection("I. Child's Basic Information", NUTRITION_BASIC_GROUPS, record, centers, readonly)}
+      ${nutritionGroupedFormSection("II. Family Background", NUTRITION_FAMILY_GROUPS, record, centers, readonly)}
+      ${renderNutritionHouseholdSection(record, readonly)}
+      ${nutritionGroupedFormSection("III. Admission & Nutrition Snapshot", NUTRITION_SNAPSHOT_GROUPS, record, centers, readonly)}
+    </section>
+  `;
+}
+
+function renderNutritionPictureBlock(record, readonly) {
+  const source = readonly ? record.picture_data : state.nutritionPictureData;
+  const preview = source
+    ? `<img src="${escapeHtml(source)}" alt="Nutrition beneficiary picture">`
+    : `<span>${readonly ? "No picture" : "Picture"}</span>`;
+
+  if (readonly) {
+    return `<div class="photo-box"><div class="photo-preview">${preview}</div></div>`;
+  }
+
+  return `
+    <div class="photo-box editable-photo ${source ? "has-photo" : ""}" id="nutritionPhotoDropZone">
+      <div id="nutritionPhotoPreview" class="photo-preview">${preview}</div>
+      <div class="photo-actions">
+        <label for="nutritionPictureInput" class="text-button photo-choose-button">Choose</label>
+        <button id="removeNutritionPictureButton" type="button" class="icon-button photo-remove-button" title="Remove picture" aria-label="Remove picture" ${source ? "" : "hidden"}>
+          ${icon("bin")}
+        </button>
+      </div>
+      <input id="nutritionPictureInput" type="file" accept="image/*">
+    </div>
+  `;
+}
+
+function renderNutritionOcrPanel() {
+  return `
+    <section class="ocr-status-panel" id="nutritionOcrPanel" hidden>
+      <input id="nutritionOcrInput" type="file" accept="image/*,application/pdf" hidden>
+      <div class="ocr-status-row">
+        <span class="search-icon">${icon("search")}</span>
+        <div>
+          <strong id="nutritionOcrStatus">OCR Import</strong>
+          <span id="nutritionOcrSummary"></span>
+        </div>
+      </div>
+      <details id="nutritionOcrDetails" hidden>
+        <summary>OCR Text</summary>
+        <pre id="nutritionOcrText"></pre>
+      </details>
+    </section>
+  `;
+}
+
+function nutritionFormSection(title, fields, record, centers, readonly) {
+  return `
+    <section class="paper-section">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="paper-grid">
+        ${fields.map(meta => renderNutritionField(meta, record, centers, readonly)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function nutritionGroupedFormSection(title, groups, record, centers, readonly) {
+  return `
+    <section class="paper-section">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="nutrition-field-groups">
+        ${groups.map(group => `
+          <div class="nutrition-field-group">
+            <h4>${escapeHtml(group.title)}</h4>
+            <div class="paper-grid">
+              ${group.fields.map(meta => renderNutritionField(meta, record, centers, readonly)).join("")}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function nutritionSelectOptions(options, selected = "", includeBlank = true) {
+  const choices = [...options];
+  if (selected && !choices.includes(selected)) choices.push(selected);
+
+  return `
+    ${includeBlank ? `<option value="" ${selected ? "" : "selected"}></option>` : ""}
+    ${choices.map(option => `<option value="${escapeHtml(option)}" ${option === selected ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+  `;
+}
+
+function renderNutritionField(meta, record, centers, readonly) {
+  const value = meta.input === "date"
+    ? normalizeNutritionDateValue(record[meta.name])
+    : meta.input === "computed"
+      ? nutritionComputedValue(record, meta.name)
+    : nutritionText(record[meta.name]);
+  const isWide = meta.wide || meta.input === "textarea";
+
+  if (meta.input === "computed") {
+    return `
+      <div class="paper-field ${isWide ? "wide" : ""}">
+        <label>${escapeHtml(meta.label)}</label>
+        <div class="display-value computed-value" data-nutrition-computed="${escapeHtml(meta.name)}">${escapeHtml(value) || "&nbsp;"}</div>
+      </div>
+    `;
+  }
+
+  if (readonly) {
+    const displayValue = meta.input === "center"
+      ? nutritionCenterName(record)
+      : value;
+
+    return `
+      <div class="paper-field ${isWide ? "wide" : ""}">
+        <label>${escapeHtml(meta.label)}</label>
+        <div class="display-value">${escapeHtml(displayValue).replaceAll("\n", "<br>") || "&nbsp;"}</div>
+      </div>
+    `;
+  }
+
+  if (meta.input === "center") {
+    const selectedId = Number(record.center_id || 0);
+    const hasSelected = centers.some(center => Number(center.id) === selectedId);
+
+    return `
+      <div class="paper-field ${isWide ? "wide" : ""}">
+        <label for="nutrition_${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
+        <select id="nutrition_${escapeHtml(meta.name)}" data-nutrition-field="${escapeHtml(meta.name)}">
+          <option value="" ${selectedId ? "" : "selected"}></option>
+          ${!hasSelected && selectedId ? `<option value="${selectedId}" selected>${escapeHtml(record.feeding_center || `Center ${selectedId}`)}</option>` : ""}
+          ${centers.map(center => `<option value="${center.id}" ${Number(center.id) === selectedId ? "selected" : ""}>${escapeHtml(center.center_name)}</option>`).join("")}
+        </select>
+      </div>
+    `;
+  }
+
+  if (meta.input === "select") {
+    return `
+      <div class="paper-field ${isWide ? "wide" : ""}">
+        <label for="nutrition_${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
+        <select id="nutrition_${escapeHtml(meta.name)}" data-nutrition-field="${escapeHtml(meta.name)}">
+          ${nutritionSelectOptions(meta.options || [], value, true)}
+        </select>
+      </div>
+    `;
+  }
+
+  if (meta.input === "textarea") {
+    return `
+      <div class="paper-field ${isWide ? "wide" : ""}">
+        <label for="nutrition_${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
+        <textarea id="nutrition_${escapeHtml(meta.name)}" rows="3" data-nutrition-field="${escapeHtml(meta.name)}" data-capitalize="words" autocapitalize="words">${escapeHtml(value)}</textarea>
+      </div>
+    `;
+  }
+
+  const type = meta.input === "tel" || meta.input === "date" ? "text" : meta.input === "decimal" ? "number" : meta.input || "text";
+  const attrs = [
+    `id="nutrition_${escapeHtml(meta.name)}"`,
+    `type="${type}"`,
+    `data-nutrition-field="${escapeHtml(meta.name)}"`,
+    `value="${escapeHtml(value)}"`,
+    meta.input === "tel" ? 'inputmode="numeric" maxlength="11" autocomplete="tel"' : "",
+    meta.input === "date" ? 'inputmode="numeric" placeholder="MM/DD/YYYY"' : "",
+    meta.input === "number" ? 'inputmode="numeric" min="0"' : "",
+    meta.input === "decimal" ? 'step="0.1" min="0"' : "",
+    shouldNutritionCapitalizeField(meta.name) ? 'data-capitalize="words" autocapitalize="words"' : "",
+    meta.required ? "required" : ""
+  ].filter(Boolean).join(" ");
+
+  return `
+    <div class="paper-field ${isWide ? "wide" : ""}">
+      <label for="nutrition_${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
+      <input ${attrs}>
+    </div>
+  `;
+}
+
+function shouldNutritionCapitalizeField(name) {
+  return ![
+    "beneficiary_no",
+    "center_id",
+    "picture_data",
+    "birth_date",
+    "age",
+    "contact_no",
+    "sibling_count",
+    "admission_date",
+    "initial_age_months",
+    "initial_weight_kg",
+    "initial_height_cm",
+    "current_update_date",
+    "current_age_months",
+    "current_weight_kg",
+    "current_height_cm"
+  ].includes(name);
+}
+
+function nutritionHouseholdRows(record = {}) {
+  return Array.isArray(record.household_members) ? record.household_members : [];
+}
+
+function renderNutritionHouseholdCell(fieldMeta, row, rowIndex, readonly) {
+  const value = nutritionText(row[fieldMeta.name]);
+
+  if (readonly) return `<td>${escapeHtml(value)}</td>`;
+
+  if (fieldMeta.name === "relationship") {
+    return `
+      <td>
+        <select data-nutrition-household-field="${escapeHtml(fieldMeta.name)}" data-nutrition-household-row="${rowIndex}">
+          ${nutritionSelectOptions(NUTRITION_RELATIONSHIP_OPTIONS, value, true)}
+        </select>
+      </td>
+    `;
+  }
+
+  const type = fieldMeta.name === "age" ? "number" : "text";
+  return `
+    <td>
+      <input type="${type}" data-nutrition-household-field="${escapeHtml(fieldMeta.name)}" data-nutrition-household-row="${rowIndex}" value="${escapeHtml(value)}"${fieldMeta.name === "age" ? ' inputmode="numeric" min="0"' : ' data-capitalize="words" autocapitalize="words"'}>
+    </td>
+  `;
+}
+
+function renderNutritionHouseholdRow(row, rowIndex, readonly) {
+  return `
+    <tr data-nutrition-household-container="${rowIndex}">
+      ${NUTRITION_HOUSEHOLD_FIELDS.map(fieldMeta => renderNutritionHouseholdCell(fieldMeta, row, rowIndex, readonly)).join("")}
+      ${readonly ? "" : `
+        <td class="row-remove-cell">
+          <button type="button" class="icon-button" title="Remove household member" data-remove-nutrition-household-row="${rowIndex}">
+            ${icon("bin")}
+          </button>
+        </td>
+      `}
+    </tr>
+  `;
+}
+
+function renderNutritionHouseholdSection(record, readonly) {
+  const rows = nutritionHouseholdRows(record);
+  const headers = NUTRITION_HOUSEHOLD_FIELDS.map(fieldMeta => fieldMeta.label);
+  const bodyRows = rows.length
+    ? rows.map((row, rowIndex) => renderNutritionHouseholdRow(row, rowIndex, readonly)).join("")
+    : `<tr class="family-empty-row"><td colspan="${NUTRITION_HOUSEHOLD_FIELDS.length + (readonly ? 0 : 1)}">No household members added.</td></tr>`;
+
+  return `
+    <section class="paper-section">
+      <div class="family-section-header">
+        <h3>Household Members</h3>
+        ${readonly ? "" : `
+          <button type="button" id="addNutritionHouseholdButton" class="icon-button family-add-button" title="Add household member" aria-label="Add household member">
+            ${icon("plus")}
+          </button>
+        `}
+      </div>
+      <div class="family-table-wrap">
+        <table class="family-table nutrition-household-table">
+          <thead>
+            <tr>
+              ${headers.map(header => `<th>${escapeHtml(header)}</th>`).join("")}
+              ${readonly ? "" : `<th class="row-remove-head">Remove</th>`}
+            </tr>
+          </thead>
+          <tbody id="nutritionHouseholdBody">
+            ${bodyRows}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function normalizeNutritionInputValue(name, value) {
+  if (name === "contact_no") return normalizeContactNumber(value);
+  if ([
+    "age",
+    "sibling_count",
+    "initial_age_months",
+    "current_age_months"
+  ].includes(name)) {
+    return String(value || "").replace(/\D/g, "").slice(0, 3);
+  }
+  if ([
+    "initial_weight_kg",
+    "initial_height_cm",
+    "current_weight_kg",
+    "current_height_cm"
+  ].includes(name)) {
+    const number = Number(String(value || "").replace(/[^\d.]/g, ""));
+    return Number.isFinite(number) && String(value || "").trim() ? String(number) : "";
+  }
+  if ([
+    "beneficiary_no",
+    "center_id"
+  ].includes(name)) {
+    return String(value || "").trim();
+  }
+  if ([
+    "birth_date",
+    "admission_date",
+    "current_update_date"
+  ].includes(name)) {
+    return normalizeNutritionDateValue(value);
+  }
+  return titleCaseValue(value);
+}
+
+function setNutritionPictureData(data) {
+  state.nutritionPictureData = data;
+
+  const preview = document.getElementById("nutritionPhotoPreview");
+  if (preview) {
+    preview.innerHTML = data
+      ? `<img src="${escapeHtml(data)}" alt="Nutrition beneficiary picture">`
+      : "<span>Picture</span>";
+  }
+
+  const dropZone = document.getElementById("nutritionPhotoDropZone");
+  dropZone?.classList.toggle("has-photo", Boolean(data));
+  dropZone?.classList.remove("drag-over");
+
+  const removeButton = document.getElementById("removeNutritionPictureButton");
+  if (removeButton) removeButton.hidden = !data;
+}
+
+function readNutritionPictureFile(file) {
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    showToast("Choose an image file.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => setNutritionPictureData(String(reader.result || ""));
+  reader.readAsDataURL(file);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      let dataUrl = String(reader.result || "");
+      if (dataUrl.startsWith("data:;base64,") && file.name.toLowerCase().endsWith(".pdf")) {
+        dataUrl = dataUrl.replace("data:;base64,", "data:application/pdf;base64,");
+      }
+      resolve(dataUrl);
+    };
+    reader.onerror = () => reject(new Error("Could not read the selected file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function nextNutritionHouseholdRowIndex() {
+  const indexes = [...elements.pageRoot.querySelectorAll("[data-nutrition-household-row]")]
+    .map(input => Number(input.dataset.nutritionHouseholdRow))
+    .filter(Number.isFinite);
+
+  return indexes.length ? Math.max(...indexes) + 1 : 0;
+}
+
+function addNutritionHouseholdRow() {
+  const body = document.getElementById("nutritionHouseholdBody");
+  if (!body) return;
+
+  body.querySelector(".family-empty-row")?.remove();
+  const rowIndex = nextNutritionHouseholdRowIndex();
+  body.insertAdjacentHTML("beforeend", renderNutritionHouseholdRow({}, rowIndex, false));
+  attachCapitalizationHandlers(body.rows[body.rows.length - 1]);
+  attachNutritionHouseholdRemoveHandlers(body.rows[body.rows.length - 1]);
+}
+
+function removeNutritionHouseholdRow(rowIndex) {
+  const body = document.getElementById("nutritionHouseholdBody");
+  body?.querySelector(`[data-nutrition-household-container="${rowIndex}"]`)?.remove();
+
+  if (body && !body.querySelector("[data-nutrition-household-container]")) {
+    body.innerHTML = `<tr class="family-empty-row"><td colspan="${NUTRITION_HOUSEHOLD_FIELDS.length + 1}">No household members added.</td></tr>`;
+  }
+}
+
+function attachNutritionHouseholdRemoveHandlers(scope = document) {
+  scope.querySelectorAll("[data-remove-nutrition-household-row]").forEach(button => {
+    button.addEventListener("click", () => removeNutritionHouseholdRow(button.dataset.removeNutritionHouseholdRow));
+  });
+}
+
+function setNutritionOcrStatus(status, summary = "", text = "") {
+  const panel = document.getElementById("nutritionOcrPanel");
+  const statusNode = document.getElementById("nutritionOcrStatus");
+  const summaryNode = document.getElementById("nutritionOcrSummary");
+  const details = document.getElementById("nutritionOcrDetails");
+  const textNode = document.getElementById("nutritionOcrText");
+
+  if (panel) panel.hidden = false;
+  if (statusNode) statusNode.textContent = status;
+  if (summaryNode) summaryNode.textContent = summary;
+  if (details) details.hidden = !text;
+  if (textNode) textNode.textContent = text || "";
+}
+
+function applyNutritionOcrDraft(draft = {}) {
+  Object.entries(draft).forEach(([name, value]) => {
+    if (name === "household_members") return;
+
+    const input = elements.pageRoot.querySelector(`[data-nutrition-field="${name}"]`);
+    if (!input || value === null || typeof value === "undefined" || String(value).trim() === "") return;
+    input.value = value;
+  });
+
+  if (draft.feeding_center && !draft.center_id) {
+    const centerSelect = elements.pageRoot.querySelector('[data-nutrition-field="center_id"]');
+    const match = [...(centerSelect?.options || [])].find(option => {
+      return option.textContent.trim().toLowerCase() === String(draft.feeding_center).trim().toLowerCase();
+    });
+    if (match) centerSelect.value = match.value;
+  }
+
+  if (Array.isArray(draft.household_members) && draft.household_members.length) {
+    const body = document.getElementById("nutritionHouseholdBody");
+    if (body) {
+      body.innerHTML = draft.household_members
+        .map((row, index) => renderNutritionHouseholdRow(row, index, false))
+        .join("");
+      attachCapitalizationHandlers(body);
+      attachNutritionHouseholdRemoveHandlers(body);
+    }
+  }
+
+  updateNutritionComputedFields();
+}
+
+function nutritionOcrFieldCount(draft = {}) {
+  return Object.entries(draft).reduce((count, [key, value]) => {
+    if (key === "household_members") return count + (Array.isArray(value) ? value.length : 0);
+    return count + (String(value || "").trim() ? 1 : 0);
+  }, 0);
+}
+
+async function handleNutritionOcrImport(file) {
+  if (!file) return;
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  if (!file.type.startsWith("image/") && !isPdf) {
+    showToast("Choose an image or PDF file for OCR.");
+    return;
+  }
+
+  setNutritionOcrStatus("Reading Image", file.name);
+
+  try {
+    const imageData = await readFileAsDataUrl(file);
+    setNutritionOcrStatus("Scanning Profile", "This may take a moment.");
+    const payload = await api("/api/nutrition/ocr-profile", {
+      method: "POST",
+      body: JSON.stringify({ imageData })
+    });
+    const draft = payload.draft || {};
+    const fieldCount = nutritionOcrFieldCount(draft);
+
+    applyNutritionOcrDraft(draft);
+    setNutritionOcrStatus(
+      "OCR Import Complete",
+      `${fieldCount} field${fieldCount === 1 ? "" : "s"} detected from ${payload.sourceType === "pdf" ? `${payload.pages || 0} PDF page${payload.pages === 1 ? "" : "s"}` : "image"}. Confidence: ${payload.confidence || 0}%`,
+      payload.text || ""
+    );
+    showToast("OCR import applied. Review before saving.");
+  } catch (error) {
+    setNutritionOcrStatus("OCR Import Failed", error.message);
+    showToast(error.message);
+  }
+}
+
+function updateNutritionAgeFromBirthDate() {
+  const birthInput = elements.pageRoot.querySelector('[data-nutrition-field="birth_date"]');
+  const ageInput = elements.pageRoot.querySelector('[data-nutrition-field="age"]');
+  if (!birthInput || !ageInput || !birthInput.value) return;
+
+  const birthDate = parseNutritionDate(birthInput.value);
+  if (!birthDate) return;
+
+  const now = new Date();
+  let age = now.getFullYear() - birthDate.getFullYear();
+  const beforeBirthday = now.getMonth() < birthDate.getMonth()
+    || (now.getMonth() === birthDate.getMonth() && now.getDate() < birthDate.getDate());
+  if (beforeBirthday) age -= 1;
+  if (age >= 0 && age < 130) ageInput.value = String(age);
+}
+
+function nutritionComputedDraftFromInputs() {
+  const record = { ...(state.currentNutritionBeneficiary || {}) };
+  elements.pageRoot.querySelectorAll("[data-nutrition-field]").forEach(input => {
+    record[input.dataset.nutritionField] = input.value;
+  });
+  return record;
+}
+
+function updateNutritionComputedFields() {
+  const record = nutritionComputedDraftFromInputs();
+  elements.pageRoot.querySelectorAll("[data-nutrition-computed]").forEach(node => {
+    node.textContent = nutritionComputedValue(record, node.dataset.nutritionComputed) || "";
+  });
+}
+
+function attachNutritionBeneficiaryFormHandlers() {
+  const fileInput = document.getElementById("nutritionPictureInput");
+  fileInput?.addEventListener("change", () => {
+    readNutritionPictureFile(fileInput.files?.[0]);
+  });
+  const ocrInput = document.getElementById("nutritionOcrInput");
+  ocrInput?.addEventListener("change", () => {
+    handleNutritionOcrImport(ocrInput.files?.[0]).finally(() => {
+      ocrInput.value = "";
+    });
+  });
+
+  const dropZone = document.getElementById("nutritionPhotoDropZone");
+  dropZone?.addEventListener("dragenter", event => {
+    event.preventDefault();
+    dropZone.classList.add("drag-over");
+  });
+  dropZone?.addEventListener("dragover", event => {
+    event.preventDefault();
+    dropZone.classList.add("drag-over");
+  });
+  dropZone?.addEventListener("dragleave", event => {
+    if (!dropZone.contains(event.relatedTarget)) {
+      dropZone.classList.remove("drag-over");
+    }
+  });
+  dropZone?.addEventListener("drop", event => {
+    event.preventDefault();
+    dropZone.classList.remove("drag-over");
+    readNutritionPictureFile(event.dataTransfer?.files?.[0]);
+  });
+
+  document.getElementById("removeNutritionPictureButton")?.addEventListener("click", () => {
+    setNutritionPictureData("");
+    if (fileInput) fileInput.value = "";
+  });
+
+  elements.pageRoot.querySelectorAll('[data-nutrition-field="contact_no"]').forEach(input => {
+    input.addEventListener("input", () => {
+      input.value = normalizeContactNumber(input.value);
+    });
+    input.addEventListener("blur", () => {
+      input.value = normalizeContactNumber(input.value);
+    });
+  });
+  elements.pageRoot.querySelector('[data-nutrition-field="birth_date"]')?.addEventListener("change", updateNutritionAgeFromBirthDate);
+  elements.pageRoot.querySelectorAll([
+    '[data-nutrition-field="birth_date"]',
+    '[data-nutrition-field="admission_date"]',
+    '[data-nutrition-field="current_update_date"]'
+  ].join(",")).forEach(input => {
+    input.addEventListener("blur", () => {
+      input.value = normalizeNutritionDateValue(input.value);
+      if (input.dataset.nutritionField === "birth_date") updateNutritionAgeFromBirthDate();
+    });
+  });
+
+  elements.pageRoot.querySelectorAll([
+    '[data-nutrition-field="initial_weight_kg"]',
+    '[data-nutrition-field="current_weight_kg"]',
+    '[data-nutrition-field="initial_height_cm"]',
+    '[data-nutrition-field="current_height_cm"]'
+  ].join(",")).forEach(input => {
+    input.addEventListener("input", updateNutritionComputedFields);
+    input.addEventListener("change", updateNutritionComputedFields);
+  });
+  updateNutritionComputedFields();
+
+  attachCapitalizationHandlers(elements.pageRoot);
+  attachNutritionHouseholdRemoveHandlers(elements.pageRoot);
+  document.getElementById("addNutritionHouseholdButton")?.addEventListener("click", addNutritionHouseholdRow);
+}
+
+function collectNutritionBeneficiary() {
+  const record = {};
+
+  if (state.currentNutritionBeneficiary?.id) {
+    record.id = state.currentNutritionBeneficiary.id;
+  }
+
+  elements.pageRoot.querySelectorAll("[data-nutrition-field]").forEach(input => {
+    record[input.dataset.nutritionField] = normalizeNutritionInputValue(input.dataset.nutritionField, input.value);
+  });
+
+  const centerInput = elements.pageRoot.querySelector('[data-nutrition-field="center_id"]');
+  if (centerInput?.tagName === "SELECT") {
+    const selected = centerInput.options[centerInput.selectedIndex];
+    record.feeding_center = record.center_id ? String(selected?.textContent || "").trim() : "";
+  }
+
+  record.picture_data = state.nutritionPictureData || "";
+  record.household_members = [...new Set([...elements.pageRoot.querySelectorAll("[data-nutrition-household-row]")]
+    .map(input => Number(input.dataset.nutritionHouseholdRow))
+    .filter(Number.isFinite))]
+    .sort((left, right) => left - right)
+    .map(rowIndex => {
+      return NUTRITION_HOUSEHOLD_FIELDS.reduce((row, fieldMeta) => {
+        const input = elements.pageRoot.querySelector(`[data-nutrition-household-field="${fieldMeta.name}"][data-nutrition-household-row="${rowIndex}"]`);
+        row[fieldMeta.name] = normalizeNutritionInputValue(fieldMeta.name, input?.value || "").trim();
+        return row;
+      }, {});
+    })
+    .filter(row => NUTRITION_HOUSEHOLD_FIELDS.some(fieldMeta => row[fieldMeta.name]));
+
+  return record;
+}
+
+async function saveCurrentNutritionBeneficiary() {
+  const record = collectNutritionBeneficiary();
+  if (!record.child_last_name || !record.child_first_name) {
+    showToast("Child first and last name are required.");
+    return;
+  }
+
+  if (record.contact_no && !/^\d{11}$/.test(record.contact_no)) {
+    showToast("Contact No. must be 11 digits.");
+    return;
+  }
+
+  const payload = await api("/api/nutrition/beneficiaries", {
+    method: "POST",
+    body: JSON.stringify(record)
+  });
+
+  await refreshStats();
+  showToast("Nutrition profile saved.");
+  history.replaceState(null, "", `#/nutrition-profiles/edit-${payload.beneficiary.id}`);
+  await renderNutritionBeneficiaryDetailPage(String(payload.beneficiary.id), false);
+}
+
+async function deleteCurrentNutritionBeneficiary(id) {
+  const record = state.currentNutritionBeneficiary || await loadNutritionBeneficiary(id);
+  const confirmed = window.confirm(`Delete this nutrition beneficiary profile?\n\n${record.beneficiary_no}\n${nutritionFullName(record)}`);
+  if (!confirmed) return;
+
+  await api(`/api/nutrition/beneficiaries/${id}`, { method: "DELETE" });
+  await refreshStats();
+  showToast("Nutrition profile deleted.");
+  navigate("nutrition-profiles");
+}
+
+function nutritionPrintDisplayValue(record, meta) {
+  if (meta.input === "center") return nutritionCenterName(record);
+  if (meta.input === "date") return normalizeNutritionDateValue(record[meta.name]);
+  if (meta.input === "computed") return nutritionComputedValue(record, meta.name);
+  return nutritionText(record[meta.name]);
+}
+
+function nutritionPrintField(record, meta) {
+  const value = nutritionPrintDisplayValue(record, meta) || "-";
+
+  return `
+    <div class="print-field ${meta.wide || meta.input === "textarea" ? "wide" : ""}">
+      <span>${escapeHtml(meta.label)}</span>
+      <strong>${escapeHtml(value).replaceAll("\n", "<br>")}</strong>
+    </div>
+  `;
+}
+
+function nutritionPrintGroup(record, group) {
+  return `
+    <div class="print-group">
+      <h4>${escapeHtml(group.title)}</h4>
+      <div class="field-grid">
+        ${group.fields.map(meta => nutritionPrintField(record, meta)).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function nutritionPrintHouseholdRows(record) {
+  const rows = nutritionHouseholdRows(record);
+
+  if (!rows.length) {
+    return `<tr><td colspan="${NUTRITION_HOUSEHOLD_FIELDS.length}">No household members added.</td></tr>`;
+  }
+
+  return rows.map(row => `
+    <tr>
+      ${NUTRITION_HOUSEHOLD_FIELDS.map(fieldMeta => `<td>${escapeHtml(nutritionText(row[fieldMeta.name], "-"))}</td>`).join("")}
+    </tr>
+  `).join("");
+}
+
+function printNutritionBeneficiary(record) {
+  const printWindow = window.open("", "_blank", "width=940,height=760");
+  if (!printWindow) {
+    showToast("Allow popups to print nutrition profiles.");
+    return;
+  }
+
+  const logoSrc = `${window.location.origin}/assets/paofi-logo.png`;
+  const centerName = nutritionCenterName(record);
+  const profileTitle = `${record.beneficiary_no || "Nutrition Profile"} ${nutritionFullName(record)}`;
+  const picture = record.picture_data
+    ? `<img class="profile-photo" src="${escapeHtml(record.picture_data)}" alt="">`
+    : `<div class="profile-photo photo-placeholder">Photo</div>`;
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>${escapeHtml(profileTitle)}</title>
+        <style>
+          @page { size: letter; margin: 8mm; }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            background: #edf3ef;
+            color: #1d2520;
+            font-family: "Segoe UI", Arial, sans-serif;
+            font-size: 9.2px;
+            line-height: 1.2;
+          }
+          button {
+            margin: 12px;
+            border: 1px solid #bdd3c6;
+            border-radius: 7px;
+            background: #ffffff;
+            padding: 8px 12px;
+            color: #155b3c;
+            font-weight: 700;
+          }
+          .sheet {
+            width: 8.5in;
+            min-height: 11in;
+            margin: 0 auto;
+            padding: 0.26in 0.3in;
+            background: #ffffff;
+          }
+          h1, h2, h3, h4, p { margin: 0; }
+          .header {
+            display: grid;
+            grid-template-columns: 54px minmax(0, 1fr);
+            gap: 10px;
+            align-items: center;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #1f7a4f;
+            text-align: center;
+          }
+          .header img {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+          }
+          .header h1 {
+            color: #2f68b1;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0;
+            text-transform: uppercase;
+          }
+          .header h2 {
+            margin-top: 2px;
+            color: #c62b26;
+            font-size: 14px;
+            line-height: 1;
+            text-transform: uppercase;
+          }
+          .form-title {
+            margin-top: 3px;
+            color: #1d2520;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+          }
+          .profile-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 1.82in;
+            gap: 12px;
+            align-items: start;
+            margin-top: 10px;
+          }
+          .profile-photo {
+            width: 1.82in;
+            height: 2.42in;
+            border: 1px solid #8ea79a;
+            background: #f4f8f6;
+            object-fit: cover;
+          }
+          .photo-placeholder {
+            display: grid;
+            place-items: center;
+            color: #7a8a82;
+            font-weight: 800;
+            text-transform: uppercase;
+          }
+          .print-section {
+            break-inside: avoid;
+            margin-top: 8px;
+          }
+          .print-section:first-child {
+            margin-top: 0;
+          }
+          .print-section h3 {
+            margin-bottom: 5px;
+            border-left: 4px solid #1f7a4f;
+            border-radius: 4px;
+            background: #eaf6ef;
+            color: #143d33;
+            padding: 5px 7px;
+            font-size: 10px;
+            line-height: 1;
+          }
+          .print-group {
+            break-inside: avoid;
+            margin-bottom: 6px;
+          }
+          .print-group:last-child {
+            margin-bottom: 0;
+          }
+          .print-group h4 {
+            margin-bottom: 3px;
+            color: #155b3c;
+            font-size: 8.4px;
+            text-transform: uppercase;
+          }
+          .field-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            border-top: 1px solid #cddbd2;
+            border-left: 1px solid #cddbd2;
+          }
+          .family-grid,
+          .snapshot-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+          .family-grid .print-group:last-child,
+          .snapshot-grid .print-group:last-child {
+            grid-column: 1 / -1;
+          }
+          .print-field {
+            min-height: 26px;
+            border-right: 1px solid #cddbd2;
+            border-bottom: 1px solid #cddbd2;
+            padding: 3px 5px;
+            overflow-wrap: anywhere;
+          }
+          .print-field.wide {
+            grid-column: 1 / -1;
+          }
+          .print-field span {
+            display: block;
+            margin-bottom: 2px;
+            color: #5b6861;
+            font-size: 6.8px;
+            font-weight: 800;
+            text-transform: uppercase;
+          }
+          .print-field strong {
+            display: block;
+            color: #1d2520;
+            font-size: 8.4px;
+            font-weight: 650;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          th, td {
+            border: 1px solid #cddbd2;
+            padding: 3px 4px;
+            text-align: left;
+            vertical-align: top;
+            overflow-wrap: anywhere;
+          }
+          th {
+            background: #f2f7f4;
+            color: #243029;
+            font-size: 7px;
+            font-weight: 800;
+          }
+          td {
+            font-size: 7.4px;
+          }
+          th:nth-child(2),
+          td:nth-child(2) {
+            width: 10%;
+            text-align: center;
+          }
+          th:nth-child(3),
+          td:nth-child(3) {
+            width: 18%;
+          }
+          @media print {
+            body { background: #ffffff; }
+            button { display: none; }
+            .sheet {
+              width: auto;
+              min-height: auto;
+              margin: 0;
+              padding: 0;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <button onclick="window.print()">Print</button>
+        <main class="sheet">
+          <header class="header">
+            <img src="${escapeHtml(logoSrc)}" alt="">
+            <div>
+              <h1>Payatas Orione Foundation, Inc.</h1>
+              <h2>${escapeHtml(centerName)}</h2>
+              <p class="form-title">Beneficiary Profile</p>
+            </div>
+          </header>
+          <section class="profile-layout">
+            <div>
+              <section class="print-section">
+                <h3>I. Child's Basic Information</h3>
+                ${NUTRITION_BASIC_GROUPS.map(group => nutritionPrintGroup(record, group)).join("")}
+              </section>
+            </div>
+            ${picture}
+          </section>
+          <section class="print-section">
+            <h3>II. Family Background</h3>
+            <div class="family-grid">
+              ${NUTRITION_FAMILY_GROUPS.map(group => nutritionPrintGroup(record, group)).join("")}
+            </div>
+          </section>
+          <section class="print-section">
+            <h3>Household Members</h3>
+            <table>
+              <thead>
+                <tr>${NUTRITION_HOUSEHOLD_FIELDS.map(fieldMeta => `<th>${escapeHtml(fieldMeta.label)}</th>`).join("")}</tr>
+              </thead>
+              <tbody>${nutritionPrintHouseholdRows(record)}</tbody>
+            </table>
+          </section>
+          <section class="print-section">
+            <h3>III. Admission & Nutrition Snapshot</h3>
+            <div class="snapshot-grid">
+              ${NUTRITION_SNAPSHOT_GROUPS.map(group => nutritionPrintGroup(record, group)).join("")}
+            </div>
+          </section>
+        </main>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+async function renderNutritionCentersPage(id = "") {
+  const parsed = parseNutritionRouteId(id);
+
+  if (parsed.mode !== "list") {
+    await renderNutritionCenterDetailPage(parsed.id, parsed.mode !== "edit" && parsed.mode !== "new");
+    return;
+  }
+
+  setTitle("Feeding Centers");
+  setTopbarActions([
+    { id: "nutritionCenterNew", label: "New Center", icon: "plus", variant: "primary", onClick: () => navigate("nutrition-centers", "new") },
+    { id: "nutritionProfiles", label: "Profiles", icon: "users", onClick: () => navigate("nutrition-profiles") }
+  ]);
+
+  const overview = await loadNutritionOverview();
+  const centers = overview.centers || [];
+  const beneficiaries = overview.beneficiaries || [];
+
+  elements.pageRoot.innerHTML = `
+    ${renderNutritionCenterAnalytics(centers, beneficiaries)}
+    <section class="database-page nutrition-page">
+      <div class="table-toolbar">
+        <div class="search-band compact with-button">
+          <span class="search-icon">${icon("search")}</span>
+          <input id="nutritionCenterSearchInput" type="search" placeholder="Search center, location, coordinator, or status">
+          <button id="nutritionCenterSearchButton" type="button" class="action-button">
+            <span class="button-icon">${icon("search")}</span>
+            <span>Search</span>
+          </button>
+        </div>
+        <div class="table-toolbar-footer">
+          <div class="filter-summary"><span>Feeding center profile records</span></div>
+          <span id="nutritionCenterCount" class="table-count"></span>
+        </div>
+      </div>
+      <div id="nutritionCenterTableHost" class="database-table-host"></div>
+    </section>
+  `;
+
+  async function loadCenters() {
+    const search = encodeURIComponent(document.getElementById("nutritionCenterSearchInput").value.trim());
+    const payload = await api(`/api/nutrition/centers?search=${search}&limit=500`);
+    renderNutritionCenterTable(payload.centers || []);
+  }
+
+  document.getElementById("nutritionCenterSearchButton").addEventListener("click", () => loadCenters().catch(error => showToast(error.message)));
+  document.getElementById("nutritionCenterSearchInput").addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      loadCenters().catch(error => showToast(error.message));
+    }
+  });
+
+  renderNutritionCenterTable(centers);
+}
+
+function renderNutritionCenterAnalytics(centers = [], beneficiaries = []) {
+  const analytics = buildNutritionAnalytics(beneficiaries, centers);
+  const topCenter = topAnalyticsEntry(analytics.centerCounts);
+
+  return `
+    <section class="database-analytics nutrition-analytics">
+      <div class="analytics-title-row">
+        <div>
+          <span class="analytics-eyebrow">Feeding Center Analytics</span>
+          <h3>Center Coverage</h3>
+        </div>
+        <span class="analytics-note">${analytics.activeCenters} active of ${analytics.centers} centers</span>
+      </div>
+      <div class="analytics-kpi-grid">
+        ${renderAnalyticsKpi("Centers", String(analytics.centers), "Profile records", "green")}
+        ${renderAnalyticsKpi("Active Centers", String(analytics.activeCenters), "Currently operating", "blue")}
+        ${renderAnalyticsKpi("Beneficiaries", String(analytics.total), "Children linked to centers", "amber")}
+        ${renderAnalyticsKpi("Largest Center", topCenter.label, analyticsPlural(topCenter.count, "child", "children"), "violet")}
+      </div>
+      <div class="analytics-preview-grid">
+        ${renderAnalyticsCard("Children by Center", "Profile distribution", renderBarList(analytics.centerCounts, analytics.total, 6))}
+        ${renderAnalyticsCard("Current Nutrition Status", "Across all centers", renderBarList(analytics.nutritionStatusCounts, analytics.total, 5))}
+      </div>
+    </section>
+  `;
+}
+
+function renderNutritionCenterTable(centers = []) {
+  document.getElementById("nutritionCenterCount").textContent = `${centers.length} shown`;
+
+  if (!centers.length) {
+    document.getElementById("nutritionCenterTableHost").innerHTML = emptyState("No feeding centers found.");
+    return;
+  }
+
+  document.getElementById("nutritionCenterTableHost").innerHTML = `
+    <div class="data-table-scroll">
+      <table class="data-table nutrition-center-table">
+        <thead>
+          <tr>
+            <th class="sticky-column">Actions</th>
+            <th>Feeding Center</th>
+            <th>Location</th>
+            <th>Coordinator</th>
+            <th>Contact No.</th>
+            <th>Capacity</th>
+            <th>Status</th>
+            <th>Beneficiaries</th>
+            <th>Active Children</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${centers.map(center => `
+            <tr>
+              <td class="sticky-column">
+                <div class="table-actions">
+                  <button type="button" class="icon-button" title="View" data-nutrition-center-view-id="${center.id}">${icon("view")}</button>
+                  <button type="button" class="icon-button" title="Edit" data-nutrition-center-edit-id="${center.id}">${icon("edit")}</button>
+                </div>
+              </td>
+              <td>${escapeHtml(center.center_name || "")}</td>
+              <td>${escapeHtml(center.location || "")}</td>
+              <td>${escapeHtml(center.coordinator || "")}</td>
+              <td>${escapeHtml(center.contact_no || "")}</td>
+              <td>${escapeHtml(center.capacity || "")}</td>
+              <td>${escapeHtml(center.status || "")}</td>
+              <td>${escapeHtml(center.beneficiary_count || 0)}</td>
+              <td>${escapeHtml(center.active_beneficiary_count || 0)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+  attachNutritionCenterTableHandlers(elements.pageRoot);
+}
+
+function attachNutritionCenterTableHandlers(scope = document) {
+  scope.querySelectorAll("[data-nutrition-center-view-id]").forEach(button => {
+    button.addEventListener("click", () => navigate("nutrition-centers", button.dataset.nutritionCenterViewId));
+  });
+  scope.querySelectorAll("[data-nutrition-center-edit-id]").forEach(button => {
+    button.addEventListener("click", () => navigate("nutrition-centers", `edit-${button.dataset.nutritionCenterEditId}`));
+  });
+}
+
+async function loadNutritionCenter(id) {
+  const payload = await api(`/api/nutrition/centers/${id}`);
+  return payload.center;
+}
+
+function blankNutritionCenter() {
+  return {
+    center_name: "",
+    location: "",
+    coordinator: "",
+    contact_no: "",
+    capacity: "",
+    status: "Active",
+    notes: ""
+  };
+}
+
+async function renderNutritionCenterDetailPage(id = "", readonly = true) {
+  const isNew = !id;
+  const [center, beneficiaries] = await Promise.all([
+    isNew ? Promise.resolve(blankNutritionCenter()) : loadNutritionCenter(id),
+    id ? api(`/api/nutrition/beneficiaries?centerId=${encodeURIComponent(id)}&limit=500`).then(payload => payload.beneficiaries || []) : Promise.resolve([])
+  ]);
+  state.currentNutritionCenter = center;
+
+  setTitle(isNew ? "New Feeding Center" : readonly ? "Feeding Center Profile" : "Edit Feeding Center");
+  setTopbarActions([
+    { id: "nutritionCenterBack", label: "Centers", icon: "table", onClick: () => navigate("nutrition-centers") },
+    ...(readonly && center.id ? [
+      { id: "nutritionCenterEdit", label: "Edit", icon: "edit", variant: "primary", onClick: () => navigate("nutrition-centers", `edit-${center.id}`) }
+    ] : [
+      { id: "nutritionCenterSave", label: "Save", icon: "save", variant: "primary", onClick: () => saveCurrentNutritionCenter().catch(error => showToast(error.message)) }
+    ]),
+    ...(!isNew && !readonly ? [
+      { id: "nutritionCenterDelete", label: "Delete", icon: "bin", variant: "danger", onClick: () => deleteCurrentNutritionCenter(center.id).catch(error => showToast(error.message)) }
+    ] : [])
+  ]);
+
+  elements.pageRoot.innerHTML = renderNutritionCenterForm(center, beneficiaries, readonly);
+  if (!readonly) attachNutritionCenterFormHandlers();
+}
+
+function renderNutritionCenterForm(center, beneficiaries = [], readonly) {
+  return `
+    <section class="application-paper nutrition-paper ${readonly ? "readonly" : "editable"}">
+      <header class="monitoring-heading">
+        <img src="/assets/paofi-logo.png" alt="">
+        <div>
+          <h2>Payatas Orione Foundation Inc.</h2>
+          <h3>Nutrition Program - Supplemental Feeding Center Profile</h3>
+        </div>
+      </header>
+      ${nutritionCenterFormSection("Feeding Center Profile", NUTRITION_CENTER_FIELDS, center, readonly)}
+      ${center.id ? `
+        <section class="paper-section">
+          <h3>Linked Beneficiaries</h3>
+          ${beneficiaries.length ? `
+            <div class="data-table-scroll">
+              <table class="data-table nutrition-center-linked-table">
+                <thead>
+                  <tr>
+                    <th>Beneficiary No.</th>
+                    <th>Child's Name</th>
+                    <th>Age</th>
+                    <th>Gender</th>
+                    <th>Current Nutrition Status</th>
+                    <th>Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${beneficiaries.map(record => `
+                    <tr>
+                      <td>${escapeHtml(record.beneficiary_no || "")}</td>
+                      <td>${escapeHtml(nutritionFullName(record))}</td>
+                      <td>${escapeHtml(record.age || "")}</td>
+                      <td>${escapeHtml(record.gender || "")}</td>
+                      <td>${escapeHtml(record.current_nutrition_status || "")}</td>
+                      <td>${escapeHtml(record.remarks || "")}</td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          ` : emptyState("No child profiles are linked to this center yet.")}
+        </section>
+      ` : ""}
+    </section>
+  `;
+}
+
+function nutritionCenterFormSection(title, fields, center, readonly) {
+  return `
+    <section class="paper-section">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="paper-grid">
+        ${fields.map(meta => renderNutritionCenterField(meta, center, readonly)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderNutritionCenterField(meta, center, readonly) {
+  const value = nutritionText(center[meta.name]);
+  const isWide = meta.wide || meta.input === "textarea";
+
+  if (readonly) {
+    return `
+      <div class="paper-field ${isWide ? "wide" : ""}">
+        <label>${escapeHtml(meta.label)}</label>
+        <div class="display-value">${escapeHtml(value).replaceAll("\n", "<br>") || "&nbsp;"}</div>
+      </div>
+    `;
+  }
+
+  if (meta.input === "select") {
+    return `
+      <div class="paper-field ${isWide ? "wide" : ""}">
+        <label for="nutrition_center_${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
+        <select id="nutrition_center_${escapeHtml(meta.name)}" data-nutrition-center-field="${escapeHtml(meta.name)}">
+          ${nutritionSelectOptions(meta.options || [], value, true)}
+        </select>
+      </div>
+    `;
+  }
+
+  if (meta.input === "textarea") {
+    return `
+      <div class="paper-field ${isWide ? "wide" : ""}">
+        <label for="nutrition_center_${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
+        <textarea id="nutrition_center_${escapeHtml(meta.name)}" rows="3" data-nutrition-center-field="${escapeHtml(meta.name)}" data-capitalize="words" autocapitalize="words">${escapeHtml(value)}</textarea>
+      </div>
+    `;
+  }
+
+  const type = meta.input === "tel" ? "text" : meta.input || "text";
+  const attrs = [
+    `id="nutrition_center_${escapeHtml(meta.name)}"`,
+    `type="${type}"`,
+    `data-nutrition-center-field="${escapeHtml(meta.name)}"`,
+    `value="${escapeHtml(value)}"`,
+    meta.input === "tel" ? 'inputmode="numeric" maxlength="11" autocomplete="tel"' : "",
+    meta.input === "number" ? 'inputmode="numeric" min="0"' : "",
+    !["contact_no", "capacity"].includes(meta.name) ? 'data-capitalize="words" autocapitalize="words"' : "",
+    meta.required ? "required" : ""
+  ].filter(Boolean).join(" ");
+
+  return `
+    <div class="paper-field ${isWide ? "wide" : ""}">
+      <label for="nutrition_center_${escapeHtml(meta.name)}">${escapeHtml(meta.label)}</label>
+      <input ${attrs}>
+    </div>
+  `;
+}
+
+function collectNutritionCenter() {
+  const center = {};
+  if (state.currentNutritionCenter?.id) center.id = state.currentNutritionCenter.id;
+
+  elements.pageRoot.querySelectorAll("[data-nutrition-center-field]").forEach(input => {
+    const name = input.dataset.nutritionCenterField;
+    if (name === "contact_no") {
+      center[name] = normalizeContactNumber(input.value);
+    } else if (name === "capacity") {
+      center[name] = String(input.value || "").replace(/\D/g, "").slice(0, 5);
+    } else {
+      center[name] = titleCaseValue(input.value);
+    }
+  });
+
+  return center;
+}
+
+function attachNutritionCenterFormHandlers() {
+  elements.pageRoot.querySelectorAll('[data-nutrition-center-field="contact_no"]').forEach(input => {
+    input.addEventListener("input", () => {
+      input.value = normalizeContactNumber(input.value);
+    });
+    input.addEventListener("blur", () => {
+      input.value = normalizeContactNumber(input.value);
+    });
+  });
+  attachCapitalizationHandlers(elements.pageRoot);
+}
+
+async function saveCurrentNutritionCenter() {
+  const center = collectNutritionCenter();
+  if (!center.center_name) {
+    showToast("Feeding center name is required.");
+    return;
+  }
+
+  if (center.contact_no && !/^\d{11}$/.test(center.contact_no)) {
+    showToast("Contact No. must be 11 digits.");
+    return;
+  }
+
+  const payload = await api("/api/nutrition/centers", {
+    method: "POST",
+    body: JSON.stringify(center)
+  });
+
+  await refreshStats();
+  showToast("Feeding center saved.");
+  history.replaceState(null, "", `#/nutrition-centers/edit-${payload.center.id}`);
+  await renderNutritionCenterDetailPage(String(payload.center.id), false);
+}
+
+async function deleteCurrentNutritionCenter(id) {
+  const center = state.currentNutritionCenter || await loadNutritionCenter(id);
+  const confirmed = window.confirm(`Delete this feeding center profile?\n\n${center.center_name}`);
+  if (!confirmed) return;
+
+  await api(`/api/nutrition/centers/${id}`, { method: "DELETE" });
+  await refreshStats();
+  showToast("Feeding center deleted.");
+  navigate("nutrition-centers");
 }
 
 async function renderMonitoringPage(id = "") {
@@ -3438,7 +5279,7 @@ async function exportData() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `lp-database-export-${todayDate()}.json`;
+  link.download = `paofi-database-export-${todayDate()}.json`;
   link.click();
   URL.revokeObjectURL(url);
 }

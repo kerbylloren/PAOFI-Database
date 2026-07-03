@@ -1263,8 +1263,91 @@ textarea[data-capitalize="words"] {
   min-width: 1080px;
 }
 
+.nutrition-table {
+  min-width: 1320px;
+}
+
+.nutrition-center-table {
+  min-width: 1120px;
+}
+
+.nutrition-center-linked-table {
+  min-width: 900px;
+}
+
+.nutrition-household-table {
+  min-width: 720px;
+}
+
 .monitoring-paper {
   max-width: 1240px;
+}
+
+.nutrition-paper {
+  max-width: 1240px;
+}
+
+.nutrition-form-heading {
+  grid-template-columns: minmax(0, 1fr) 220px;
+}
+
+.nutrition-form-heading .photo-box {
+  width: min(220px, 100%);
+  aspect-ratio: 3 / 4;
+  justify-self: end;
+}
+
+.ocr-status-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfd;
+}
+
+.ocr-status-panel[hidden] {
+  display: none;
+}
+
+.ocr-status-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.ocr-status-row strong,
+.ocr-status-row span {
+  display: block;
+}
+
+.ocr-status-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ocr-status-panel details {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.ocr-status-panel summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  color: var(--green-dark);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-status-panel pre {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  color: #405047;
+  white-space: pre-wrap;
 }
 
 .monitoring-heading {
@@ -1512,6 +1595,24 @@ textarea[data-capitalize="words"] {
   display: grid;
   grid-template-columns: repeat(3, minmax(170px, 1fr));
   gap: 12px;
+}
+
+.nutrition-field-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.nutrition-field-group {
+  padding: 12px;
+  border: 1px solid #d8e2dd;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.nutrition-field-group h4 {
+  margin: 0 0 10px;
+  color: var(--green-dark);
+  font-size: 13px;
 }
 
 .paper-field {
@@ -1900,6 +2001,18 @@ textarea[data-capitalize="words"] {
   font-size: 13px;
 }
 
+.data-table.nutrition-table {
+  min-width: 1320px;
+}
+
+.data-table.nutrition-center-table {
+  min-width: 1120px;
+}
+
+.data-table.nutrition-center-linked-table {
+  min-width: 900px;
+}
+
 .data-table th,
 .data-table td {
   max-width: 260px;
@@ -2076,6 +2189,11 @@ textarea[data-capitalize="words"] {
 
   .photo-box {
     width: 136px;
+  }
+
+  .nutrition-form-heading .photo-box {
+    width: min(184px, 100%);
+    justify-self: start;
   }
 
   .record-strip,

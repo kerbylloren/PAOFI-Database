@@ -57,6 +57,55 @@ const DEFAULT_SUPERADMIN_PASSWORD = process.env.LPDB_SUPERADMIN_PASSWORD || "Cha
 const PASSWORD_ITERATIONS = 210000;
 const PASSWORD_KEY_LENGTH = 32;
 const PASSWORD_DIGEST = "sha256";
+const NUTRITION_CENTER_FIELDS = [
+  "center_name",
+  "location",
+  "coordinator",
+  "contact_no",
+  "capacity",
+  "status",
+  "notes"
+];
+const NUTRITION_BENEFICIARY_FIELDS = [
+  "center_id",
+  "beneficiary_no",
+  "feeding_center",
+  "picture_data",
+  "child_last_name",
+  "child_first_name",
+  "child_middle_name",
+  "birth_date",
+  "age",
+  "gender",
+  "home_address",
+  "school",
+  "grade_level",
+  "mother_name",
+  "mother_occupation",
+  "father_name",
+  "father_occupation",
+  "contact_no",
+  "sibling_count",
+  "birth_order",
+  "admission_date",
+  "profile_status",
+  "remarks",
+  "initial_age_months",
+  "initial_weight_kg",
+  "initial_height_cm",
+  "initial_nutrition_status",
+  "current_update_date",
+  "current_age_months",
+  "current_weight_kg",
+  "current_height_cm",
+  "current_nutrition_status"
+];
+const NUTRITION_HOUSEHOLD_FIELDS = [
+  "member_name",
+  "age",
+  "relationship",
+  "occupation"
+];
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -180,6 +229,38 @@ function normalizeAmount(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function normalizePositiveIntegerText(value, maxLength = 3) {
+  return normalizeText(value).replace(/[^\d]/g, "").slice(0, maxLength);
+}
+
+function normalizeDecimalText(value) {
+  const text = normalizeText(value).replace(/[^\d.]/g, "");
+  if (!text) return "";
+
+  const number = Number(text);
+  return Number.isFinite(number) ? String(number) : "";
+}
+
+function normalizeProfileDate(value) {
+  const text = normalizeText(value).trim();
+  if (!text) return "";
+
+  const isoMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+  if (isoMatch) {
+    return `${String(Number(isoMatch[2])).padStart(2, "0")}/${String(Number(isoMatch[3])).padStart(2, "0")}/${isoMatch[1]}`;
+  }
+
+  const slashMatch = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(text);
+  if (!slashMatch) return text;
+
+  const month = Number(slashMatch[1]);
+  const day = Number(slashMatch[2]);
+  const year = Number(slashMatch[3]) < 100 ? Number(slashMatch[3]) + 2000 : Number(slashMatch[3]);
+
+  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900) return text;
+  return `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}/${year}`;
+}
+
 function normalizeMonitoringText(value) {
   return titleCaseValue(value);
 }
@@ -262,6 +343,77 @@ function displayName(record) {
   return [record.last_name, record.first_name, record.middle_name]
     .filter(Boolean)
     .join(", ") || record.control_no;
+}
+
+function nutritionBeneficiaryName(record = {}) {
+  return [record.child_last_name, record.child_first_name, record.child_middle_name]
+    .filter(Boolean)
+    .join(", ") || record.beneficiary_no;
+}
+
+function normalizeNutritionCenter(input = {}) {
+  return {
+    id: Number(input.id || 0) || 0,
+    center_name: titleCaseValue(input.center_name || input.centerName),
+    location: titleCaseValue(input.location),
+    coordinator: titleCaseValue(input.coordinator),
+    contact_no: normalizeContactNumber(input.contact_no || input.contactNo),
+    capacity: Number(normalizePositiveIntegerText(input.capacity, 5)) || 0,
+    status: titleCaseValue(input.status || "Active") || "Active",
+    notes: titleCaseValue(input.notes)
+  };
+}
+
+function normalizeNutritionHouseholdMembers(rows = []) {
+  return (Array.isArray(rows) ? rows : [])
+    .map(row => ({
+      member_name: titleCaseValue(row.member_name || row.memberName),
+      age: normalizePositiveIntegerText(row.age),
+      relationship: titleCaseValue(row.relationship),
+      occupation: titleCaseValue(row.occupation)
+    }))
+    .filter(row => rowHasValue(row, NUTRITION_HOUSEHOLD_FIELDS));
+}
+
+function normalizeNutritionBeneficiary(input = {}, center = null) {
+  const centerId = Number(input.center_id || input.centerId || center?.id || 0) || null;
+
+  return {
+    id: Number(input.id || 0) || 0,
+    center_id: centerId,
+    beneficiary_no: normalizeText(input.beneficiary_no || input.beneficiaryNo).trim(),
+    feeding_center: titleCaseValue(input.feeding_center || input.feedingCenter || center?.center_name),
+    picture_data: normalizeText(input.picture_data || input.pictureData),
+    child_last_name: titleCaseValue(input.child_last_name || input.childLastName),
+    child_first_name: titleCaseValue(input.child_first_name || input.childFirstName),
+    child_middle_name: titleCaseValue(input.child_middle_name || input.childMiddleName),
+    birth_date: normalizeProfileDate(input.birth_date || input.birthDate),
+    age: normalizePositiveIntegerText(input.age),
+    gender: titleCaseValue(input.gender),
+    home_address: titleCaseValue(input.home_address || input.homeAddress),
+    school: titleCaseValue(input.school),
+    grade_level: titleCaseValue(input.grade_level || input.gradeLevel),
+    mother_name: titleCaseValue(input.mother_name || input.motherName),
+    mother_occupation: titleCaseValue(input.mother_occupation || input.motherOccupation),
+    father_name: titleCaseValue(input.father_name || input.fatherName),
+    father_occupation: titleCaseValue(input.father_occupation || input.fatherOccupation),
+    contact_no: normalizeContactNumber(input.contact_no || input.contactNo),
+    sibling_count: normalizePositiveIntegerText(input.sibling_count || input.siblingCount, 2),
+    birth_order: titleCaseValue(input.birth_order || input.birthOrder),
+    admission_date: normalizeProfileDate(input.admission_date || input.admissionDate),
+    profile_status: titleCaseValue(input.profile_status || input.profileStatus || "New") || "New",
+    remarks: titleCaseValue(input.remarks || "Active") || "Active",
+    initial_age_months: normalizePositiveIntegerText(input.initial_age_months || input.initialAgeMonths, 3),
+    initial_weight_kg: normalizeDecimalText(input.initial_weight_kg || input.initialWeightKg),
+    initial_height_cm: normalizeDecimalText(input.initial_height_cm || input.initialHeightCm),
+    initial_nutrition_status: titleCaseValue(input.initial_nutrition_status || input.initialNutritionStatus),
+    current_update_date: normalizeProfileDate(input.current_update_date || input.currentUpdateDate),
+    current_age_months: normalizePositiveIntegerText(input.current_age_months || input.currentAgeMonths, 3),
+    current_weight_kg: normalizeDecimalText(input.current_weight_kg || input.currentWeightKg),
+    current_height_cm: normalizeDecimalText(input.current_height_cm || input.currentHeightCm),
+    current_nutrition_status: titleCaseValue(input.current_nutrition_status || input.currentNutritionStatus),
+    household_members: normalizeNutritionHouseholdMembers(input.household_members || input.householdMembers)
+  };
 }
 
 class BeneficiaryDatabase {
@@ -379,6 +531,85 @@ class BeneficiaryDatabase {
       CREATE INDEX IF NOT EXISTS idx_monitoring_expenses_report
         ON monitoring_expenses(report_id);
 
+      CREATE TABLE IF NOT EXISTS nutrition_centers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        center_name TEXT NOT NULL DEFAULT '',
+        location TEXT NOT NULL DEFAULT '',
+        coordinator TEXT NOT NULL DEFAULT '',
+        contact_no TEXT NOT NULL DEFAULT '',
+        capacity INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'Active',
+        notes TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_centers_name
+        ON nutrition_centers(center_name);
+
+      CREATE TABLE IF NOT EXISTS nutrition_beneficiaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        center_id INTEGER,
+        beneficiary_no TEXT NOT NULL DEFAULT '',
+        feeding_center TEXT NOT NULL DEFAULT '',
+        picture_data TEXT NOT NULL DEFAULT '',
+        child_last_name TEXT NOT NULL DEFAULT '',
+        child_first_name TEXT NOT NULL DEFAULT '',
+        child_middle_name TEXT NOT NULL DEFAULT '',
+        birth_date TEXT NOT NULL DEFAULT '',
+        age TEXT NOT NULL DEFAULT '',
+        gender TEXT NOT NULL DEFAULT '',
+        home_address TEXT NOT NULL DEFAULT '',
+        school TEXT NOT NULL DEFAULT '',
+        grade_level TEXT NOT NULL DEFAULT '',
+        mother_name TEXT NOT NULL DEFAULT '',
+        mother_occupation TEXT NOT NULL DEFAULT '',
+        father_name TEXT NOT NULL DEFAULT '',
+        father_occupation TEXT NOT NULL DEFAULT '',
+        contact_no TEXT NOT NULL DEFAULT '',
+        sibling_count TEXT NOT NULL DEFAULT '',
+        birth_order TEXT NOT NULL DEFAULT '',
+        admission_date TEXT NOT NULL DEFAULT '',
+        profile_status TEXT NOT NULL DEFAULT 'New',
+        remarks TEXT NOT NULL DEFAULT 'Active',
+        initial_age_months TEXT NOT NULL DEFAULT '',
+        initial_weight_kg TEXT NOT NULL DEFAULT '',
+        initial_height_cm TEXT NOT NULL DEFAULT '',
+        initial_nutrition_status TEXT NOT NULL DEFAULT '',
+        current_update_date TEXT NOT NULL DEFAULT '',
+        current_age_months TEXT NOT NULL DEFAULT '',
+        current_weight_kg TEXT NOT NULL DEFAULT '',
+        current_height_cm TEXT NOT NULL DEFAULT '',
+        current_nutrition_status TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (center_id) REFERENCES nutrition_centers(id) ON DELETE SET NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_nutrition_beneficiaries_no
+        ON nutrition_beneficiaries(beneficiary_no)
+        WHERE beneficiary_no <> '';
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_beneficiaries_name
+        ON nutrition_beneficiaries(child_last_name, child_first_name, child_middle_name);
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_beneficiaries_center
+        ON nutrition_beneficiaries(center_id);
+
+      CREATE TABLE IF NOT EXISTS nutrition_household_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        beneficiary_id INTEGER NOT NULL,
+        row_order INTEGER NOT NULL DEFAULT 0,
+        member_name TEXT NOT NULL DEFAULT '',
+        age TEXT NOT NULL DEFAULT '',
+        relationship TEXT NOT NULL DEFAULT '',
+        occupation TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY (beneficiary_id) REFERENCES nutrition_beneficiaries(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_household_beneficiary
+        ON nutrition_household_members(beneficiary_id);
+
       CREATE TABLE IF NOT EXISTS app_users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
@@ -449,11 +680,15 @@ class BeneficiaryDatabase {
     const active = this.db.prepare("SELECT COUNT(*) AS count FROM beneficiaries").get().count;
     const deleted = this.db.prepare("SELECT COUNT(*) AS count FROM deleted_records").get().count;
     const monitoringReports = this.db.prepare("SELECT COUNT(*) AS count FROM monitoring_reports").get().count;
+    const nutritionCenters = this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_centers").get().count;
+    const nutritionBeneficiaries = this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_beneficiaries").get().count;
 
     return {
       active,
       deleted,
       monitoringReports,
+      nutritionCenters,
+      nutritionBeneficiaries,
       databasePath: this.dbPath
     };
   }
@@ -967,12 +1202,356 @@ class BeneficiaryDatabase {
       .map(report => this.getMonitoringReport(report.id));
   }
 
+  nutritionCenterWithCountsSelect() {
+    return `
+      SELECT c.*,
+        COUNT(b.id) AS beneficiary_count,
+        SUM(CASE
+          WHEN lower(COALESCE(b.remarks, '')) = 'active'
+            OR lower(COALESCE(b.profile_status, '')) = 'active'
+          THEN 1 ELSE 0
+        END) AS active_beneficiary_count
+      FROM nutrition_centers c
+      LEFT JOIN nutrition_beneficiaries b ON b.center_id = c.id
+    `;
+  }
+
+  listNutritionCenters({ search = "", limit = 200 } = {}) {
+    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+    const pattern = `%${search.trim().toLowerCase()}%`;
+    const where = search.trim()
+      ? `WHERE lower(c.center_name) LIKE ?
+          OR lower(c.location) LIKE ?
+          OR lower(c.coordinator) LIKE ?
+          OR lower(c.status) LIKE ?`
+      : "";
+    const args = search.trim() ? [pattern, pattern, pattern, pattern] : [];
+
+    return this.db
+      .prepare(`
+        ${this.nutritionCenterWithCountsSelect()}
+        ${where}
+        GROUP BY c.id
+        ORDER BY c.center_name, c.id
+        LIMIT ?
+      `)
+      .all(...args, max);
+  }
+
+  getNutritionCenter(id) {
+    const row = this.db
+      .prepare(`
+        ${this.nutritionCenterWithCountsSelect()}
+        WHERE c.id = ?
+        GROUP BY c.id
+      `)
+      .get(Number(id));
+    return row || null;
+  }
+
+  saveNutritionCenter(input = {}) {
+    const center = normalizeNutritionCenter(input);
+    if (!center.center_name) {
+      throw new Error("Feeding center name is required.");
+    }
+
+    const id = Number(input.id || 0);
+    const existing = id ? this.getNutritionCenter(id) : null;
+    const timestamp = nowIso();
+
+    if (existing) {
+      this.db.exec("BEGIN");
+      try {
+        this.db
+          .prepare(`
+            UPDATE nutrition_centers
+            SET center_name = ?,
+                location = ?,
+                coordinator = ?,
+                contact_no = ?,
+                capacity = ?,
+                status = ?,
+                notes = ?,
+                updated_at = ?
+            WHERE id = ?
+          `)
+          .run(
+            center.center_name,
+            center.location,
+            center.coordinator,
+            center.contact_no,
+            center.capacity,
+            center.status,
+            center.notes,
+            timestamp,
+            existing.id
+          );
+        this.db
+          .prepare(`
+            UPDATE nutrition_beneficiaries
+            SET feeding_center = ?, updated_at = ?
+            WHERE center_id = ?
+          `)
+          .run(center.center_name, timestamp, existing.id);
+        this.db.exec("COMMIT");
+      } catch (error) {
+        this.db.exec("ROLLBACK");
+        throw error;
+      }
+      return this.getNutritionCenter(existing.id);
+    }
+
+    const result = this.db
+      .prepare(`
+        INSERT INTO nutrition_centers (
+          center_name, location, coordinator, contact_no, capacity, status, notes, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        center.center_name,
+        center.location,
+        center.coordinator,
+        center.contact_no,
+        center.capacity,
+        center.status,
+        center.notes,
+        timestamp,
+        timestamp
+      );
+
+    return this.getNutritionCenter(Number(result.lastInsertRowid));
+  }
+
+  deleteNutritionCenter(id) {
+    const center = this.getNutritionCenter(id);
+    if (!center) {
+      throw new Error("Feeding center was not found.");
+    }
+
+    this.db.prepare("DELETE FROM nutrition_centers WHERE id = ?").run(Number(id));
+    return center;
+  }
+
+  nextNutritionBeneficiaryNo(year = new Date().getFullYear()) {
+    const prefix = `NP-${year}-`;
+    const rows = this.db
+      .prepare("SELECT beneficiary_no FROM nutrition_beneficiaries WHERE beneficiary_no LIKE ?")
+      .all(`${prefix}%`);
+    const highest = rows.reduce((max, row) => {
+      const numberPart = Number(String(row.beneficiary_no || "").slice(prefix.length));
+      return Number.isFinite(numberPart) && numberPart > max ? numberPart : max;
+    }, 0);
+
+    return `${prefix}${String(highest + 1).padStart(3, "0")}`;
+  }
+
+  nutritionBeneficiarySelect() {
+    return `
+      SELECT b.*, c.center_name AS center_name, c.location AS center_location
+      FROM nutrition_beneficiaries b
+      LEFT JOIN nutrition_centers c ON c.id = b.center_id
+    `;
+  }
+
+  listNutritionBeneficiaries({ search = "", centerId = "", limit = 200 } = {}) {
+    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+    const conditions = [];
+    const args = [];
+
+    if (centerId) {
+      conditions.push("b.center_id = ?");
+      args.push(Number(centerId));
+    }
+
+    if (search.trim()) {
+      const pattern = `%${search.trim().toLowerCase()}%`;
+      conditions.push(`(
+        lower(b.beneficiary_no) LIKE ?
+        OR lower(b.child_last_name) LIKE ?
+        OR lower(b.child_first_name) LIKE ?
+        OR lower(b.child_middle_name) LIKE ?
+        OR lower(b.child_last_name || ' ' || b.child_first_name || ' ' || b.child_middle_name) LIKE ?
+        OR lower(b.mother_name) LIKE ?
+        OR lower(b.father_name) LIKE ?
+        OR lower(b.home_address) LIKE ?
+        OR lower(b.school) LIKE ?
+        OR lower(b.gender) LIKE ?
+        OR lower(b.remarks) LIKE ?
+        OR lower(b.current_nutrition_status) LIKE ?
+        OR lower(b.feeding_center) LIKE ?
+        OR lower(COALESCE(c.center_name, '')) LIKE ?
+      )`);
+      args.push(
+        pattern, pattern, pattern, pattern, pattern, pattern, pattern,
+        pattern, pattern, pattern, pattern, pattern, pattern, pattern
+      );
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    return this.db
+      .prepare(`
+        ${this.nutritionBeneficiarySelect()}
+        ${where}
+        ORDER BY b.updated_at DESC, b.id DESC
+        LIMIT ?
+      `)
+      .all(...args, max);
+  }
+
+  getNutritionBeneficiary(id) {
+    const row = this.db
+      .prepare(`
+        ${this.nutritionBeneficiarySelect()}
+        WHERE b.id = ?
+      `)
+      .get(Number(id));
+    if (!row) return null;
+
+    return {
+      ...row,
+      household_members: this.db
+        .prepare("SELECT * FROM nutrition_household_members WHERE beneficiary_id = ? ORDER BY row_order, id")
+        .all(row.id)
+    };
+  }
+
+  getNutritionBeneficiaryByNo(beneficiaryNo) {
+    const key = String(beneficiaryNo || "").trim();
+    if (!key) return null;
+
+    const row = this.db
+      .prepare(`
+        ${this.nutritionBeneficiarySelect()}
+        WHERE b.beneficiary_no = ?
+      `)
+      .get(key);
+    return row || null;
+  }
+
+  saveNutritionBeneficiary(input = {}) {
+    const id = Number(input.id || 0);
+    const existing = id ? this.getNutritionBeneficiary(id) : null;
+    const requestedCenterId = Number(input.center_id || input.centerId || existing?.center_id || 0) || 0;
+    const center = requestedCenterId ? this.getNutritionCenter(requestedCenterId) : null;
+    const beneficiary = normalizeNutritionBeneficiary({
+      ...existing,
+      ...input,
+      center_id: requestedCenterId || null
+    }, center);
+
+    if (!beneficiary.beneficiary_no) {
+      beneficiary.beneficiary_no = this.nextNutritionBeneficiaryNo();
+    }
+
+    if (!beneficiary.child_last_name || !beneficiary.child_first_name) {
+      throw new Error("Child first and last name are required.");
+    }
+
+    const duplicate = this.getNutritionBeneficiaryByNo(beneficiary.beneficiary_no);
+    if (duplicate && duplicate.id !== existing?.id) {
+      throw new Error(`Nutrition beneficiary no. already exists: ${beneficiary.beneficiary_no}`);
+    }
+
+    const timestamp = nowIso();
+    const values = NUTRITION_BENEFICIARY_FIELDS.map(fieldName => beneficiary[fieldName]);
+
+    this.db.exec("BEGIN");
+    try {
+      let beneficiaryId = existing?.id || 0;
+
+      if (existing) {
+        const assignments = NUTRITION_BENEFICIARY_FIELDS.map(fieldName => `${quoted(fieldName)} = ?`).join(", ");
+        this.db
+          .prepare(`UPDATE nutrition_beneficiaries SET ${assignments}, updated_at = ? WHERE id = ?`)
+          .run(...values, timestamp, existing.id);
+        beneficiaryId = existing.id;
+      } else {
+        const columns = NUTRITION_BENEFICIARY_FIELDS.map(quoted).join(", ");
+        const placeholders = NUTRITION_BENEFICIARY_FIELDS.map(() => "?").join(", ");
+        const result = this.db
+          .prepare(`
+            INSERT INTO nutrition_beneficiaries (${columns}, created_at, updated_at)
+            VALUES (${placeholders}, ?, ?)
+          `)
+          .run(...values, timestamp, timestamp);
+        beneficiaryId = Number(result.lastInsertRowid);
+      }
+
+      this.db.prepare("DELETE FROM nutrition_household_members WHERE beneficiary_id = ?").run(beneficiaryId);
+      const memberInsert = this.db.prepare(`
+        INSERT INTO nutrition_household_members (
+          beneficiary_id, row_order, member_name, age, relationship, occupation
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      beneficiary.household_members.forEach((member, index) => {
+        memberInsert.run(
+          beneficiaryId,
+          index,
+          member.member_name,
+          member.age,
+          member.relationship,
+          member.occupation
+        );
+      });
+
+      this.db.exec("COMMIT");
+      return this.getNutritionBeneficiary(beneficiaryId);
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  deleteNutritionBeneficiary(id) {
+    const beneficiary = this.getNutritionBeneficiary(id);
+    if (!beneficiary) {
+      throw new Error("Nutrition beneficiary was not found.");
+    }
+
+    this.db.prepare("DELETE FROM nutrition_beneficiaries WHERE id = ?").run(Number(id));
+    return beneficiary;
+  }
+
+  exportNutritionBeneficiaries() {
+    return this.db
+      .prepare("SELECT id FROM nutrition_beneficiaries ORDER BY beneficiary_no, child_last_name, child_first_name")
+      .all()
+      .map(row => this.getNutritionBeneficiary(row.id));
+  }
+
+  nutritionOverview() {
+    const centers = this.listNutritionCenters({ limit: 500 });
+    const beneficiaries = this.listNutritionBeneficiaries({ limit: 500 });
+    const activeBeneficiaries = beneficiaries.filter(beneficiary => {
+      const remarks = String(beneficiary.remarks || "").toLowerCase();
+      const profileStatus = String(beneficiary.profile_status || "").toLowerCase();
+      return remarks === "active" || profileStatus === "active";
+    });
+
+    return {
+      centers,
+      beneficiaries,
+      stats: {
+        centers: centers.length,
+        activeCenters: centers.filter(center => String(center.status || "").toLowerCase() === "active").length,
+        beneficiaries: beneficiaries.length,
+        activeBeneficiaries: activeBeneficiaries.length
+      }
+    };
+  }
+
   exportData() {
+    const nutrition = this.nutritionOverview();
+
     return {
       exportedAt: nowIso(),
       fields: FIELD_NAMES,
       records: this.db.prepare("SELECT * FROM beneficiaries ORDER BY control_no").all(),
       monitoringReports: this.exportMonitoringReports(),
+      nutritionCenters: nutrition.centers,
+      nutritionBeneficiaries: this.exportNutritionBeneficiaries(),
       deletedRecords: this.db
         .prepare("SELECT * FROM deleted_records ORDER BY deleted_at DESC, id DESC")
         .all()
@@ -983,11 +1562,18 @@ class BeneficiaryDatabase {
 module.exports = {
   BeneficiaryDatabase,
   DEFAULT_DB_PATH,
+  NUTRITION_BENEFICIARY_FIELDS,
+  NUTRITION_CENTER_FIELDS,
+  NUTRITION_HOUSEHOLD_FIELDS,
   hashPassword,
   normalizeContactNumber,
   normalizeFieldValue,
   normalizeMonitoringReport,
+  normalizeNutritionBeneficiary,
+  normalizeNutritionCenter,
+  normalizeNutritionHouseholdMembers,
   normalizeRecord,
+  nutritionBeneficiaryName,
   nowIso,
   quoted,
   verifyPassword,

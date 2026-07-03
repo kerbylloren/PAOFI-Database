@@ -28,6 +28,7 @@ node_modules/
 # Local database/runtime data
 native-app/data/
 native-app/runtime/
+native-app/*.traineddata
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
