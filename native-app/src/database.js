@@ -3,6 +3,13 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
 const { FIELD_NAMES, SUMMARY_FIELDS } = require("./metadata");
+const {
+  calculateAgeMonths,
+  cgsReferencePayload,
+  classifyCgs,
+  normalizeReportMonth,
+  parseMeasurementNumber
+} = require("./nutrition-cgs");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
 const DEFAULT_DB_PATH = path.join(DATA_DIR, "lp_database.sqlite");
@@ -18,6 +25,7 @@ const RAW_VALUE_FIELDS = new Set([
 const UPPERCASE_TERMS = new Set([
   "ALS",
   "BPI",
+  "ICC",
   "LP",
   "MDPP",
   "N/A",
@@ -105,6 +113,31 @@ const NUTRITION_HOUSEHOLD_FIELDS = [
   "age",
   "relationship",
   "occupation"
+];
+const NUTRITION_GROWTH_REPORT_FIELDS = [
+  "center_id",
+  "center_name",
+  "submitted_date",
+  "report_month"
+];
+const NUTRITION_GROWTH_ENTRY_FIELDS = [
+  "report_id",
+  "beneficiary_id",
+  "beneficiary_no",
+  "beneficiary_name",
+  "gender",
+  "birth_date",
+  "age_months",
+  "height_cm",
+  "weight_kg",
+  "height_change_cm",
+  "weight_change_kg",
+  "cgs_classification",
+  "previous_record_date",
+  "previous_height_cm",
+  "previous_weight_kg",
+  "previous_cgs_classification",
+  "row_order"
 ];
 
 function ensureDir(dirPath) {
@@ -265,6 +298,15 @@ function normalizeMonitoringText(value) {
   return titleCaseValue(value);
 }
 
+function sentenceCaseValue(value) {
+  const text = normalizeText(value).trim().toLowerCase();
+  if (!text) return "";
+
+  return text.replace(/(^|[.!?]\s+|\n+\s*)([a-z])/g, (match, prefix, letter) => {
+    return `${prefix}${letter.toUpperCase()}`;
+  });
+}
+
 function rowHasValue(row, names) {
   return names.some(name => {
     const value = row[name];
@@ -307,12 +349,13 @@ function normalizeMonitoringReport(input = {}, beneficiary = null) {
   const totalSales = sales.reduce((sum, row) => sum + normalizeAmount(row.total_sales), 0);
   const totalExpenses = expenses.reduce((sum, row) => sum + normalizeAmount(row.amount), 0);
   const forwardedBalance = normalizeAmount(input.forwarded_balance);
+  const displayBeneficiaryName = normalizeMonitoringText(input.beneficiary_name || beneficiaryName);
 
   return {
     id: Number(input.id || 0) || 0,
     beneficiary_id: beneficiaryId,
     control_no: normalizeText(input.control_no || beneficiary?.control_no).trim(),
-    beneficiary_name: normalizeMonitoringText(input.beneficiary_name || beneficiaryName),
+    beneficiary_name: displayBeneficiaryName,
     chapel: normalizeMonitoringText(input.chapel || beneficiary?.field_c12),
     contact_no: normalizeContactNumber(input.contact_no || beneficiary?.field_l11),
     project_type: normalizeMonitoringText(input.project_type || ""),
@@ -321,9 +364,9 @@ function normalizeMonitoringReport(input = {}, beneficiary = null) {
     total_sales: totalSales,
     total_expenses: totalExpenses,
     net_income: forwardedBalance + totalSales - totalExpenses,
-    challenges: normalizeMonitoringText(input.challenges),
-    success_stories: normalizeMonitoringText(input.success_stories),
-    prepared_by: normalizeMonitoringText(input.prepared_by),
+    challenges: sentenceCaseValue(input.challenges),
+    success_stories: sentenceCaseValue(input.success_stories),
+    prepared_by: normalizeMonitoringText(input.prepared_by || displayBeneficiaryName),
     prepared_date: normalizeText(input.prepared_date).trim(),
     checked_by: normalizeMonitoringText(input.checked_by),
     checked_date: normalizeText(input.checked_date).trim(),
@@ -413,6 +456,47 @@ function normalizeNutritionBeneficiary(input = {}, center = null) {
     current_height_cm: normalizeDecimalText(input.current_height_cm || input.currentHeightCm),
     current_nutrition_status: titleCaseValue(input.current_nutrition_status || input.currentNutritionStatus),
     household_members: normalizeNutritionHouseholdMembers(input.household_members || input.householdMembers)
+  };
+}
+
+function formatMeasurementValue(value) {
+  const number = parseMeasurementNumber(value);
+  if (number === null) return "";
+  return Number(number.toFixed(2)).toString();
+}
+
+function formatSignedMeasurement(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "";
+  return Number(number.toFixed(2)).toString();
+}
+
+function measurementChange(current, previous) {
+  const currentNumber = parseMeasurementNumber(current);
+  const previousNumber = parseMeasurementNumber(previous);
+  if (currentNumber === null || previousNumber === null) return "";
+  return formatSignedMeasurement(currentNumber - previousNumber);
+}
+
+function monthEndProfileDate(reportMonth) {
+  const normalized = normalizeReportMonth(reportMonth);
+  if (!normalized) return "";
+
+  const [year, month] = normalized.split("-").map(Number);
+  return normalizeProfileDate(`${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`);
+}
+
+function normalizeNutritionGrowthReport(input = {}, center = null, existing = null) {
+  const reportMonth = normalizeReportMonth(input.report_month || input.reportMonth || existing?.report_month);
+  const submittedDate = normalizeProfileDate(input.submitted_date || input.submittedDate || existing?.submitted_date) || normalizeProfileDate(todayDate());
+
+  return {
+    id: Number(input.id || existing?.id || 0) || 0,
+    center_id: Number(input.center_id || input.centerId || existing?.center_id || center?.id || 0) || 0,
+    center_name: titleCaseValue(input.center_name || input.centerName || existing?.center_name || center?.center_name),
+    submitted_date: submittedDate,
+    report_month: reportMonth,
+    entries: Array.isArray(input.entries) ? input.entries : []
   };
 }
 
@@ -610,6 +694,52 @@ class BeneficiaryDatabase {
       CREATE INDEX IF NOT EXISTS idx_nutrition_household_beneficiary
         ON nutrition_household_members(beneficiary_id);
 
+      CREATE TABLE IF NOT EXISTS nutrition_growth_reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        center_id INTEGER,
+        center_name TEXT NOT NULL DEFAULT '',
+        submitted_date TEXT NOT NULL DEFAULT '',
+        report_month TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (center_id) REFERENCES nutrition_centers(id) ON DELETE SET NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_nutrition_growth_center_month
+        ON nutrition_growth_reports(center_id, report_month);
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_growth_reports_month
+        ON nutrition_growth_reports(report_month);
+
+      CREATE TABLE IF NOT EXISTS nutrition_growth_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        report_id INTEGER NOT NULL,
+        beneficiary_id INTEGER,
+        beneficiary_no TEXT NOT NULL DEFAULT '',
+        beneficiary_name TEXT NOT NULL DEFAULT '',
+        gender TEXT NOT NULL DEFAULT '',
+        birth_date TEXT NOT NULL DEFAULT '',
+        age_months TEXT NOT NULL DEFAULT '',
+        height_cm TEXT NOT NULL DEFAULT '',
+        weight_kg TEXT NOT NULL DEFAULT '',
+        height_change_cm TEXT NOT NULL DEFAULT '',
+        weight_change_kg TEXT NOT NULL DEFAULT '',
+        cgs_classification TEXT NOT NULL DEFAULT '',
+        previous_record_date TEXT NOT NULL DEFAULT '',
+        previous_height_cm TEXT NOT NULL DEFAULT '',
+        previous_weight_kg TEXT NOT NULL DEFAULT '',
+        previous_cgs_classification TEXT NOT NULL DEFAULT '',
+        row_order INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (report_id) REFERENCES nutrition_growth_reports(id) ON DELETE CASCADE,
+        FOREIGN KEY (beneficiary_id) REFERENCES nutrition_beneficiaries(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_growth_entries_report
+        ON nutrition_growth_entries(report_id);
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_growth_entries_beneficiary
+        ON nutrition_growth_entries(beneficiary_id);
+
       CREATE TABLE IF NOT EXISTS app_users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
@@ -682,6 +812,7 @@ class BeneficiaryDatabase {
     const monitoringReports = this.db.prepare("SELECT COUNT(*) AS count FROM monitoring_reports").get().count;
     const nutritionCenters = this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_centers").get().count;
     const nutritionBeneficiaries = this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_beneficiaries").get().count;
+    const nutritionGrowthReports = this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_growth_reports").get().count;
 
     return {
       active,
@@ -689,6 +820,7 @@ class BeneficiaryDatabase {
       monitoringReports,
       nutritionCenters,
       nutritionBeneficiaries,
+      nutritionGrowthReports,
       databasePath: this.dbPath
     };
   }
@@ -1020,6 +1152,57 @@ class BeneficiaryDatabase {
     };
   }
 
+  getPreviousMonitoringReport(beneficiaryId, reportMonth, excludeId = 0) {
+    if (!beneficiaryId || !reportMonth) return null;
+
+    return this.db
+      .prepare(`
+        SELECT *
+        FROM monitoring_reports
+        WHERE beneficiary_id = ?
+          AND report_month < ?
+          AND id <> ?
+        ORDER BY report_month DESC, id DESC
+        LIMIT 1
+      `)
+      .get(Number(beneficiaryId), String(reportMonth), Number(excludeId || 0)) || null;
+  }
+
+  getMonitoringForwardedBalance({ beneficiaryId = "", reportMonth = "", excludeId = 0 } = {}) {
+    const previous = this.getPreviousMonitoringReport(beneficiaryId, reportMonth, excludeId);
+    return {
+      forwardedBalance: previous ? normalizeAmount(previous.net_income) : 0,
+      previousReport: previous
+    };
+  }
+
+  recomputeMonitoringBalances(beneficiaryId) {
+    if (!beneficiaryId) return;
+
+    const rows = this.db
+      .prepare(`
+        SELECT id, total_sales, total_expenses
+        FROM monitoring_reports
+        WHERE beneficiary_id = ?
+        ORDER BY report_month ASC, id ASC
+      `)
+      .all(Number(beneficiaryId));
+    const update = this.db.prepare(`
+      UPDATE monitoring_reports
+      SET forwarded_balance = ?,
+          net_income = ?,
+          updated_at = ?
+      WHERE id = ?
+    `);
+    let forwardedBalance = 0;
+
+    rows.forEach(row => {
+      const netIncome = forwardedBalance + normalizeAmount(row.total_sales) - normalizeAmount(row.total_expenses);
+      update.run(forwardedBalance, netIncome, nowIso(), row.id);
+      forwardedBalance = netIncome;
+    });
+  }
+
   saveMonitoringReport(input = {}) {
     const id = Number(input.id || 0) || 0;
     const existing = id ? this.getMonitoringReport(id) : null;
@@ -1043,6 +1226,14 @@ class BeneficiaryDatabase {
     if (!report.control_no || !report.beneficiary_name) {
       throw new Error("Monitoring report beneficiary details are incomplete.");
     }
+
+    const carryForward = this.getMonitoringForwardedBalance({
+      beneficiaryId: report.beneficiary_id,
+      reportMonth: report.report_month,
+      excludeId: id || 0
+    });
+    report.forwarded_balance = carryForward.forwardedBalance;
+    report.net_income = report.forwarded_balance + report.total_sales - report.total_expenses;
 
     const duplicate = report.beneficiary_id
       ? this.db
@@ -1177,6 +1368,10 @@ class BeneficiaryDatabase {
         );
       });
 
+      this.recomputeMonitoringBalances(report.beneficiary_id);
+      if (existing?.beneficiary_id && Number(existing.beneficiary_id) !== Number(report.beneficiary_id)) {
+        this.recomputeMonitoringBalances(existing.beneficiary_id);
+      }
       this.db.exec("COMMIT");
       return this.getMonitoringReport(reportId);
     } catch (error) {
@@ -1192,6 +1387,7 @@ class BeneficiaryDatabase {
     }
 
     this.db.prepare("DELETE FROM monitoring_reports WHERE id = ?").run(Number(id));
+    this.recomputeMonitoringBalances(report.beneficiary_id);
     return report;
   }
 
@@ -1497,6 +1693,7 @@ class BeneficiaryDatabase {
       });
 
       this.db.exec("COMMIT");
+      this.refreshNutritionBeneficiaryGrowthSnapshot(beneficiaryId);
       return this.getNutritionBeneficiary(beneficiaryId);
     } catch (error) {
       this.db.exec("ROLLBACK");
@@ -1521,9 +1718,345 @@ class BeneficiaryDatabase {
       .map(row => this.getNutritionBeneficiary(row.id));
   }
 
+  nutritionGrowthReportSelect() {
+    return `
+      SELECT r.*,
+        COUNT(e.id) AS child_count,
+        SUM(CASE WHEN e.cgs_classification = 'Severely Underweight' THEN 1 ELSE 0 END) AS severely_underweight_count,
+        SUM(CASE WHEN e.cgs_classification = 'Underweight' THEN 1 ELSE 0 END) AS underweight_count,
+        SUM(CASE WHEN e.cgs_classification = 'Normal' THEN 1 ELSE 0 END) AS normal_count,
+        SUM(CASE WHEN e.cgs_classification = 'Overweight' THEN 1 ELSE 0 END) AS overweight_count
+      FROM nutrition_growth_reports r
+      LEFT JOIN nutrition_growth_entries e ON e.report_id = r.id
+    `;
+  }
+
+  listNutritionGrowthReports({ search = "", centerId = "", limit = 200 } = {}) {
+    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+    const conditions = [];
+    const args = [];
+
+    if (centerId) {
+      conditions.push("r.center_id = ?");
+      args.push(Number(centerId));
+    }
+
+    if (search.trim()) {
+      const pattern = `%${search.trim().toLowerCase()}%`;
+      conditions.push(`(
+        lower(r.center_name) LIKE ?
+        OR lower(r.report_month) LIKE ?
+        OR lower(r.submitted_date) LIKE ?
+      )`);
+      args.push(pattern, pattern, pattern);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    return this.db
+      .prepare(`
+        ${this.nutritionGrowthReportSelect()}
+        ${where}
+        GROUP BY r.id
+        ORDER BY r.report_month DESC, r.updated_at DESC, r.id DESC
+        LIMIT ?
+      `)
+      .all(...args, max);
+  }
+
+  getNutritionGrowthReport(id) {
+    const report = this.db
+      .prepare(`
+        ${this.nutritionGrowthReportSelect()}
+        WHERE r.id = ?
+        GROUP BY r.id
+      `)
+      .get(Number(id));
+    if (!report) return null;
+
+    return {
+      ...report,
+      entries: this.db
+        .prepare("SELECT * FROM nutrition_growth_entries WHERE report_id = ? ORDER BY row_order, id")
+        .all(report.id)
+    };
+  }
+
+  listNutritionBeneficiariesForGrowth(centerId) {
+    return this.db
+      .prepare(`
+        ${this.nutritionBeneficiarySelect()}
+        WHERE b.center_id = ?
+        ORDER BY b.beneficiary_no, b.child_last_name, b.child_first_name, b.id
+      `)
+      .all(Number(centerId));
+  }
+
+  getPreviousNutritionGrowthEntry(beneficiaryId, reportMonth, excludeReportId = 0) {
+    if (!beneficiaryId || !reportMonth) return null;
+
+    return this.db
+      .prepare(`
+        SELECT e.*, r.report_month, r.submitted_date
+        FROM nutrition_growth_entries e
+        JOIN nutrition_growth_reports r ON r.id = e.report_id
+        WHERE e.beneficiary_id = ?
+          AND r.report_month < ?
+          AND r.id <> ?
+        ORDER BY r.report_month DESC, r.id DESC, e.id DESC
+        LIMIT 1
+      `)
+      .get(Number(beneficiaryId), String(reportMonth), Number(excludeReportId || 0)) || null;
+  }
+
+  latestNutritionGrowthEntry(beneficiaryId) {
+    if (!beneficiaryId) return null;
+
+    return this.db
+      .prepare(`
+        SELECT e.*, r.report_month, r.submitted_date
+        FROM nutrition_growth_entries e
+        JOIN nutrition_growth_reports r ON r.id = e.report_id
+        WHERE e.beneficiary_id = ?
+          AND (trim(COALESCE(e.height_cm, '')) <> '' OR trim(COALESCE(e.weight_kg, '')) <> '')
+        ORDER BY r.report_month DESC, r.id DESC, e.id DESC
+        LIMIT 1
+      `)
+      .get(Number(beneficiaryId)) || null;
+  }
+
+  nutritionGrowthReference(beneficiary, reportMonth, excludeReportId = 0) {
+    const previous = this.getPreviousNutritionGrowthEntry(beneficiary.id, reportMonth, excludeReportId);
+    if (previous) {
+      return {
+        previous_record_date: previous.report_month || previous.submitted_date || "",
+        previous_height_cm: previous.height_cm || "",
+        previous_weight_kg: previous.weight_kg || "",
+        previous_cgs_classification: previous.cgs_classification || ""
+      };
+    }
+
+    return {
+      previous_record_date: beneficiary.admission_date || "",
+      previous_height_cm: beneficiary.initial_height_cm || "",
+      previous_weight_kg: beneficiary.initial_weight_kg || "",
+      previous_cgs_classification: beneficiary.initial_nutrition_status || ""
+    };
+  }
+
+  buildNutritionGrowthEntry(beneficiary, inputEntry = {}, reportMonth, excludeReportId = 0, rowOrder = 0) {
+    const reference = this.nutritionGrowthReference(beneficiary, reportMonth, excludeReportId);
+    const height = formatMeasurementValue(inputEntry.height_cm ?? inputEntry.heightCm);
+    const weight = formatMeasurementValue(inputEntry.weight_kg ?? inputEntry.weightKg);
+    const ageMonths = calculateAgeMonths(beneficiary.birth_date, reportMonth);
+    const cgsClassification = weight
+      ? classifyCgs({ gender: beneficiary.gender, ageMonths, weightKg: weight })
+      : "";
+
+    return {
+      report_id: Number(inputEntry.report_id || inputEntry.reportId || 0) || 0,
+      beneficiary_id: Number(beneficiary.id),
+      beneficiary_no: beneficiary.beneficiary_no || "",
+      beneficiary_name: nutritionBeneficiaryName(beneficiary),
+      gender: beneficiary.gender || "",
+      birth_date: beneficiary.birth_date || "",
+      age_months: ageMonths,
+      height_cm: height,
+      weight_kg: weight,
+      height_change_cm: measurementChange(height, reference.previous_height_cm),
+      weight_change_kg: measurementChange(weight, reference.previous_weight_kg),
+      cgs_classification: cgsClassification,
+      previous_record_date: reference.previous_record_date,
+      previous_height_cm: reference.previous_height_cm,
+      previous_weight_kg: reference.previous_weight_kg,
+      previous_cgs_classification: reference.previous_cgs_classification,
+      row_order: rowOrder
+    };
+  }
+
+  buildNutritionGrowthDraft(input = {}) {
+    const id = Number(input.id || 0) || 0;
+    const existing = id ? this.getNutritionGrowthReport(id) : null;
+    const centerId = Number(input.center_id || input.centerId || existing?.center_id || 0) || 0;
+    const center = centerId ? this.getNutritionCenter(centerId) : null;
+    if (!center) {
+      throw new Error("Select a feeding center for this growth monitoring report.");
+    }
+
+    const report = normalizeNutritionGrowthReport({
+      ...existing,
+      ...input,
+      center_id: center.id
+    }, center, existing);
+
+    if (!report.report_month) {
+      throw new Error("Report month is required.");
+    }
+
+    const entryMap = new Map(
+      (Array.isArray(report.entries) ? report.entries : []).map(entry => [
+        Number(entry.beneficiary_id || entry.beneficiaryId),
+        entry
+      ])
+    );
+    const beneficiaries = this.listNutritionBeneficiariesForGrowth(center.id);
+    const entries = beneficiaries.map((beneficiary, index) => {
+      const entry = this.buildNutritionGrowthEntry(
+        beneficiary,
+        entryMap.get(Number(beneficiary.id)) || {},
+        report.report_month,
+        id || 0,
+        index
+      );
+      entry.report_id = id || 0;
+      return entry;
+    });
+
+    return {
+      ...report,
+      entries
+    };
+  }
+
+  saveNutritionGrowthReport(input = {}) {
+    const id = Number(input.id || 0) || 0;
+    const existing = id ? this.getNutritionGrowthReport(id) : null;
+    const report = this.buildNutritionGrowthDraft(input);
+    const duplicate = this.db
+      .prepare("SELECT id FROM nutrition_growth_reports WHERE center_id = ? AND report_month = ? AND id <> ?")
+      .get(report.center_id, report.report_month, id || 0);
+
+    if (duplicate) {
+      throw new Error("This feeding center already has a growth monitoring report for that month.");
+    }
+
+    const timestamp = nowIso();
+    this.db.exec("BEGIN");
+    try {
+      let reportId = id;
+      const reportValues = [
+        report.center_id,
+        report.center_name,
+        report.submitted_date,
+        report.report_month
+      ];
+
+      if (existing) {
+        this.db
+          .prepare(`
+            UPDATE nutrition_growth_reports
+            SET center_id = ?,
+                center_name = ?,
+                submitted_date = ?,
+                report_month = ?,
+                updated_at = ?
+            WHERE id = ?
+          `)
+          .run(...reportValues, timestamp, reportId);
+      } else {
+        const result = this.db
+          .prepare(`
+            INSERT INTO nutrition_growth_reports (
+              center_id, center_name, submitted_date, report_month, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+          `)
+          .run(...reportValues, timestamp, timestamp);
+        reportId = Number(result.lastInsertRowid);
+      }
+
+      this.db.prepare("DELETE FROM nutrition_growth_entries WHERE report_id = ?").run(reportId);
+      const insertEntry = this.db.prepare(`
+        INSERT INTO nutrition_growth_entries (
+          report_id, beneficiary_id, beneficiary_no, beneficiary_name, gender, birth_date,
+          age_months, height_cm, weight_kg, height_change_cm, weight_change_kg,
+          cgs_classification, previous_record_date, previous_height_cm, previous_weight_kg,
+          previous_cgs_classification, row_order
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      report.entries.forEach((entry, index) => {
+        const values = NUTRITION_GROWTH_ENTRY_FIELDS.map(fieldName => (
+          fieldName === "report_id" ? reportId :
+          fieldName === "row_order" ? index :
+          entry[fieldName]
+        ));
+        insertEntry.run(...values);
+      });
+
+      this.db.exec("COMMIT");
+      report.entries.forEach(entry => this.refreshNutritionBeneficiaryGrowthSnapshot(entry.beneficiary_id));
+      if (existing?.center_id && Number(existing.center_id) !== Number(report.center_id)) {
+        existing.entries.forEach(entry => this.refreshNutritionBeneficiaryGrowthSnapshot(entry.beneficiary_id));
+      }
+      return this.getNutritionGrowthReport(reportId);
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  refreshNutritionBeneficiaryGrowthSnapshot(beneficiaryId) {
+    if (!beneficiaryId) return;
+
+    const latest = this.latestNutritionGrowthEntry(beneficiaryId);
+    if (!latest) return;
+
+    this.db
+      .prepare(`
+        UPDATE nutrition_beneficiaries
+        SET current_update_date = ?,
+            current_age_months = ?,
+            current_weight_kg = ?,
+            current_height_cm = ?,
+            current_nutrition_status = ?,
+            updated_at = ?
+        WHERE id = ?
+      `)
+      .run(
+        latest.submitted_date || monthEndProfileDate(latest.report_month),
+        latest.age_months || "",
+        latest.weight_kg || "",
+        latest.height_cm || "",
+        latest.cgs_classification || "",
+        nowIso(),
+        Number(beneficiaryId)
+      );
+  }
+
+  deleteNutritionGrowthReport(id) {
+    const report = this.getNutritionGrowthReport(id);
+    if (!report) {
+      throw new Error("Growth monitoring report was not found.");
+    }
+
+    this.db.exec("BEGIN");
+    try {
+      this.db.prepare("DELETE FROM nutrition_growth_reports WHERE id = ?").run(Number(id));
+      this.db.exec("COMMIT");
+      report.entries.forEach(entry => this.refreshNutritionBeneficiaryGrowthSnapshot(entry.beneficiary_id));
+      return report;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  exportNutritionGrowthReports() {
+    return this.db
+      .prepare("SELECT id FROM nutrition_growth_reports ORDER BY report_month DESC, center_name")
+      .all()
+      .map(row => this.getNutritionGrowthReport(row.id));
+  }
+
+  nutritionCgsReference() {
+    return cgsReferencePayload();
+  }
+
   nutritionOverview() {
     const centers = this.listNutritionCenters({ limit: 500 });
     const beneficiaries = this.listNutritionBeneficiaries({ limit: 500 });
+    const growthReports = this.listNutritionGrowthReports({ limit: 500 });
     const activeBeneficiaries = beneficiaries.filter(beneficiary => {
       const remarks = String(beneficiary.remarks || "").toLowerCase();
       const profileStatus = String(beneficiary.profile_status || "").toLowerCase();
@@ -1533,11 +2066,13 @@ class BeneficiaryDatabase {
     return {
       centers,
       beneficiaries,
+      growthReports,
       stats: {
         centers: centers.length,
         activeCenters: centers.filter(center => String(center.status || "").toLowerCase() === "active").length,
         beneficiaries: beneficiaries.length,
-        activeBeneficiaries: activeBeneficiaries.length
+        activeBeneficiaries: activeBeneficiaries.length,
+        growthReports: growthReports.length
       }
     };
   }
@@ -1552,6 +2087,7 @@ class BeneficiaryDatabase {
       monitoringReports: this.exportMonitoringReports(),
       nutritionCenters: nutrition.centers,
       nutritionBeneficiaries: this.exportNutritionBeneficiaries(),
+      nutritionGrowthReports: this.exportNutritionGrowthReports(),
       deletedRecords: this.db
         .prepare("SELECT * FROM deleted_records ORDER BY deleted_at DESC, id DESC")
         .all()
@@ -1564,9 +2100,12 @@ module.exports = {
   DEFAULT_DB_PATH,
   NUTRITION_BENEFICIARY_FIELDS,
   NUTRITION_CENTER_FIELDS,
+  NUTRITION_GROWTH_ENTRY_FIELDS,
+  NUTRITION_GROWTH_REPORT_FIELDS,
   NUTRITION_HOUSEHOLD_FIELDS,
   hashPassword,
   normalizeContactNumber,
+  normalizeAmount,
   normalizeFieldValue,
   normalizeMonitoringReport,
   normalizeNutritionBeneficiary,
@@ -1576,6 +2115,7 @@ module.exports = {
   nutritionBeneficiaryName,
   nowIso,
   quoted,
+  sentenceCaseValue,
   verifyPassword,
   titleCaseValue,
   todayDate

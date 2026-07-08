@@ -287,6 +287,15 @@ function createServer(database) {
         return;
       }
 
+      if (pathname === "/api/monitoring/forwarded-balance" && req.method === "GET") {
+        sendJson(res, 200, await database.getMonitoringForwardedBalance({
+          beneficiaryId: url.searchParams.get("beneficiaryId") || "",
+          reportMonth: url.searchParams.get("reportMonth") || "",
+          excludeId: url.searchParams.get("excludeId") || 0
+        }));
+        return;
+      }
+
       if (pathname.startsWith("/api/monitoring/reports/") && req.method === "GET") {
         const id = recordIdFromPath(pathname, "/api/monitoring/reports/");
         const report = id ? await database.getMonitoringReport(id) : null;
@@ -327,6 +336,66 @@ function createServer(database) {
       if (pathname === "/api/nutrition/ocr-profile" && req.method === "POST") {
         const payload = await readJsonBody(req);
         sendJson(res, 200, await recognizeNutritionProfile(payload.imageData));
+        return;
+      }
+
+      if (pathname === "/api/nutrition/growth/cgs" && req.method === "GET") {
+        sendJson(res, 200, await database.nutritionCgsReference());
+        return;
+      }
+
+      if (pathname === "/api/nutrition/growth/reports" && req.method === "GET") {
+        sendJson(res, 200, {
+          reports: await database.listNutritionGrowthReports({
+            search: url.searchParams.get("search") || "",
+            centerId: url.searchParams.get("centerId") || "",
+            limit: url.searchParams.get("limit") || 200
+          })
+        });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/growth/draft" && req.method === "GET") {
+        sendJson(res, 200, {
+          report: await database.buildNutritionGrowthDraft({
+            id: url.searchParams.get("id") || "",
+            center_id: url.searchParams.get("centerId") || "",
+            submitted_date: url.searchParams.get("submittedDate") || "",
+            report_month: url.searchParams.get("reportMonth") || ""
+          })
+        });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/growth/reports" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        sendJson(res, 200, { report: await database.saveNutritionGrowthReport(payload) });
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/growth/reports/") && req.method === "GET") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/growth/reports/");
+        const report = id ? await database.getNutritionGrowthReport(id) : null;
+
+        if (!report) {
+          sendError(res, 404, "Growth monitoring report was not found.");
+          return;
+        }
+
+        sendJson(res, 200, { report });
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/growth/reports/") && req.method === "DELETE") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/growth/reports/");
+        const report = id ? await database.deleteNutritionGrowthReport(id) : null;
+
+        if (!report) {
+          sendError(res, 404, "Growth monitoring report was not found.");
+          return;
+        }
+
+        sendJson(res, 200, { report });
         return;
       }
 

@@ -1,0 +1,2822 @@
+{
+  "source": "CGS.xlsx",
+  "description": "Child Growth Standard weight-for-age cutoffs used by PAOFI Nutrition Program. Male standards are from the left CGS table and female standards from the right CGS table.",
+  "age_range_months": [
+    0,
+    155
+  ],
+  "standards": {
+    "male": [
+      {
+        "age_months": 0,
+        "severely_underweight_max": 2.1,
+        "underweight_min": 2.2,
+        "underweight_max": 2.4,
+        "normal_min": 2.5,
+        "normal_max": 4.4,
+        "overweight_min": 4.5
+      },
+      {
+        "age_months": 1,
+        "severely_underweight_max": 2.9,
+        "underweight_min": 3.0,
+        "underweight_max": 3.3,
+        "normal_min": 3.4,
+        "normal_max": 5.8,
+        "overweight_min": 5.9
+      },
+      {
+        "age_months": 2,
+        "severely_underweight_max": 3.8,
+        "underweight_min": 3.9,
+        "underweight_max": 4.2,
+        "normal_min": 4.3,
+        "normal_max": 7.1,
+        "overweight_min": 7.2
+      },
+      {
+        "age_months": 3,
+        "severely_underweight_max": 4.4,
+        "underweight_min": 4.5,
+        "underweight_max": 4.9,
+        "normal_min": 5.0,
+        "normal_max": 8.0,
+        "overweight_min": 8.1
+      },
+      {
+        "age_months": 4,
+        "severely_underweight_max": 4.9,
+        "underweight_min": 5.0,
+        "underweight_max": 5.5,
+        "normal_min": 5.6,
+        "normal_max": 8.7,
+        "overweight_min": 8.8
+      },
+      {
+        "age_months": 5,
+        "severely_underweight_max": 5.3,
+        "underweight_min": 5.4,
+        "underweight_max": 5.9,
+        "normal_min": 6.0,
+        "normal_max": 9.3,
+        "overweight_min": 9.4
+      },
+      {
+        "age_months": 6,
+        "severely_underweight_max": 5.7,
+        "underweight_min": 5.8,
+        "underweight_max": 6.3,
+        "normal_min": 6.4,
+        "normal_max": 9.8,
+        "overweight_min": 9.9
+      },
+      {
+        "age_months": 7,
+        "severely_underweight_max": 5.9,
+        "underweight_min": 6.0,
+        "underweight_max": 6.6,
+        "normal_min": 6.7,
+        "normal_max": 10.3,
+        "overweight_min": 10.4
+      },
+      {
+        "age_months": 8,
+        "severely_underweight_max": 6.2,
+        "underweight_min": 6.3,
+        "underweight_max": 6.8,
+        "normal_min": 6.9,
+        "normal_max": 10.7,
+        "overweight_min": 10.8
+      },
+      {
+        "age_months": 9,
+        "severely_underweight_max": 6.4,
+        "underweight_min": 6.5,
+        "underweight_max": 7.0,
+        "normal_min": 7.1,
+        "normal_max": 11.0,
+        "overweight_min": 11.1
+      },
+      {
+        "age_months": 10,
+        "severely_underweight_max": 6.6,
+        "underweight_min": 6.7,
+        "underweight_max": 7.3,
+        "normal_min": 7.4,
+        "normal_max": 11.4,
+        "overweight_min": 11.5
+      },
+      {
+        "age_months": 11,
+        "severely_underweight_max": 6.8,
+        "underweight_min": 6.9,
+        "underweight_max": 7.5,
+        "normal_min": 7.6,
+        "normal_max": 11.7,
+        "overweight_min": 11.8
+      },
+      {
+        "age_months": 12,
+        "severely_underweight_max": 6.9,
+        "underweight_min": 7.0,
+        "underweight_max": 7.6,
+        "normal_min": 7.7,
+        "normal_max": 12.0,
+        "overweight_min": 12.1
+      },
+      {
+        "age_months": 13,
+        "severely_underweight_max": 7.1,
+        "underweight_min": 7.2,
+        "underweight_max": 7.8,
+        "normal_min": 7.9,
+        "normal_max": 12.3,
+        "overweight_min": 12.4
+      },
+      {
+        "age_months": 14,
+        "severely_underweight_max": 7.2,
+        "underweight_min": 7.3,
+        "underweight_max": 8.0,
+        "normal_min": 8.1,
+        "normal_max": 12.6,
+        "overweight_min": 12.7
+      },
+      {
+        "age_months": 15,
+        "severely_underweight_max": 7.4,
+        "underweight_min": 7.5,
+        "underweight_max": 8.2,
+        "normal_min": 8.3,
+        "normal_max": 12.8,
+        "overweight_min": 12.9
+      },
+      {
+        "age_months": 16,
+        "severely_underweight_max": 7.5,
+        "underweight_min": 7.6,
+        "underweight_max": 8.3,
+        "normal_min": 8.4,
+        "normal_max": 13.1,
+        "overweight_min": 13.2
+      },
+      {
+        "age_months": 17,
+        "severely_underweight_max": 7.7,
+        "underweight_min": 7.8,
+        "underweight_max": 8.5,
+        "normal_min": 8.6,
+        "normal_max": 13.4,
+        "overweight_min": 13.5
+      },
+      {
+        "age_months": 18,
+        "severely_underweight_max": 7.8,
+        "underweight_min": 7.9,
+        "underweight_max": 8.7,
+        "normal_min": 8.8,
+        "normal_max": 13.7,
+        "overweight_min": 13.8
+      },
+      {
+        "age_months": 19,
+        "severely_underweight_max": 8.0,
+        "underweight_min": 8.1,
+        "underweight_max": 8.8,
+        "normal_min": 8.9,
+        "normal_max": 13.9,
+        "overweight_min": 14.0
+      },
+      {
+        "age_months": 20,
+        "severely_underweight_max": 8.1,
+        "underweight_min": 8.2,
+        "underweight_max": 9.0,
+        "normal_min": 9.1,
+        "normal_max": 14.2,
+        "overweight_min": 14.3
+      },
+      {
+        "age_months": 21,
+        "severely_underweight_max": 8.2,
+        "underweight_min": 8.3,
+        "underweight_max": 9.1,
+        "normal_min": 9.2,
+        "normal_max": 14.5,
+        "overweight_min": 14.6
+      },
+      {
+        "age_months": 22,
+        "severely_underweight_max": 8.4,
+        "underweight_min": 8.5,
+        "underweight_max": 9.3,
+        "normal_min": 9.4,
+        "normal_max": 14.7,
+        "overweight_min": 14.8
+      },
+      {
+        "age_months": 23,
+        "severely_underweight_max": 8.5,
+        "underweight_min": 8.6,
+        "underweight_max": 9.4,
+        "normal_min": 9.5,
+        "normal_max": 15.0,
+        "overweight_min": 15.1
+      },
+      {
+        "age_months": 24,
+        "severely_underweight_max": 8.6,
+        "underweight_min": 8.7,
+        "underweight_max": 9.6,
+        "normal_min": 9.7,
+        "normal_max": 15.3,
+        "overweight_min": 15.4
+      },
+      {
+        "age_months": 25,
+        "severely_underweight_max": 8.8,
+        "underweight_min": 8.9,
+        "underweight_max": 9.7,
+        "normal_min": 9.8,
+        "normal_max": 15.5,
+        "overweight_min": 15.6
+      },
+      {
+        "age_months": 26,
+        "severely_underweight_max": 8.9,
+        "underweight_min": 9.0,
+        "underweight_max": 9.9,
+        "normal_min": 10.0,
+        "normal_max": 15.8,
+        "overweight_min": 15.9
+      },
+      {
+        "age_months": 27,
+        "severely_underweight_max": 9.0,
+        "underweight_min": 9.1,
+        "underweight_max": 10.0,
+        "normal_min": 10.1,
+        "normal_max": 16.1,
+        "overweight_min": 16.2
+      },
+      {
+        "age_months": 28,
+        "severely_underweight_max": 9.1,
+        "underweight_min": 9.2,
+        "underweight_max": 10.1,
+        "normal_min": 10.2,
+        "normal_max": 16.3,
+        "overweight_min": 16.4
+      },
+      {
+        "age_months": 29,
+        "severely_underweight_max": 9.2,
+        "underweight_min": 9.3,
+        "underweight_max": 10.3,
+        "normal_min": 10.4,
+        "normal_max": 16.6,
+        "overweight_min": 16.7
+      },
+      {
+        "age_months": 30,
+        "severely_underweight_max": 9.4,
+        "underweight_min": 9.5,
+        "underweight_max": 10.4,
+        "normal_min": 10.5,
+        "normal_max": 16.9,
+        "overweight_min": 17.0
+      },
+      {
+        "age_months": 31,
+        "severely_underweight_max": 9.5,
+        "underweight_min": 9.6,
+        "underweight_max": 10.6,
+        "normal_min": 10.7,
+        "normal_max": 17.1,
+        "overweight_min": 17.2
+      },
+      {
+        "age_months": 32,
+        "severely_underweight_max": 9.6,
+        "underweight_min": 9.7,
+        "underweight_max": 10.7,
+        "normal_min": 10.8,
+        "normal_max": 17.4,
+        "overweight_min": 17.5
+      },
+      {
+        "age_months": 33,
+        "severely_underweight_max": 9.7,
+        "underweight_min": 9.8,
+        "underweight_max": 10.8,
+        "normal_min": 10.9,
+        "normal_max": 17.6,
+        "overweight_min": 17.7
+      },
+      {
+        "age_months": 34,
+        "severely_underweight_max": 9.8,
+        "underweight_min": 9.9,
+        "underweight_max": 10.9,
+        "normal_min": 11.0,
+        "normal_max": 17.8,
+        "overweight_min": 17.9
+      },
+      {
+        "age_months": 35,
+        "severely_underweight_max": 9.9,
+        "underweight_min": 10.0,
+        "underweight_max": 11.1,
+        "normal_min": 11.2,
+        "normal_max": 18.1,
+        "overweight_min": 18.2
+      },
+      {
+        "age_months": 36,
+        "severely_underweight_max": 10.0,
+        "underweight_min": 10.1,
+        "underweight_max": 11.2,
+        "normal_min": 11.3,
+        "normal_max": 18.3,
+        "overweight_min": 18.4
+      },
+      {
+        "age_months": 37,
+        "severely_underweight_max": 10.1,
+        "underweight_min": 10.2,
+        "underweight_max": 11.3,
+        "normal_min": 11.4,
+        "normal_max": 18.6,
+        "overweight_min": 18.7
+      },
+      {
+        "age_months": 38,
+        "severely_underweight_max": 10.2,
+        "underweight_min": 10.3,
+        "underweight_max": 11.4,
+        "normal_min": 11.5,
+        "normal_max": 18.8,
+        "overweight_min": 18.9
+      },
+      {
+        "age_months": 39,
+        "severely_underweight_max": 10.3,
+        "underweight_min": 10.4,
+        "underweight_max": 11.5,
+        "normal_min": 11.6,
+        "normal_max": 19.0,
+        "overweight_min": 19.1
+      },
+      {
+        "age_months": 40,
+        "severely_underweight_max": 10.4,
+        "underweight_min": 10.5,
+        "underweight_max": 11.7,
+        "normal_min": 11.8,
+        "normal_max": 19.3,
+        "overweight_min": 19.4
+      },
+      {
+        "age_months": 41,
+        "severely_underweight_max": 10.5,
+        "underweight_min": 10.6,
+        "underweight_max": 11.8,
+        "normal_min": 11.9,
+        "normal_max": 19.5,
+        "overweight_min": 19.6
+      },
+      {
+        "age_months": 42,
+        "severely_underweight_max": 10.6,
+        "underweight_min": 10.7,
+        "underweight_max": 11.9,
+        "normal_min": 12.0,
+        "normal_max": 19.7,
+        "overweight_min": 19.8
+      },
+      {
+        "age_months": 43,
+        "severely_underweight_max": 10.7,
+        "underweight_min": 10.8,
+        "underweight_max": 12.0,
+        "normal_min": 12.1,
+        "normal_max": 20.0,
+        "overweight_min": 20.1
+      },
+      {
+        "age_months": 44,
+        "severely_underweight_max": 10.8,
+        "underweight_min": 10.9,
+        "underweight_max": 12.1,
+        "normal_min": 12.2,
+        "normal_max": 20.2,
+        "overweight_min": 20.3
+      },
+      {
+        "age_months": 45,
+        "severely_underweight_max": 10.9,
+        "underweight_min": 11.0,
+        "underweight_max": 12.3,
+        "normal_min": 12.4,
+        "normal_max": 20.5,
+        "overweight_min": 20.6
+      },
+      {
+        "age_months": 46,
+        "severely_underweight_max": 11.0,
+        "underweight_min": 11.1,
+        "underweight_max": 12.4,
+        "normal_min": 12.5,
+        "normal_max": 20.7,
+        "overweight_min": 20.8
+      },
+      {
+        "age_months": 47,
+        "severely_underweight_max": 11.1,
+        "underweight_min": 11.2,
+        "underweight_max": 12.5,
+        "normal_min": 12.6,
+        "normal_max": 20.9,
+        "overweight_min": 21.0
+      },
+      {
+        "age_months": 48,
+        "severely_underweight_max": 11.2,
+        "underweight_min": 11.3,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 21.2,
+        "overweight_min": 21.3
+      },
+      {
+        "age_months": 49,
+        "severely_underweight_max": 11.3,
+        "underweight_min": 11.4,
+        "underweight_max": 12.7,
+        "normal_min": 12.8,
+        "normal_max": 21.4,
+        "overweight_min": 21.5
+      },
+      {
+        "age_months": 50,
+        "severely_underweight_max": 11.4,
+        "underweight_min": 11.5,
+        "underweight_max": 12.8,
+        "normal_min": 12.9,
+        "normal_max": 21.7,
+        "overweight_min": 21.8
+      },
+      {
+        "age_months": 51,
+        "severely_underweight_max": 11.5,
+        "underweight_min": 11.6,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 21.9,
+        "overweight_min": 22.0
+      },
+      {
+        "age_months": 52,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 22.2,
+        "overweight_min": 22.3
+      },
+      {
+        "age_months": 53,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 22.4,
+        "overweight_min": 22.5
+      },
+      {
+        "age_months": 54,
+        "severely_underweight_max": 11.8,
+        "underweight_min": 11.9,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 22.7,
+        "overweight_min": 22.8
+      },
+      {
+        "age_months": 55,
+        "severely_underweight_max": 11.9,
+        "underweight_min": 12.0,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 22.9,
+        "overweight_min": 23.0
+      },
+      {
+        "age_months": 56,
+        "severely_underweight_max": 12.0,
+        "underweight_min": 12.1,
+        "underweight_max": 13.5,
+        "normal_min": 13.6,
+        "normal_max": 23.2,
+        "overweight_min": 23.3
+      },
+      {
+        "age_months": 57,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.6,
+        "normal_min": 13.7,
+        "normal_max": 23.4,
+        "overweight_min": 23.5
+      },
+      {
+        "age_months": 58,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.7,
+        "normal_min": 13.8,
+        "normal_max": 23.7,
+        "overweight_min": 23.8
+      },
+      {
+        "age_months": 59,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.9,
+        "normal_min": 14.0,
+        "normal_max": 23.9,
+        "overweight_min": 24.0
+      },
+      {
+        "age_months": 60,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 14.0,
+        "normal_min": 14.1,
+        "normal_max": 24.2,
+        "overweight_min": 24.3
+      },
+      {
+        "age_months": 61,
+        "severely_underweight_max": 12.7,
+        "underweight_min": 12.8,
+        "underweight_max": 14.3,
+        "normal_min": 14.4,
+        "normal_max": 24.3,
+        "overweight_min": 24.4
+      },
+      {
+        "age_months": 62,
+        "severely_underweight_max": 12.8,
+        "underweight_min": 12.9,
+        "underweight_max": 14.4,
+        "normal_min": 14.5,
+        "normal_max": 24.4,
+        "overweight_min": 24.5
+      },
+      {
+        "age_months": 63,
+        "severely_underweight_max": 13.0,
+        "underweight_min": 13.1,
+        "underweight_max": 14.5,
+        "normal_min": 14.6,
+        "normal_max": 24.7,
+        "overweight_min": 24.8
+      },
+      {
+        "age_months": 64,
+        "severely_underweight_max": 13.1,
+        "underweight_min": 13.2,
+        "underweight_max": 14.7,
+        "normal_min": 14.8,
+        "normal_max": 24.9,
+        "overweight_min": 25.0
+      },
+      {
+        "age_months": 65,
+        "severely_underweight_max": 13.2,
+        "underweight_min": 13.3,
+        "underweight_max": 14.8,
+        "normal_min": 14.9,
+        "normal_max": 25.2,
+        "overweight_min": 25.3
+      },
+      {
+        "age_months": 66,
+        "severely_underweight_max": 13.3,
+        "underweight_min": 13.4,
+        "underweight_max": 14.9,
+        "normal_min": 15.0,
+        "normal_max": 25.5,
+        "overweight_min": 25.6
+      },
+      {
+        "age_months": 67,
+        "severely_underweight_max": 13.4,
+        "underweight_min": 13.5,
+        "underweight_max": 15.1,
+        "normal_min": 15.2,
+        "normal_max": 25.7,
+        "overweight_min": 25.8
+      },
+      {
+        "age_months": 68,
+        "severely_underweight_max": 13.6,
+        "underweight_min": 13.7,
+        "underweight_max": 15.2,
+        "normal_min": 15.3,
+        "normal_max": 26.0,
+        "overweight_min": 26.1
+      },
+      {
+        "age_months": 69,
+        "severely_underweight_max": 13.7,
+        "underweight_min": 13.8,
+        "underweight_max": 15.3,
+        "normal_min": 15.4,
+        "normal_max": 26.3,
+        "overweight_min": 26.4
+      },
+      {
+        "age_months": 70,
+        "severely_underweight_max": 13.8,
+        "underweight_min": 13.9,
+        "underweight_max": 15.5,
+        "normal_min": 15.6,
+        "normal_max": 26.6,
+        "overweight_min": 26.7
+      },
+      {
+        "age_months": 71,
+        "severely_underweight_max": 13.9,
+        "underweight_min": 14.0,
+        "underweight_max": 15.6,
+        "normal_min": 15.7,
+        "normal_max": 26.8,
+        "overweight_min": 26.9
+      },
+      {
+        "age_months": 72,
+        "severely_underweight_max": 12.0,
+        "underweight_min": 12.1,
+        "underweight_max": 12.9,
+        "normal_min": 13.0,
+        "normal_max": 16.8,
+        "overweight_min": 16.9
+      },
+      {
+        "age_months": 73,
+        "severely_underweight_max": 12.0,
+        "underweight_min": 12.1,
+        "underweight_max": 12.9,
+        "normal_min": 13.0,
+        "normal_max": 16.8,
+        "overweight_min": 16.9
+      },
+      {
+        "age_months": 74,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 16.8,
+        "overweight_min": 16.9
+      },
+      {
+        "age_months": 75,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 2.2,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 16.8,
+        "overweight_min": 16.9
+      },
+      {
+        "age_months": 76,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 16.8,
+        "overweight_min": 16.9
+      },
+      {
+        "age_months": 77,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 16.9,
+        "overweight_min": 17.0
+      },
+      {
+        "age_months": 78,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 16.9,
+        "overweight_min": 17.0
+      },
+      {
+        "age_months": 79,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 16.9,
+        "overweight_min": 17.0
+      },
+      {
+        "age_months": 80,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 16.9,
+        "overweight_min": 17.0
+      },
+      {
+        "age_months": 81,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 17.0,
+        "overweight_min": 17.1
+      },
+      {
+        "age_months": 82,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 17.0,
+        "overweight_min": 17.1
+      },
+      {
+        "age_months": 83,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 17.0,
+        "overweight_min": 17.1
+      },
+      {
+        "age_months": 84,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 17.0,
+        "overweight_min": 17.1
+      },
+      {
+        "age_months": 85,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 17.1,
+        "overweight_min": 17.2
+      },
+      {
+        "age_months": 86,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 17.1,
+        "overweight_min": 17.2
+      },
+      {
+        "age_months": 87,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 17.1,
+        "overweight_min": 17.2
+      },
+      {
+        "age_months": 88,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 17.2,
+        "overweight_min": 17.3
+      },
+      {
+        "age_months": 89,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 17.2,
+        "overweight_min": 17.3
+      },
+      {
+        "age_months": 90,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 17.2,
+        "overweight_min": 17.3
+      },
+      {
+        "age_months": 91,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 17.3,
+        "overweight_min": 17.4
+      },
+      {
+        "age_months": 92,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 17.3,
+        "overweight_min": 17.4
+      },
+      {
+        "age_months": 93,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 17.3,
+        "overweight_min": 17.4
+      },
+      {
+        "age_months": 94,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 17.4,
+        "overweight_min": 17.5
+      },
+      {
+        "age_months": 95,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 17.4,
+        "overweight_min": 17.5
+      },
+      {
+        "age_months": 96,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 17.4,
+        "overweight_min": 17.5
+      },
+      {
+        "age_months": 97,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 17.5,
+        "overweight_min": 17.6
+      },
+      {
+        "age_months": 98,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 17.5,
+        "overweight_min": 17.6
+      },
+      {
+        "age_months": 99,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 17.5,
+        "overweight_min": 1.6
+      },
+      {
+        "age_months": 100,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 17.6,
+        "overweight_min": 17.7
+      },
+      {
+        "age_months": 101,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 17.6,
+        "overweight_min": 17.7
+      },
+      {
+        "age_months": 102,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 17.7,
+        "overweight_min": 17.8
+      },
+      {
+        "age_months": 103,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 17.7,
+        "overweight_min": 17.8
+      },
+      {
+        "age_months": 104,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 17.7,
+        "overweight_min": 17.8
+      },
+      {
+        "age_months": 105,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 17.8,
+        "overweight_min": 17.9
+      },
+      {
+        "age_months": 106,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 17.8,
+        "overweight_min": 17.9
+      },
+      {
+        "age_months": 107,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 17.9,
+        "overweight_min": 18.0
+      },
+      {
+        "age_months": 108,
+        "severely_underweight_max": 12.5,
+        "underweight_min": 12.6,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 17.9,
+        "overweight_min": 18.0
+      },
+      {
+        "age_months": 109,
+        "severely_underweight_max": 12.5,
+        "underweight_min": 12.6,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 18.0,
+        "overweight_min": 18.1
+      },
+      {
+        "age_months": 110,
+        "severely_underweight_max": 12.5,
+        "underweight_min": 12.6,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 18.0,
+        "overweight_min": 18.1
+      },
+      {
+        "age_months": 111,
+        "severely_underweight_max": 12.5,
+        "underweight_min": 12.6,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 18.0,
+        "overweight_min": 18.1
+      },
+      {
+        "age_months": 112,
+        "severely_underweight_max": 12.5,
+        "underweight_min": 12.6,
+        "underweight_max": 13.5,
+        "normal_min": 13.6,
+        "normal_max": 18.1,
+        "overweight_min": 18.2
+      },
+      {
+        "age_months": 113,
+        "severely_underweight_max": 12.5,
+        "underweight_min": 12.6,
+        "underweight_max": 13.5,
+        "normal_min": 13.6,
+        "normal_max": 18.1,
+        "overweight_min": 18.2
+      },
+      {
+        "age_months": 114,
+        "severely_underweight_max": 12.6,
+        "underweight_min": 12.7,
+        "underweight_max": 13.5,
+        "normal_min": 13.6,
+        "normal_max": 18.2,
+        "overweight_min": 18.3
+      },
+      {
+        "age_months": 115,
+        "severely_underweight_max": 12.6,
+        "underweight_min": 12.7,
+        "underweight_max": 13.5,
+        "normal_min": 13.6,
+        "normal_max": 18.2,
+        "overweight_min": 18.3
+      },
+      {
+        "age_months": 116,
+        "severely_underweight_max": 12.6,
+        "underweight_min": 12.7,
+        "underweight_max": 13.5,
+        "normal_min": 13.6,
+        "normal_max": 18.3,
+        "overweight_min": 18.4
+      },
+      {
+        "age_months": 117,
+        "severely_underweight_max": 12.6,
+        "underweight_min": 12.7,
+        "underweight_max": 13.6,
+        "normal_min": 13.7,
+        "normal_max": 18.3,
+        "overweight_min": 18.4
+      },
+      {
+        "age_months": 118,
+        "severely_underweight_max": 12.6,
+        "underweight_min": 12.7,
+        "underweight_max": 13.6,
+        "normal_min": 13.7,
+        "normal_max": 18.4,
+        "overweight_min": 18.5
+      },
+      {
+        "age_months": 119,
+        "severely_underweight_max": 12.7,
+        "underweight_min": 12.8,
+        "underweight_max": 13.6,
+        "normal_min": 13.7,
+        "normal_max": 18.4,
+        "overweight_min": 18.5
+      },
+      {
+        "age_months": 120,
+        "severely_underweight_max": 12.7,
+        "underweight_min": 12.8,
+        "underweight_max": 13.6,
+        "normal_min": 13.7,
+        "normal_max": 18.5,
+        "overweight_min": 18.6
+      },
+      {
+        "age_months": 121,
+        "severely_underweight_max": 12.7,
+        "underweight_min": 12.8,
+        "underweight_max": 13.7,
+        "normal_min": 13.8,
+        "normal_max": 18.5,
+        "overweight_min": 18.6
+      },
+      {
+        "age_months": 122,
+        "severely_underweight_max": 12.7,
+        "underweight_min": 12.8,
+        "underweight_max": 13.7,
+        "normal_min": 13.8,
+        "normal_max": 18.6,
+        "overweight_min": 18.7
+      },
+      {
+        "age_months": 123,
+        "severely_underweight_max": 12.7,
+        "underweight_min": 12.8,
+        "underweight_max": 13.7,
+        "normal_min": 13.8,
+        "normal_max": 18.6,
+        "overweight_min": 18.7
+      },
+      {
+        "age_months": 124,
+        "severely_underweight_max": 12.8,
+        "underweight_min": 12.9,
+        "underweight_max": 13.7,
+        "normal_min": 13.8,
+        "normal_max": 18.7,
+        "overweight_min": 18.8
+      },
+      {
+        "age_months": 125,
+        "severely_underweight_max": 12.8,
+        "underweight_min": 12.9,
+        "underweight_max": 13.8,
+        "normal_min": 13.9,
+        "normal_max": 18.8,
+        "overweight_min": 18.9
+      },
+      {
+        "age_months": 126,
+        "severely_underweight_max": 12.8,
+        "underweight_min": 12.9,
+        "underweight_max": 13.8,
+        "normal_min": 13.9,
+        "normal_max": 18.8,
+        "overweight_min": 18.9
+      },
+      {
+        "age_months": 127,
+        "severely_underweight_max": 12.8,
+        "underweight_min": 12.9,
+        "underweight_max": 13.8,
+        "normal_min": 13.9,
+        "normal_max": 18.9,
+        "overweight_min": 19.0
+      },
+      {
+        "age_months": 128,
+        "severely_underweight_max": 12.9,
+        "underweight_min": 13.0,
+        "underweight_max": 13.8,
+        "normal_min": 13.9,
+        "normal_max": 18.9,
+        "overweight_min": 19.0
+      },
+      {
+        "age_months": 129,
+        "severely_underweight_max": 12.9,
+        "underweight_min": 13.0,
+        "underweight_max": 13.9,
+        "normal_min": 14.0,
+        "normal_max": 19.0,
+        "overweight_min": 19.1
+      },
+      {
+        "age_months": 130,
+        "severely_underweight_max": 12.9,
+        "underweight_min": 13.0,
+        "underweight_max": 13.9,
+        "normal_min": 14.0,
+        "normal_max": 19.0,
+        "overweight_min": 19.1
+      },
+      {
+        "age_months": 131,
+        "severely_underweight_max": 12.9,
+        "underweight_min": 13.0,
+        "underweight_max": 13.9,
+        "normal_min": 14.0,
+        "normal_max": 19.1,
+        "overweight_min": 19.2
+      },
+      {
+        "age_months": 132,
+        "severely_underweight_max": 13.0,
+        "underweight_min": 13.1,
+        "underweight_max": 14.0,
+        "normal_min": 14.1,
+        "normal_max": 19.2,
+        "overweight_min": 19.3
+      },
+      {
+        "age_months": 133,
+        "severely_underweight_max": 13.0,
+        "underweight_min": 13.1,
+        "underweight_max": 14.0,
+        "normal_min": 14.1,
+        "normal_max": 19.2,
+        "overweight_min": 19.3
+      },
+      {
+        "age_months": 134,
+        "severely_underweight_max": 13.0,
+        "underweight_min": 13.1,
+        "underweight_max": 14.0,
+        "normal_min": 14.1,
+        "normal_max": 19.3,
+        "overweight_min": 19.4
+      },
+      {
+        "age_months": 135,
+        "severely_underweight_max": 13.0,
+        "underweight_min": 13.1,
+        "underweight_max": 14.0,
+        "normal_min": 14.1,
+        "normal_max": 19.3,
+        "overweight_min": 19.4
+      },
+      {
+        "age_months": 136,
+        "severely_underweight_max": 13.1,
+        "underweight_min": 13.2,
+        "underweight_max": 14.1,
+        "normal_min": 14.2,
+        "normal_max": 19.4,
+        "overweight_min": 19.5
+      },
+      {
+        "age_months": 137,
+        "severely_underweight_max": 13.1,
+        "underweight_min": 13.2,
+        "underweight_max": 14.1,
+        "normal_min": 14.2,
+        "normal_max": 19.5,
+        "overweight_min": 19.6
+      },
+      {
+        "age_months": 138,
+        "severely_underweight_max": 13.1,
+        "underweight_min": 13.2,
+        "underweight_max": 14.1,
+        "normal_min": 14.2,
+        "normal_max": 19.5,
+        "overweight_min": 19.6
+      },
+      {
+        "age_months": 139,
+        "severely_underweight_max": 13.1,
+        "underweight_min": 13.2,
+        "underweight_max": 14.2,
+        "normal_min": 14.3,
+        "normal_max": 19.6,
+        "overweight_min": 19.7
+      },
+      {
+        "age_months": 140,
+        "severely_underweight_max": 13.2,
+        "underweight_min": 13.3,
+        "underweight_max": 14.2,
+        "normal_min": 14.3,
+        "normal_max": 19.7,
+        "overweight_min": 19.8
+      },
+      {
+        "age_months": 141,
+        "severely_underweight_max": 13.2,
+        "underweight_min": 13.3,
+        "underweight_max": 14.2,
+        "normal_min": 14.3,
+        "normal_max": 19.7,
+        "overweight_min": 19.8
+      },
+      {
+        "age_months": 142,
+        "severely_underweight_max": 13.2,
+        "underweight_min": 13.3,
+        "underweight_max": 14.3,
+        "normal_min": 14.4,
+        "normal_max": 19.8,
+        "overweight_min": 19.9
+      },
+      {
+        "age_months": 143,
+        "severely_underweight_max": 13.3,
+        "underweight_min": 13.4,
+        "underweight_max": 14.3,
+        "normal_min": 14.4,
+        "normal_max": 19.9,
+        "overweight_min": 20.0
+      },
+      {
+        "age_months": 144,
+        "severely_underweight_max": 13.3,
+        "underweight_min": 13.4,
+        "underweight_max": 14.4,
+        "normal_min": 14.5,
+        "normal_max": 19.9,
+        "overweight_min": 20.0
+      },
+      {
+        "age_months": 145,
+        "severely_underweight_max": 13.3,
+        "underweight_min": 13.4,
+        "underweight_max": 14.4,
+        "normal_min": 14.5,
+        "normal_max": 20.0,
+        "overweight_min": 20.1
+      },
+      {
+        "age_months": 146,
+        "severely_underweight_max": 13.4,
+        "underweight_min": 13.5,
+        "underweight_max": 14.4,
+        "normal_min": 14.5,
+        "normal_max": 20.1,
+        "overweight_min": 20.2
+      },
+      {
+        "age_months": 147,
+        "severely_underweight_max": 13.4,
+        "underweight_min": 13.5,
+        "underweight_max": 14.5,
+        "normal_min": 14.6,
+        "normal_max": 20.2,
+        "overweight_min": 20.3
+      },
+      {
+        "age_months": 148,
+        "severely_underweight_max": 13.4,
+        "underweight_min": 13.5,
+        "underweight_max": 14.5,
+        "normal_min": 14.6,
+        "normal_max": 20.2,
+        "overweight_min": 20.3
+      },
+      {
+        "age_months": 149,
+        "severely_underweight_max": 13.5,
+        "underweight_min": 13.6,
+        "underweight_max": 14.5,
+        "normal_min": 14.6,
+        "normal_max": 20.3,
+        "overweight_min": 20.4
+      },
+      {
+        "age_months": 150,
+        "severely_underweight_max": 13.5,
+        "underweight_min": 13.6,
+        "underweight_max": 14.6,
+        "normal_min": 14.7,
+        "normal_max": 20.4,
+        "overweight_min": 20.5
+      },
+      {
+        "age_months": 151,
+        "severely_underweight_max": 13.5,
+        "underweight_min": 13.6,
+        "underweight_max": 14.6,
+        "normal_min": 14.7,
+        "normal_max": 20.4,
+        "overweight_min": 20.5
+      },
+      {
+        "age_months": 152,
+        "severely_underweight_max": 13.6,
+        "underweight_min": 13.7,
+        "underweight_max": 14.7,
+        "normal_min": 14.8,
+        "normal_max": 20.5,
+        "overweight_min": 20.6
+      },
+      {
+        "age_months": 153,
+        "severely_underweight_max": 13.6,
+        "underweight_min": 13.7,
+        "underweight_max": 14.7,
+        "normal_min": 14.8,
+        "normal_max": 20.6,
+        "overweight_min": 20.7
+      },
+      {
+        "age_months": 154,
+        "severely_underweight_max": 13.6,
+        "underweight_min": 13.7,
+        "underweight_max": 14.7,
+        "normal_min": 14.8,
+        "normal_max": 20.7,
+        "overweight_min": 20.8
+      },
+      {
+        "age_months": 155,
+        "severely_underweight_max": 13.7,
+        "underweight_min": 13.8,
+        "underweight_max": 14.8,
+        "normal_min": 14.9,
+        "normal_max": 20.8,
+        "overweight_min": 20.9
+      }
+    ],
+    "female": [
+      {
+        "age_months": 0,
+        "severely_underweight_max": 2.0,
+        "underweight_min": 2.1,
+        "underweight_max": 2.3,
+        "normal_min": 2.4,
+        "normal_max": 4.2,
+        "overweight_min": 4.3
+      },
+      {
+        "age_months": 1,
+        "severely_underweight_max": 2.7,
+        "underweight_min": 2.8,
+        "underweight_max": 3.1,
+        "normal_min": 3.2,
+        "normal_max": 5.5,
+        "overweight_min": 5.6
+      },
+      {
+        "age_months": 2,
+        "severely_underweight_max": 3.4,
+        "underweight_min": 3.5,
+        "underweight_max": 3.8,
+        "normal_min": 3.9,
+        "normal_max": 6.6,
+        "overweight_min": 6.7
+      },
+      {
+        "age_months": 3,
+        "severely_underweight_max": 4.0,
+        "underweight_min": 4.1,
+        "underweight_max": 4.4,
+        "normal_min": 4.5,
+        "normal_max": 7.5,
+        "overweight_min": 7.6
+      },
+      {
+        "age_months": 4,
+        "severely_underweight_max": 4.4,
+        "underweight_min": 4.5,
+        "underweight_max": 4.9,
+        "normal_min": 5.0,
+        "normal_max": 8.2,
+        "overweight_min": 8.3
+      },
+      {
+        "age_months": 5,
+        "severely_underweight_max": 4.8,
+        "underweight_min": 4.9,
+        "underweight_max": 5.3,
+        "normal_min": 5.4,
+        "normal_max": 8.8,
+        "overweight_min": 8.9
+      },
+      {
+        "age_months": 6,
+        "severely_underweight_max": 5.1,
+        "underweight_min": 5.2,
+        "underweight_max": 5.6,
+        "normal_min": 5.7,
+        "normal_max": 9.3,
+        "overweight_min": 9.4
+      },
+      {
+        "age_months": 7,
+        "severely_underweight_max": 5.3,
+        "underweight_min": 5.4,
+        "underweight_max": 5.9,
+        "normal_min": 6.0,
+        "normal_max": 9.8,
+        "overweight_min": 9.9
+      },
+      {
+        "age_months": 8,
+        "severely_underweight_max": 5.6,
+        "underweight_min": 5.7,
+        "underweight_max": 6.2,
+        "normal_min": 6.3,
+        "normal_max": 10.2,
+        "overweight_min": 10.3
+      },
+      {
+        "age_months": 9,
+        "severely_underweight_max": 5.8,
+        "underweight_min": 5.9,
+        "underweight_max": 6.4,
+        "normal_min": 6.5,
+        "normal_max": 10.5,
+        "overweight_min": 10.6
+      },
+      {
+        "age_months": 10,
+        "severely_underweight_max": 5.9,
+        "underweight_min": 6.0,
+        "underweight_max": 6.6,
+        "normal_min": 6.7,
+        "normal_max": 10.9,
+        "overweight_min": 11.0
+      },
+      {
+        "age_months": 11,
+        "severely_underweight_max": 6.1,
+        "underweight_min": 6.2,
+        "underweight_max": 6.8,
+        "normal_min": 6.9,
+        "normal_max": 11.2,
+        "overweight_min": 11.3
+      },
+      {
+        "age_months": 12,
+        "severely_underweight_max": 6.3,
+        "underweight_min": 6.4,
+        "underweight_max": 6.9,
+        "normal_min": 7.0,
+        "normal_max": 11.5,
+        "overweight_min": 11.6
+      },
+      {
+        "age_months": 13,
+        "severely_underweight_max": 6.4,
+        "underweight_min": 6.5,
+        "underweight_max": 7.1,
+        "normal_min": 7.2,
+        "normal_max": 11.8,
+        "overweight_min": 11.9
+      },
+      {
+        "age_months": 14,
+        "severely_underweight_max": 6.6,
+        "underweight_min": 6.7,
+        "underweight_max": 7.3,
+        "normal_min": 7.4,
+        "normal_max": 12.1,
+        "overweight_min": 12.2
+      },
+      {
+        "age_months": 15,
+        "severely_underweight_max": 6.7,
+        "underweight_min": 6.8,
+        "underweight_max": 7.5,
+        "normal_min": 7.6,
+        "normal_max": 12.4,
+        "overweight_min": 12.5
+      },
+      {
+        "age_months": 16,
+        "severely_underweight_max": 6.9,
+        "underweight_min": 7.0,
+        "underweight_max": 7.6,
+        "normal_min": 7.7,
+        "normal_max": 12.6,
+        "overweight_min": 12.7
+      },
+      {
+        "age_months": 17,
+        "severely_underweight_max": 7.0,
+        "underweight_min": 7.1,
+        "underweight_max": 7.8,
+        "normal_min": 7.9,
+        "normal_max": 12.9,
+        "overweight_min": 13.0
+      },
+      {
+        "age_months": 18,
+        "severely_underweight_max": 7.2,
+        "underweight_min": 7.3,
+        "underweight_max": 8.0,
+        "normal_min": 8.1,
+        "normal_max": 13.2,
+        "overweight_min": 13.3
+      },
+      {
+        "age_months": 19,
+        "severely_underweight_max": 7.3,
+        "underweight_min": 7.4,
+        "underweight_max": 8.1,
+        "normal_min": 8.2,
+        "normal_max": 13.5,
+        "overweight_min": 13.6
+      },
+      {
+        "age_months": 20,
+        "severely_underweight_max": 7.5,
+        "underweight_min": 7.6,
+        "underweight_max": 8.3,
+        "normal_min": 8.4,
+        "normal_max": 13.7,
+        "overweight_min": 13.8
+      },
+      {
+        "age_months": 21,
+        "severely_underweight_max": 7.6,
+        "underweight_min": 7.7,
+        "underweight_max": 8.5,
+        "normal_min": 8.6,
+        "normal_max": 14.0,
+        "overweight_min": 14.1
+      },
+      {
+        "age_months": 22,
+        "severely_underweight_max": 7.8,
+        "underweight_min": 7.9,
+        "underweight_max": 8.6,
+        "normal_min": 8.7,
+        "normal_max": 14.3,
+        "overweight_min": 14.4
+      },
+      {
+        "age_months": 23,
+        "severely_underweight_max": 7.9,
+        "underweight_min": 8.0,
+        "underweight_max": 8.8,
+        "normal_min": 8.9,
+        "normal_max": 14.6,
+        "overweight_min": 14.7
+      },
+      {
+        "age_months": 24,
+        "severely_underweight_max": 8.1,
+        "underweight_min": 8.2,
+        "underweight_max": 8.9,
+        "normal_min": 9.0,
+        "normal_max": 14.8,
+        "overweight_min": 14.9
+      },
+      {
+        "age_months": 25,
+        "severely_underweight_max": 8.2,
+        "underweight_min": 8.3,
+        "underweight_max": 9.1,
+        "normal_min": 9.2,
+        "normal_max": 15.1,
+        "overweight_min": 15.2
+      },
+      {
+        "age_months": 26,
+        "severely_underweight_max": 8.4,
+        "underweight_min": 8.5,
+        "underweight_max": 9.3,
+        "normal_min": 9.4,
+        "normal_max": 15.4,
+        "overweight_min": 15.5
+      },
+      {
+        "age_months": 27,
+        "severely_underweight_max": 8.5,
+        "underweight_min": 8.6,
+        "underweight_max": 9.4,
+        "normal_min": 9.5,
+        "normal_max": 15.7,
+        "overweight_min": 15.8
+      },
+      {
+        "age_months": 28,
+        "severely_underweight_max": 8.6,
+        "underweight_min": 8.7,
+        "underweight_max": 9.6,
+        "normal_min": 9.7,
+        "normal_max": 16.0,
+        "overweight_min": 16.1
+      },
+      {
+        "age_months": 29,
+        "severely_underweight_max": 8.8,
+        "underweight_min": 8.9,
+        "underweight_max": 9.7,
+        "normal_min": 9.8,
+        "normal_max": 16.2,
+        "overweight_min": 16.3
+      },
+      {
+        "age_months": 30,
+        "severely_underweight_max": 8.9,
+        "underweight_min": 9.0,
+        "underweight_max": 9.9,
+        "normal_min": 10.0,
+        "normal_max": 16.5,
+        "overweight_min": 16.6
+      },
+      {
+        "age_months": 31,
+        "severely_underweight_max": 9.0,
+        "underweight_min": 9.1,
+        "underweight_max": 10.0,
+        "normal_min": 10.1,
+        "normal_max": 16.8,
+        "overweight_min": 16.9
+      },
+      {
+        "age_months": 32,
+        "severely_underweight_max": 9.1,
+        "underweight_min": 9.2,
+        "underweight_max": 10.2,
+        "normal_min": 10.3,
+        "normal_max": 17.1,
+        "overweight_min": 17.2
+      },
+      {
+        "age_months": 33,
+        "severely_underweight_max": 9.3,
+        "underweight_min": 9.4,
+        "underweight_max": 10.3,
+        "normal_min": 10.4,
+        "normal_max": 17.3,
+        "overweight_min": 17.4
+      },
+      {
+        "age_months": 34,
+        "severely_underweight_max": 9.4,
+        "underweight_min": 9.5,
+        "underweight_max": 10.4,
+        "normal_min": 10.5,
+        "normal_max": 17.6,
+        "overweight_min": 17.7
+      },
+      {
+        "age_months": 35,
+        "severely_underweight_max": 9.5,
+        "underweight_min": 9.6,
+        "underweight_max": 10.6,
+        "normal_min": 10.7,
+        "normal_max": 17.9,
+        "overweight_min": 18.0
+      },
+      {
+        "age_months": 36,
+        "severely_underweight_max": 9.6,
+        "underweight_min": 9.7,
+        "underweight_max": 10.7,
+        "normal_min": 10.8,
+        "normal_max": 18.1,
+        "overweight_min": 18.2
+      },
+      {
+        "age_months": 37,
+        "severely_underweight_max": 9.7,
+        "underweight_min": 9.8,
+        "underweight_max": 10.8,
+        "normal_min": 10.9,
+        "normal_max": 18.4,
+        "overweight_min": 18.5
+      },
+      {
+        "age_months": 38,
+        "severely_underweight_max": 9.8,
+        "underweight_min": 9.9,
+        "underweight_max": 11.0,
+        "normal_min": 11.1,
+        "normal_max": 18.7,
+        "overweight_min": 18.8
+      },
+      {
+        "age_months": 39,
+        "severely_underweight_max": 9.9,
+        "underweight_min": 10.0,
+        "underweight_max": 11.1,
+        "normal_min": 11.2,
+        "normal_max": 19.0,
+        "overweight_min": 19.1
+      },
+      {
+        "age_months": 40,
+        "severely_underweight_max": 10.1,
+        "underweight_min": 10.2,
+        "underweight_max": 11.2,
+        "normal_min": 11.3,
+        "normal_max": 19.2,
+        "overweight_min": 19.3
+      },
+      {
+        "age_months": 41,
+        "severely_underweight_max": 10.2,
+        "underweight_min": 10.3,
+        "underweight_max": 11.4,
+        "normal_min": 11.5,
+        "normal_max": 19.5,
+        "overweight_min": 19.6
+      },
+      {
+        "age_months": 42,
+        "severely_underweight_max": 10.3,
+        "underweight_min": 10.4,
+        "underweight_max": 11.5,
+        "normal_min": 11.6,
+        "normal_max": 19.8,
+        "overweight_min": 19.9
+      },
+      {
+        "age_months": 43,
+        "severely_underweight_max": 10.4,
+        "underweight_min": 10.5,
+        "underweight_max": 11.6,
+        "normal_min": 11.7,
+        "normal_max": 20.1,
+        "overweight_min": 20.2
+      },
+      {
+        "age_months": 44,
+        "severely_underweight_max": 10.5,
+        "underweight_min": 10.6,
+        "underweight_max": 11.7,
+        "normal_min": 11.8,
+        "normal_max": 20.4,
+        "overweight_min": 20.5
+      },
+      {
+        "age_months": 45,
+        "severely_underweight_max": 10.6,
+        "underweight_min": 10.7,
+        "underweight_max": 11.9,
+        "normal_min": 12.0,
+        "normal_max": 20.7,
+        "overweight_min": 20.8
+      },
+      {
+        "age_months": 46,
+        "severely_underweight_max": 10.7,
+        "underweight_min": 10.8,
+        "underweight_max": 12.0,
+        "normal_min": 12.1,
+        "normal_max": 20.9,
+        "overweight_min": 21.0
+      },
+      {
+        "age_months": 47,
+        "severely_underweight_max": 10.8,
+        "underweight_min": 10.9,
+        "underweight_max": 12.1,
+        "normal_min": 12.2,
+        "normal_max": 21.2,
+        "overweight_min": 21.3
+      },
+      {
+        "age_months": 48,
+        "severely_underweight_max": 10.9,
+        "underweight_min": 11.0,
+        "underweight_max": 12.2,
+        "normal_min": 12.3,
+        "normal_max": 21.5,
+        "overweight_min": 21.6
+      },
+      {
+        "age_months": 49,
+        "severely_underweight_max": 11.0,
+        "underweight_min": 11.1,
+        "underweight_max": 12.3,
+        "normal_min": 12.4,
+        "normal_max": 21.8,
+        "overweight_min": 21.9
+      },
+      {
+        "age_months": 50,
+        "severely_underweight_max": 11.1,
+        "underweight_min": 11.2,
+        "underweight_max": 12.4,
+        "normal_min": 12.5,
+        "normal_max": 22.1,
+        "overweight_min": 22.2
+      },
+      {
+        "age_months": 51,
+        "severely_underweight_max": 11.2,
+        "underweight_min": 11.3,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 22.4,
+        "overweight_min": 22.5
+      },
+      {
+        "age_months": 52,
+        "severely_underweight_max": 11.3,
+        "underweight_min": 11.4,
+        "underweight_max": 12.7,
+        "normal_min": 12.8,
+        "normal_max": 22.6,
+        "overweight_min": 22.7
+      },
+      {
+        "age_months": 53,
+        "severely_underweight_max": 11.4,
+        "underweight_min": 11.5,
+        "underweight_max": 12.8,
+        "normal_min": 12.9,
+        "normal_max": 22.9,
+        "overweight_min": 23.0
+      },
+      {
+        "age_months": 54,
+        "severely_underweight_max": 11.5,
+        "underweight_min": 11.6,
+        "underweight_max": 12.9,
+        "normal_min": 13.0,
+        "normal_max": 23.2,
+        "overweight_min": 23.3
+      },
+      {
+        "age_months": 55,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 23.5,
+        "overweight_min": 23.6
+      },
+      {
+        "age_months": 56,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 23.8,
+        "overweight_min": 23.9
+      },
+      {
+        "age_months": 57,
+        "severely_underweight_max": 11.8,
+        "underweight_min": 11.9,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 24.1,
+        "overweight_min": 24.2
+      },
+      {
+        "age_months": 58,
+        "severely_underweight_max": 11.9,
+        "underweight_min": 12.0,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 24.4,
+        "overweight_min": 24.5
+      },
+      {
+        "age_months": 59,
+        "severely_underweight_max": 12.0,
+        "underweight_min": 12.1,
+        "underweight_max": 13.5,
+        "normal_min": 13.6,
+        "normal_max": 24.6,
+        "overweight_min": 24.7
+      },
+      {
+        "age_months": 60,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.6,
+        "normal_min": 13.7,
+        "normal_max": 24.7,
+        "overweight_min": 24.8
+      },
+      {
+        "age_months": 61,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.9,
+        "normal_min": 14.0,
+        "normal_max": 24.8,
+        "overweight_min": 24.9
+      },
+      {
+        "age_months": 62,
+        "severely_underweight_max": 12.5,
+        "underweight_min": 12.6,
+        "underweight_max": 14.0,
+        "normal_min": 14.1,
+        "normal_max": 25.1,
+        "overweight_min": 25.2
+      },
+      {
+        "age_months": 63,
+        "severely_underweight_max": 12.6,
+        "underweight_min": 12.7,
+        "underweight_max": 14.1,
+        "normal_min": 14.2,
+        "normal_max": 25.4,
+        "overweight_min": 25.5
+      },
+      {
+        "age_months": 64,
+        "severely_underweight_max": 12.7,
+        "underweight_min": 12.8,
+        "underweight_max": 14.2,
+        "normal_min": 14.3,
+        "normal_max": 25.6,
+        "overweight_min": 25.7
+      },
+      {
+        "age_months": 65,
+        "severely_underweight_max": 12.8,
+        "underweight_min": 12.9,
+        "underweight_max": 14.3,
+        "normal_min": 14.4,
+        "normal_max": 25.9,
+        "overweight_min": 26.0
+      },
+      {
+        "age_months": 66,
+        "severely_underweight_max": 12.9,
+        "underweight_min": 13.0,
+        "underweight_max": 14.5,
+        "normal_min": 14.6,
+        "normal_max": 26.2,
+        "overweight_min": 26.3
+      },
+      {
+        "age_months": 67,
+        "severely_underweight_max": 13.0,
+        "underweight_min": 13.1,
+        "underweight_max": 14.6,
+        "normal_min": 14.7,
+        "normal_max": 26.5,
+        "overweight_min": 26.6
+      },
+      {
+        "age_months": 68,
+        "severely_underweight_max": 13.1,
+        "underweight_min": 13.2,
+        "underweight_max": 14.7,
+        "normal_min": 14.8,
+        "normal_max": 26.7,
+        "overweight_min": 26.8
+      },
+      {
+        "age_months": 69,
+        "severely_underweight_max": 13.2,
+        "underweight_min": 13.3,
+        "underweight_max": 14.8,
+        "normal_min": 14.9,
+        "normal_max": 27.0,
+        "overweight_min": 27.1
+      },
+      {
+        "age_months": 70,
+        "severely_underweight_max": 13.3,
+        "underweight_min": 13.4,
+        "underweight_max": 14.9,
+        "normal_min": 15.0,
+        "normal_max": 27.3,
+        "overweight_min": 27.4
+      },
+      {
+        "age_months": 71,
+        "severely_underweight_max": 13.4,
+        "underweight_min": 13.5,
+        "underweight_max": 15.1,
+        "normal_min": 15.2,
+        "normal_max": 27.6,
+        "overweight_min": 27.7
+      },
+      {
+        "age_months": 72,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.0,
+        "overweight_min": 17.1
+      },
+      {
+        "age_months": 73,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.0,
+        "overweight_min": 17.1
+      },
+      {
+        "age_months": 74,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.0,
+        "overweight_min": 17.1
+      },
+      {
+        "age_months": 75,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.1,
+        "overweight_min": 17.2
+      },
+      {
+        "age_months": 76,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.1,
+        "overweight_min": 17.2
+      },
+      {
+        "age_months": 77,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.1,
+        "overweight_min": 17.2
+      },
+      {
+        "age_months": 78,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.1,
+        "overweight_min": 17.2
+      },
+      {
+        "age_months": 79,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.2,
+        "overweight_min": 17.3
+      },
+      {
+        "age_months": 80,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.2,
+        "overweight_min": 17.3
+      },
+      {
+        "age_months": 81,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.2,
+        "overweight_min": 173.0
+      },
+      {
+        "age_months": 82,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.2,
+        "overweight_min": 17.3
+      },
+      {
+        "age_months": 83,
+        "severely_underweight_max": 11.6,
+        "underweight_min": 11.7,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.3,
+        "overweight_min": 17.4
+      },
+      {
+        "age_months": 84,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.3,
+        "overweight_min": 17.4
+      },
+      {
+        "age_months": 85,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 12.6,
+        "normal_min": 12.7,
+        "normal_max": 17.3,
+        "overweight_min": 17.4
+      },
+      {
+        "age_months": 86,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 12.7,
+        "normal_min": 12.8,
+        "normal_max": 17.4,
+        "overweight_min": 17.5
+      },
+      {
+        "age_months": 87,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 12.7,
+        "normal_min": 12.8,
+        "normal_max": 17.4,
+        "overweight_min": 17.5
+      },
+      {
+        "age_months": 88,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 12.7,
+        "normal_min": 12.8,
+        "normal_max": 17.4,
+        "overweight_min": 17.5
+      },
+      {
+        "age_months": 89,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 12.7,
+        "normal_min": 12.8,
+        "normal_max": 17.5,
+        "overweight_min": 17.6
+      },
+      {
+        "age_months": 90,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 12.7,
+        "normal_min": 12.8,
+        "normal_max": 17.5,
+        "overweight_min": 17.6
+      },
+      {
+        "age_months": 91,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 12.7,
+        "normal_min": 12.8,
+        "normal_max": 17.5,
+        "overweight_min": 176.0
+      },
+      {
+        "age_months": 92,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 12.7,
+        "normal_min": 12.8,
+        "normal_max": 17.6,
+        "overweight_min": 17.7
+      },
+      {
+        "age_months": 93,
+        "severely_underweight_max": 11.7,
+        "underweight_min": 11.8,
+        "underweight_max": 12.7,
+        "normal_min": 12.8,
+        "normal_max": 17.6,
+        "overweight_min": 17.7
+      },
+      {
+        "age_months": 94,
+        "severely_underweight_max": 11.8,
+        "underweight_min": 11.9,
+        "underweight_max": 12.8,
+        "normal_min": 12.9,
+        "normal_max": 17.6,
+        "overweight_min": 17.7
+      },
+      {
+        "age_months": 95,
+        "severely_underweight_max": 11.8,
+        "underweight_min": 11.9,
+        "underweight_max": 12.8,
+        "normal_min": 12.9,
+        "normal_max": 17.7,
+        "overweight_min": 17.8
+      },
+      {
+        "age_months": 96,
+        "severely_underweight_max": 11.8,
+        "underweight_min": 11.9,
+        "underweight_max": 12.8,
+        "normal_min": 12.9,
+        "normal_max": 17.7,
+        "overweight_min": 17.8
+      },
+      {
+        "age_months": 97,
+        "severely_underweight_max": 11.8,
+        "underweight_min": 11.9,
+        "underweight_max": 12.8,
+        "normal_min": 12.9,
+        "normal_max": 17.8,
+        "overweight_min": 17.9
+      },
+      {
+        "age_months": 98,
+        "severely_underweight_max": 11.8,
+        "underweight_min": 11.9,
+        "underweight_max": 12.8,
+        "normal_min": 12.9,
+        "normal_max": 17.8,
+        "overweight_min": 17.9
+      },
+      {
+        "age_months": 99,
+        "severely_underweight_max": 11.8,
+        "underweight_min": 11.9,
+        "underweight_max": 12.8,
+        "normal_min": 12.9,
+        "normal_max": 17.9,
+        "overweight_min": 18.0
+      },
+      {
+        "age_months": 100,
+        "severely_underweight_max": 11.8,
+        "underweight_min": 11.9,
+        "underweight_max": 12.9,
+        "normal_min": 13.0,
+        "normal_max": 17.9,
+        "overweight_min": 13.0
+      },
+      {
+        "age_months": 101,
+        "severely_underweight_max": 11.9,
+        "underweight_min": 12.0,
+        "underweight_max": 12.9,
+        "normal_min": 13.0,
+        "normal_max": 18.0,
+        "overweight_min": 18.1
+      },
+      {
+        "age_months": 102,
+        "severely_underweight_max": 11.9,
+        "underweight_min": 12.0,
+        "underweight_max": 12.9,
+        "normal_min": 13.0,
+        "normal_max": 18.0,
+        "overweight_min": 18.1
+      },
+      {
+        "age_months": 103,
+        "severely_underweight_max": 11.9,
+        "underweight_min": 12.0,
+        "underweight_max": 12.9,
+        "normal_min": 13.0,
+        "normal_max": 18.1,
+        "overweight_min": 18.2
+      },
+      {
+        "age_months": 104,
+        "severely_underweight_max": 11.9,
+        "underweight_min": 12.0,
+        "underweight_max": 12.9,
+        "normal_min": 13.0,
+        "normal_max": 18.1,
+        "overweight_min": 18.2
+      },
+      {
+        "age_months": 105,
+        "severely_underweight_max": 11.9,
+        "underweight_min": 12.0,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 18.2,
+        "overweight_min": 18.3
+      },
+      {
+        "age_months": 106,
+        "severely_underweight_max": 12.0,
+        "underweight_min": 12.1,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 18.2,
+        "overweight_min": 18.3
+      },
+      {
+        "age_months": 107,
+        "severely_underweight_max": 12.0,
+        "underweight_min": 12.1,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 18.3,
+        "overweight_min": 18.4
+      },
+      {
+        "age_months": 108,
+        "severely_underweight_max": 12.0,
+        "underweight_min": 12.1,
+        "underweight_max": 13.0,
+        "normal_min": 13.1,
+        "normal_max": 18.3,
+        "overweight_min": 18.4
+      },
+      {
+        "age_months": 109,
+        "severely_underweight_max": 12.0,
+        "underweight_min": 12.1,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 18.4,
+        "overweight_min": 18.5
+      },
+      {
+        "age_months": 110,
+        "severely_underweight_max": 12.0,
+        "underweight_min": 12.1,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 18.4,
+        "overweight_min": 18.5
+      },
+      {
+        "age_months": 111,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 18.5,
+        "overweight_min": 18.6
+      },
+      {
+        "age_months": 112,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.1,
+        "normal_min": 13.2,
+        "normal_max": 18.6,
+        "overweight_min": 18.7
+      },
+      {
+        "age_months": 113,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 18.6,
+        "overweight_min": 18.7
+      },
+      {
+        "age_months": 114,
+        "severely_underweight_max": 12.1,
+        "underweight_min": 12.2,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 18.7,
+        "overweight_min": 18.8
+      },
+      {
+        "age_months": 115,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.2,
+        "normal_min": 13.3,
+        "normal_max": 18.7,
+        "overweight_min": 18.8
+      },
+      {
+        "age_months": 116,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 18.8,
+        "overweight_min": 18.9
+      },
+      {
+        "age_months": 117,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 18.8,
+        "overweight_min": 18.9
+      },
+      {
+        "age_months": 118,
+        "severely_underweight_max": 12.2,
+        "underweight_min": 12.3,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 18.9,
+        "overweight_min": 19.0
+      },
+      {
+        "age_months": 119,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.3,
+        "normal_min": 13.4,
+        "normal_max": 19.0,
+        "overweight_min": 19.1
+      },
+      {
+        "age_months": 120,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 19.0,
+        "overweight_min": 19.1
+      },
+      {
+        "age_months": 121,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 19.1,
+        "overweight_min": 19.2
+      },
+      {
+        "age_months": 122,
+        "severely_underweight_max": 12.3,
+        "underweight_min": 12.4,
+        "underweight_max": 13.4,
+        "normal_min": 13.5,
+        "normal_max": 19.2,
+        "overweight_min": 19.3
+      },
+      {
+        "age_months": 123,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.5,
+        "normal_min": 13.6,
+        "normal_max": 19.2,
+        "overweight_min": 19.3
+      },
+      {
+        "age_months": 124,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.5,
+        "normal_min": 13.6,
+        "normal_max": 19.3,
+        "overweight_min": 19.4
+      },
+      {
+        "age_months": 125,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.5,
+        "normal_min": 13.6,
+        "normal_max": 19.4,
+        "overweight_min": 19.5
+      },
+      {
+        "age_months": 126,
+        "severely_underweight_max": 12.4,
+        "underweight_min": 12.5,
+        "underweight_max": 13.6,
+        "normal_min": 13.7,
+        "normal_max": 19.4,
+        "overweight_min": 19.5
+      },
+      {
+        "age_months": 127,
+        "severely_underweight_max": 12.5,
+        "underweight_min": 12.6,
+        "underweight_max": 13.6,
+        "normal_min": 13.7,
+        "normal_max": 19.5,
+        "overweight_min": 19.6
+      },
+      {
+        "age_months": 128,
+        "severely_underweight_max": 12.5,
+        "underweight_min": 12.6,
+        "underweight_max": 13.6,
+        "normal_min": 13.7,
+        "normal_max": 19.6,
+        "overweight_min": 19.7
+      },
+      {
+        "age_months": 129,
+        "severely_underweight_max": 12.5,
+        "underweight_min": 12.6,
+        "underweight_max": 13.7,
+        "normal_min": 13.8,
+        "normal_max": 19.6,
+        "overweight_min": 19.7
+      },
+      {
+        "age_months": 130,
+        "severely_underweight_max": 12.6,
+        "underweight_min": 12.7,
+        "underweight_max": 13.7,
+        "normal_min": 13.8,
+        "normal_max": 19.7,
+        "overweight_min": 19.8
+      },
+      {
+        "age_months": 131,
+        "severely_underweight_max": 12.6,
+        "underweight_min": 12.7,
+        "underweight_max": 13.7,
+        "normal_min": 13.8,
+        "normal_max": 19.8,
+        "overweight_min": 19.9
+      },
+      {
+        "age_months": 132,
+        "severely_underweight_max": 12.6,
+        "underweight_min": 12.7,
+        "underweight_max": 13.8,
+        "normal_min": 13.9,
+        "normal_max": 19.9,
+        "overweight_min": 20.0
+      },
+      {
+        "age_months": 133,
+        "severely_underweight_max": 12.7,
+        "underweight_min": 12.8,
+        "underweight_max": 13.8,
+        "normal_min": 13.9,
+        "normal_max": 19.9,
+        "overweight_min": 20.0
+      },
+      {
+        "age_months": 134,
+        "severely_underweight_max": 12.7,
+        "underweight_min": 12.8,
+        "underweight_max": 13.9,
+        "normal_min": 14.0,
+        "normal_max": 20.0,
+        "overweight_min": 20.1
+      },
+      {
+        "age_months": 135,
+        "severely_underweight_max": 12.7,
+        "underweight_min": 12.8,
+        "underweight_max": 13.9,
+        "normal_min": 14.0,
+        "normal_max": 20.1,
+        "overweight_min": 20.2
+      },
+      {
+        "age_months": 136,
+        "severely_underweight_max": 12.8,
+        "underweight_min": 12.9,
+        "underweight_max": 13.9,
+        "normal_min": 14.0,
+        "normal_max": 20.2,
+        "overweight_min": 20.3
+      },
+      {
+        "age_months": 137,
+        "severely_underweight_max": 12.8,
+        "underweight_min": 12.9,
+        "underweight_max": 14.0,
+        "normal_min": 14.1,
+        "normal_max": 20.2,
+        "overweight_min": 20.3
+      },
+      {
+        "age_months": 138,
+        "severely_underweight_max": 12.8,
+        "underweight_min": 12.9,
+        "underweight_max": 14.0,
+        "normal_min": 14.1,
+        "normal_max": 20.3,
+        "overweight_min": 20.4
+      },
+      {
+        "age_months": 139,
+        "severely_underweight_max": 12.9,
+        "underweight_min": 13.0,
+        "underweight_max": 14.1,
+        "normal_min": 14.2,
+        "normal_max": 20.4,
+        "overweight_min": 20.5
+      },
+      {
+        "age_months": 140,
+        "severely_underweight_max": 12.9,
+        "underweight_min": 13.0,
+        "underweight_max": 14.1,
+        "normal_min": 14.2,
+        "normal_max": 20.5,
+        "overweight_min": 20.6
+      },
+      {
+        "age_months": 141,
+        "severely_underweight_max": 12.9,
+        "underweight_min": 13.0,
+        "underweight_max": 14.2,
+        "normal_min": 14.3,
+        "normal_max": 20.6,
+        "overweight_min": 20.7
+      },
+      {
+        "age_months": 142,
+        "severely_underweight_max": 13.0,
+        "underweight_min": 13.1,
+        "underweight_max": 14.2,
+        "normal_min": 14.3,
+        "normal_max": 20.6,
+        "overweight_min": 20.7
+      },
+      {
+        "age_months": 143,
+        "severely_underweight_max": 13.0,
+        "underweight_min": 13.1,
+        "underweight_max": 14.2,
+        "normal_min": 14.3,
+        "normal_max": 20.7,
+        "overweight_min": 20.8
+      },
+      {
+        "age_months": 144,
+        "severely_underweight_max": 13.1,
+        "underweight_min": 13.2,
+        "underweight_max": 14.3,
+        "normal_min": 14.4,
+        "normal_max": 20.8,
+        "overweight_min": 20.9
+      },
+      {
+        "age_months": 145,
+        "severely_underweight_max": 13.1,
+        "underweight_min": 13.2,
+        "underweight_max": 14.3,
+        "normal_min": 14.4,
+        "normal_max": 20.9,
+        "overweight_min": 21.0
+      },
+      {
+        "age_months": 146,
+        "severely_underweight_max": 13.1,
+        "underweight_min": 13.2,
+        "underweight_max": 14.4,
+        "normal_min": 14.5,
+        "normal_max": 21.0,
+        "overweight_min": 21.1
+      },
+      {
+        "age_months": 147,
+        "severely_underweight_max": 13.2,
+        "underweight_min": 13.3,
+        "underweight_max": 14.4,
+        "normal_min": 14.5,
+        "normal_max": 21.1,
+        "overweight_min": 21.2
+      },
+      {
+        "age_months": 148,
+        "severely_underweight_max": 13.2,
+        "underweight_min": 13.3,
+        "underweight_max": 14.5,
+        "normal_min": 14.6,
+        "normal_max": 21.1,
+        "overweight_min": 21.2
+      },
+      {
+        "age_months": 149,
+        "severely_underweight_max": 13.2,
+        "underweight_min": 13.3,
+        "underweight_max": 14.5,
+        "normal_min": 14.6,
+        "normal_max": 21.2,
+        "overweight_min": 21.3
+      },
+      {
+        "age_months": 150,
+        "severely_underweight_max": 13.3,
+        "underweight_min": 13.4,
+        "underweight_max": 14.6,
+        "normal_min": 14.7,
+        "normal_max": 21.3,
+        "overweight_min": 21.4
+      },
+      {
+        "age_months": 151,
+        "severely_underweight_max": 13.3,
+        "underweight_min": 13.4,
+        "underweight_max": 14.6,
+        "normal_min": 14.7,
+        "normal_max": 21.4,
+        "overweight_min": 21.5
+      },
+      {
+        "age_months": 152,
+        "severely_underweight_max": 13.4,
+        "underweight_min": 13.5,
+        "underweight_max": 14.7,
+        "normal_min": 14.8,
+        "normal_max": 21.5,
+        "overweight_min": 21.6
+      },
+      {
+        "age_months": 153,
+        "severely_underweight_max": 13.4,
+        "underweight_min": 13.5,
+        "underweight_max": 14.7,
+        "normal_min": 14.8,
+        "normal_max": 21.6,
+        "overweight_min": 21.7
+      },
+      {
+        "age_months": 154,
+        "severely_underweight_max": 13.4,
+        "underweight_min": 13.5,
+        "underweight_max": 14.7,
+        "normal_min": 14.8,
+        "normal_max": 21.6,
+        "overweight_min": 21.7
+      },
+      {
+        "age_months": 155,
+        "severely_underweight_max": 13.5,
+        "underweight_min": 13.6,
+        "underweight_max": 14.8,
+        "normal_min": 14.9,
+        "normal_max": 21.7,
+        "overweight_min": 21.8
+      }
+    ]
+  }
+}

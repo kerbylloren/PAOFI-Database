@@ -19,8 +19,25 @@ const CHOICE_OPTIONS = {
   commit_days: ["1-2 Days", "3-4 Days"]
 };
 
+const CHAPEL_OPTIONS = [
+  "Ascension",
+  "Lourdes",
+  "MDPP/Center",
+  "Nazareno",
+  "Benedict",
+  "Sto. Nino",
+  "Molave",
+  "Sagrada",
+  "San Isidro",
+  "Litex",
+  "Sta. Cruz",
+  "ICC",
+  "Fatima"
+];
+
 const DROPDOWN_OPTIONS = {
   field_h11: ["Female", "Male"],
+  field_c12: CHAPEL_OPTIONS,
   current_group: ["Dishwashing", "Sewing", "Rag Making"],
   field_k30: ["None", "Feeding Program", "Scholarship Program", "Scholarship Program, Feeding Program"]
 };
@@ -195,13 +212,13 @@ const NUTRITION_SNAPSHOT_GROUPS = [
     ]
   },
   {
-    title: "Current Nutrition Details",
+    title: "Current Nutrition Details (From Growth Monitoring)",
     fields: [
-      { name: "current_update_date", label: "Date Updated", input: "date" },
-      { name: "current_age_months", label: "Current Age (months)", input: "number" },
-      { name: "current_weight_kg", label: "Current Weight (kg)", input: "decimal" },
-      { name: "current_height_cm", label: "Current Height (cm)", input: "decimal" },
-      { name: "current_nutrition_status", label: "Current Nutrition Status", input: "select", options: NUTRITION_STATUS_OPTIONS }
+      { name: "current_update_date", label: "Date Updated", input: "growth-current" },
+      { name: "current_age_months", label: "Current Age (months)", input: "growth-current" },
+      { name: "current_weight_kg", label: "Current Weight (kg)", input: "growth-current" },
+      { name: "current_height_cm", label: "Current Height (cm)", input: "growth-current" },
+      { name: "current_nutrition_status", label: "Current Nutrition Status", input: "growth-current" }
     ]
   },
   {
@@ -286,6 +303,7 @@ const CAPITALIZE_FIELD_EXCLUSIONS = new Set([
 const UPPERCASE_TERMS = new Set([
   "ALS",
   "BPI",
+  "ICC",
   "LP",
   "MDPP",
   "N/A",
@@ -344,11 +362,6 @@ const ICONS = {
 };
 
 const COMING_SOON_PAGES = {
-  "nutrition-growth": {
-    program: "Nutrition Program - Supplemental Feeding",
-    title: "Growth Monitoring",
-    description: "Height, weight, weight gain, and child growth standard tracking."
-  },
   "nutrition-menu": {
     program: "Nutrition Program - Supplemental Feeding",
     title: "Monthly Menu & Weekly Costing",
@@ -430,6 +443,8 @@ const state = {
   currentMonitoringReport: null,
   currentNutritionBeneficiary: null,
   currentNutritionCenter: null,
+  currentNutritionGrowthReport: null,
+  nutritionCgsReference: null,
   monitoringBeneficiaries: [],
   pictureData: "",
   nutritionPictureData: "",
@@ -510,6 +525,12 @@ function parseNutritionDate(value) {
 
   const date = new Date(Number(match[3]), Number(match[1]) - 1, Number(match[2]));
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function nutritionDateInputValue(value) {
+  const date = parseNutritionDate(value);
+  if (!date) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function nutritionNumber(value) {
@@ -601,6 +622,15 @@ function titleCaseValue(value) {
     });
 }
 
+function sentenceCaseValue(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return "";
+
+  return text.replace(/(^|[.!?]\s+|\n+\s*)([a-z])/g, (match, prefix, letter) => {
+    return `${prefix}${letter.toUpperCase()}`;
+  });
+}
+
 function shouldCapitalizeField(name) {
   return !CAPITALIZE_FIELD_EXCLUSIONS.has(name);
 }
@@ -621,6 +651,14 @@ function fullName(record = {}) {
   return [record.last_name, record.first_name, record.middle_name]
     .filter(Boolean)
     .join(", ") || "Unnamed record";
+}
+
+function beneficiarySignatureName(record = {}) {
+  const name = [record.last_name, record.first_name, record.middle_name]
+    .map(value => String(value || "").trim())
+    .filter(Boolean)
+    .join(", ");
+  return name || "Name and Signature of the Applicant";
 }
 
 function initials(record = {}) {
@@ -820,6 +858,7 @@ async function renderRoute() {
     else if (parsed.route === "monitoring") await renderMonitoringPage(parsed.id);
     else if (parsed.route === "nutrition-profiles") await renderNutritionProfilesPage(parsed.id);
     else if (parsed.route === "nutrition-centers") await renderNutritionCentersPage(parsed.id);
+    else if (parsed.route === "nutrition-growth") await renderNutritionGrowthPage(parsed.id);
     else if (parsed.route === "bin") await renderBinPage();
     else if (parsed.route === "accounts") await renderAccountsPage();
     else if (COMING_SOON_PAGES[parsed.route]) await renderComingSoonPage(parsed.route);
@@ -1294,8 +1333,8 @@ function renderNutritionDashboardSummary(overview = {}) {
       <div class="analytics-kpi-grid">
         ${renderAnalyticsKpi("Child Profiles", String(analytics.total), `${analytics.active} active`, "green")}
         ${renderAnalyticsKpi("Feeding Centers", String(analytics.centers), `${analytics.activeCenters} active`, "blue")}
+        ${renderAnalyticsKpi("Growth Reports", String((overview.growthReports || []).length), "monthly center reports", "violet")}
         ${renderAnalyticsKpi("Top Center", topCenter.label, analyticsPlural(topCenter.count, "child", "children"), "amber")}
-        ${renderAnalyticsKpi("Needs Snapshot", String(analytics.total - analytics.nutritionStatusCounts.filter(entry => entry.label !== "Not Specified").reduce((sum, entry) => sum + entry.count, 0)), "missing nutrition status", "violet")}
       </div>
       <div class="analytics-preview-grid">
         ${renderAnalyticsCard("Current Nutrition Status", "Profile-level snapshot", renderBarList(analytics.nutritionStatusCounts, analytics.total, 4))}
@@ -1424,6 +1463,7 @@ async function renderMenuPage() {
       ${menuTile("database", "table", "Database Table")}
       ${menuTile("monitoring", "monitoring", "Monitoring Reports")}
       ${menuTile("nutrition-profiles", "users", "Nutrition Profiles")}
+      ${menuTile("nutrition-growth", "monitoring", "Growth Monitoring")}
       ${menuTile("nutrition-centers", "home", "Feeding Centers")}
     </section>
 
@@ -1610,17 +1650,27 @@ function monitoringOverview(reports) {
   const totals = reports.reduce((summary, report) => {
     summary.sales += Number(report.total_sales || 0);
     summary.expenses += Number(report.total_expenses || 0);
-    summary.net += Number(report.net_income || 0);
+    summary.movement += Number(report.total_sales || 0) - Number(report.total_expenses || 0);
     summary.months.add(report.report_month);
+
+    const key = report.beneficiary_id || report.control_no || report.beneficiary_name || report.id;
+    const existing = summary.latestByBeneficiary.get(key);
+    if (!existing || String(report.report_month || "").localeCompare(String(existing.report_month || "")) > 0) {
+      summary.latestByBeneficiary.set(key, report);
+    }
+
     return summary;
-  }, { sales: 0, expenses: 0, net: 0, months: new Set() });
+  }, { sales: 0, expenses: 0, movement: 0, months: new Set(), latestByBeneficiary: new Map() });
   const monthCounts = countBy(reports, report => reportMonthLabel(report.report_month));
+  const currentFund = [...totals.latestByBeneficiary.values()]
+    .reduce((sum, report) => sum + Number(report.net_income || 0), 0);
 
   return {
     count: reports.length,
     sales: totals.sales,
     expenses: totals.expenses,
-    net: totals.net,
+    movement: totals.movement,
+    currentFund,
     months: totals.months.size,
     monthCounts
   };
@@ -1631,12 +1681,13 @@ function beneficiaryMonitoringSummary(reports = []) {
   const totals = sortedReports.reduce((summary, report) => {
     summary.sales += Number(report.total_sales || 0);
     summary.expenses += Number(report.total_expenses || 0);
-    summary.net += Number(report.net_income || 0);
-    summary.balance += Number(report.forwarded_balance || 0);
+    summary.movement += Number(report.total_sales || 0) - Number(report.total_expenses || 0);
     return summary;
-  }, { sales: 0, expenses: 0, net: 0, balance: 0 });
+  }, { sales: 0, expenses: 0, movement: 0 });
   const latest = sortedReports[sortedReports.length - 1] || null;
-  const profitableMonths = sortedReports.filter(report => Number(report.net_income || 0) > 0).length;
+  const profitableMonths = sortedReports
+    .filter(report => Number(report.total_sales || 0) - Number(report.total_expenses || 0) > 0)
+    .length;
 
   return {
     reports: sortedReports,
@@ -1645,9 +1696,9 @@ function beneficiaryMonitoringSummary(reports = []) {
     latest,
     sales: totals.sales,
     expenses: totals.expenses,
-    net: totals.net,
-    balance: totals.balance,
-    averageNet: sortedReports.length ? totals.net / sortedReports.length : 0,
+    movement: totals.movement,
+    latestBalance: latest ? Number(latest.net_income || 0) : 0,
+    averageMovement: sortedReports.length ? totals.movement / sortedReports.length : 0,
     profitableMonths
   };
 }
@@ -1671,8 +1722,8 @@ function renderBeneficiaryMonitoringSummary(reports = [], mode = "profile") {
           ${renderMonitoringSummaryMetric("Reports", String(summary.count), `${summary.months.length} month${summary.months.length === 1 ? "" : "s"} filed`)}
           ${renderMonitoringSummaryMetric("Total Sales", formatMoney(summary.sales), "All submitted reports")}
           ${renderMonitoringSummaryMetric("Total Expenses", formatMoney(summary.expenses), "All submitted reports")}
-          ${renderMonitoringSummaryMetric("Net Income", formatMoney(summary.net), `${summary.profitableMonths} positive month${summary.profitableMonths === 1 ? "" : "s"}`)}
-          ${renderMonitoringSummaryMetric("Avg. Monthly Net", formatMoney(summary.averageNet), "Across submitted reports")}
+          ${renderMonitoringSummaryMetric("Current Fund", formatMoney(summary.latestBalance), "Latest running balance")}
+          ${renderMonitoringSummaryMetric("Net Movement", formatMoney(summary.movement), `${summary.profitableMonths} positive month${summary.profitableMonths === 1 ? "" : "s"}`)}
         </div>
         <div class="beneficiary-monitoring-table-wrap">
           <table class="beneficiary-monitoring-table">
@@ -1682,7 +1733,7 @@ function renderBeneficiaryMonitoringSummary(reports = [], mode = "profile") {
                 <th>Project</th>
                 <th>Sales</th>
                 <th>Expenses</th>
-                <th>Net Income</th>
+                <th>Running Income</th>
               </tr>
             </thead>
             <tbody>
@@ -1731,7 +1782,7 @@ function renderMonitoringOverview(reports) {
         ${renderAnalyticsKpi("Reports Filed", String(overview.count), "Submitted monthly forms", "green")}
         ${renderAnalyticsKpi("Total Sales", formatMoney(overview.sales), "Production and sales", "blue")}
         ${renderAnalyticsKpi("Total Expenses", formatMoney(overview.expenses), "Reported expenses", "amber")}
-        ${renderAnalyticsKpi("Net Income", formatMoney(overview.net), "Balance plus sales less expenses", "violet")}
+        ${renderAnalyticsKpi("Current Fund", formatMoney(overview.currentFund), "Latest running balances", "violet")}
       </div>
       <div class="analytics-preview-grid">
         ${renderAnalyticsCard("Reports by Month", "Monthly submission volume", renderBarList(overview.monthCounts, overview.count, 6))}
@@ -1739,7 +1790,7 @@ function renderMonitoringOverview(reports) {
           <div class="finance-summary">
             <div><span>Sales</span><strong>${escapeHtml(formatMoney(overview.sales))}</strong></div>
             <div><span>Expenses</span><strong>${escapeHtml(formatMoney(overview.expenses))}</strong></div>
-            <div><span>Net</span><strong>${escapeHtml(formatMoney(overview.net))}</strong></div>
+            <div><span>Net Movement</span><strong>${escapeHtml(formatMoney(overview.movement))}</strong></div>
           </div>
         `)}
       </div>
@@ -2156,6 +2207,15 @@ function renderNutritionField(meta, record, centers, readonly) {
       <div class="paper-field ${isWide ? "wide" : ""}">
         <label>${escapeHtml(meta.label)}</label>
         <div class="display-value computed-value" data-nutrition-computed="${escapeHtml(meta.name)}">${escapeHtml(value) || "&nbsp;"}</div>
+      </div>
+    `;
+  }
+
+  if (meta.input === "growth-current") {
+    return `
+      <div class="paper-field ${isWide ? "wide" : ""}">
+        <label>${escapeHtml(meta.label)}</label>
+        <div class="display-value growth-derived-value">${escapeHtml(value) || "&nbsp;"}</div>
       </div>
     `;
   }
@@ -2632,7 +2692,7 @@ function attachNutritionBeneficiaryFormHandlers() {
 }
 
 function collectNutritionBeneficiary() {
-  const record = {};
+  const record = { ...(state.currentNutritionBeneficiary || {}) };
 
   if (state.currentNutritionBeneficiary?.id) {
     record.id = state.currentNutritionBeneficiary.id;
@@ -3213,6 +3273,8 @@ function renderNutritionCenterForm(center, beneficiaries = [], readonly) {
                     <th>Child's Name</th>
                     <th>Age</th>
                     <th>Gender</th>
+                    <th>Current Height (cm)</th>
+                    <th>Current Weight (kg)</th>
                     <th>Current Nutrition Status</th>
                     <th>Remarks</th>
                   </tr>
@@ -3224,6 +3286,8 @@ function renderNutritionCenterForm(center, beneficiaries = [], readonly) {
                       <td>${escapeHtml(nutritionFullName(record))}</td>
                       <td>${escapeHtml(record.age || "")}</td>
                       <td>${escapeHtml(record.gender || "")}</td>
+                      <td>${escapeHtml(record.current_height_cm || "")}</td>
+                      <td>${escapeHtml(record.current_weight_kg || "")}</td>
                       <td>${escapeHtml(record.current_nutrition_status || "")}</td>
                       <td>${escapeHtml(record.remarks || "")}</td>
                     </tr>
@@ -3366,6 +3430,901 @@ async function deleteCurrentNutritionCenter(id) {
   navigate("nutrition-centers");
 }
 
+async function loadNutritionCgsReference() {
+  if (!state.nutritionCgsReference) {
+    state.nutritionCgsReference = await api("/api/nutrition/growth/cgs");
+  }
+
+  return state.nutritionCgsReference;
+}
+
+async function loadNutritionGrowthReports({ search = "", centerId = "" } = {}) {
+  const params = new URLSearchParams({ search, centerId, limit: "500" });
+  const payload = await api(`/api/nutrition/growth/reports?${params.toString()}`);
+  return payload.reports || [];
+}
+
+async function loadNutritionGrowthReport(id) {
+  const payload = await api(`/api/nutrition/growth/reports/${id}`);
+  return payload.report;
+}
+
+async function loadNutritionGrowthDraft({ id = "", centerId = "", reportMonth = "", submittedDate = "" } = {}) {
+  const params = new URLSearchParams();
+  if (id) params.set("id", id);
+  if (centerId) params.set("centerId", centerId);
+  if (reportMonth) params.set("reportMonth", reportMonth);
+  if (submittedDate) params.set("submittedDate", submittedDate);
+  const payload = await api(`/api/nutrition/growth/draft?${params.toString()}`);
+  return payload.report;
+}
+
+function blankNutritionGrowthReport() {
+  return {
+    center_id: "",
+    center_name: "",
+    submitted_date: nutritionTodayDate(),
+    report_month: currentReportMonth(),
+    entries: []
+  };
+}
+
+function nutritionGrowthStatusCounts(entries = []) {
+  return countBy(entries, entry => nutritionText(entry.cgs_classification, "Not Classified"));
+}
+
+function buildNutritionGrowthAnalytics(reports = []) {
+  const totals = reports.reduce((summary, report) => {
+    summary.children += Number(report.child_count || 0);
+    summary.severelyUnderweight += Number(report.severely_underweight_count || 0);
+    summary.underweight += Number(report.underweight_count || 0);
+    summary.normal += Number(report.normal_count || 0);
+    summary.overweight += Number(report.overweight_count || 0);
+    summary.centerCounts.set(report.center_name || "No Center", (summary.centerCounts.get(report.center_name || "No Center") || 0) + 1);
+    return summary;
+  }, {
+    children: 0,
+    severelyUnderweight: 0,
+    underweight: 0,
+    normal: 0,
+    overweight: 0,
+    centerCounts: new Map()
+  });
+
+  return {
+    reports: reports.length,
+    children: totals.children,
+    statusCounts: [
+      { label: "Severely Underweight", count: totals.severelyUnderweight },
+      { label: "Underweight", count: totals.underweight },
+      { label: "Normal", count: totals.normal },
+      { label: "Overweight", count: totals.overweight }
+    ],
+    centerCounts: [...totals.centerCounts.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count)
+  };
+}
+
+function renderNutritionGrowthAnalytics(reports = []) {
+  const analytics = buildNutritionGrowthAnalytics(reports);
+  const topCenter = topAnalyticsEntry(analytics.centerCounts);
+  const needsFollowUp = analytics.statusCounts
+    .filter(entry => ["Severely Underweight", "Underweight"].includes(entry.label))
+    .reduce((sum, entry) => sum + entry.count, 0);
+
+  return `
+    <section class="database-analytics nutrition-analytics">
+      <div class="analytics-title-row">
+        <div>
+          <span class="analytics-eyebrow">Nutrition Growth Monitoring</span>
+          <h3>Monthly Center Reports</h3>
+        </div>
+        <span class="analytics-note">${analytics.reports} report${analytics.reports === 1 ? "" : "s"} filed</span>
+      </div>
+      <div class="analytics-kpi-grid">
+        ${renderAnalyticsKpi("Reports", String(analytics.reports), "center-month records", "green")}
+        ${renderAnalyticsKpi("Children Monitored", String(analytics.children), "rows across reports", "blue")}
+        ${renderAnalyticsKpi("Needs Follow-Up", String(needsFollowUp), "SU + Underweight", "red")}
+        ${renderAnalyticsKpi("Top Center", topCenter.label, analyticsPlural(topCenter.count, "report"), "amber")}
+      </div>
+      <div class="analytics-preview-grid">
+        ${renderAnalyticsCard("CGS Classification", "All displayed reports", renderBarList(analytics.statusCounts, Math.max(analytics.children, 1), 4))}
+        ${renderAnalyticsCard("Reports by Center", "Monitoring coverage", renderBarList(analytics.centerCounts, Math.max(analytics.reports, 1), 6))}
+      </div>
+    </section>
+  `;
+}
+
+async function renderNutritionGrowthPage(id = "") {
+  const parsed = parseNutritionRouteId(id);
+
+  if (parsed.mode !== "list") {
+    await renderNutritionGrowthEditorPage(parsed.id, parsed.mode === "new");
+    return;
+  }
+
+  setTitle("Nutrition Growth Monitoring");
+  setTopbarActions([
+    { id: "nutritionGrowthNew", label: "New Report", icon: "plus", variant: "primary", onClick: () => navigate("nutrition-growth", "new") },
+    { id: "nutritionGrowthYearly", label: "Yearly Summary", icon: "print", onClick: () => printNutritionGrowthYearlySummary().catch(error => showToast(error.message)) }
+  ]);
+
+  const [overview, reports] = await Promise.all([
+    loadNutritionOverview(),
+    loadNutritionGrowthReports()
+  ]);
+  const centers = overview.centers || [];
+
+  elements.pageRoot.innerHTML = `
+    <div id="nutritionGrowthAnalyticsHost">${renderNutritionGrowthAnalytics(reports)}</div>
+    <section class="database-page nutrition-page">
+      <div class="table-toolbar">
+        <div class="search-band compact with-button">
+          <span class="search-icon">${icon("search")}</span>
+          <input id="nutritionGrowthSearchInput" type="search" placeholder="Search center, month, or submission date">
+          <button id="nutritionGrowthSearchButton" type="button" class="action-button">
+            <span class="button-icon">${icon("search")}</span>
+            <span>Search</span>
+          </button>
+        </div>
+        <div class="database-filter-grid nutrition-filter-grid">
+          <label>
+            Feeding Center
+            <select id="nutritionGrowthCenterFilter">
+              <option value="">All Centers</option>
+              ${centers.map(center => `<option value="${center.id}">${escapeHtml(center.center_name)}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="table-toolbar-footer">
+          <div class="filter-summary"><span>Nutrition growth monitoring reports</span></div>
+          <span id="nutritionGrowthCount" class="table-count"></span>
+        </div>
+      </div>
+      <div id="nutritionGrowthTableHost" class="database-table-host"></div>
+    </section>
+  `;
+
+  async function loadReports() {
+    const search = document.getElementById("nutritionGrowthSearchInput").value.trim();
+    const centerId = document.getElementById("nutritionGrowthCenterFilter").value;
+    const filteredReports = await loadNutritionGrowthReports({ search, centerId });
+    document.getElementById("nutritionGrowthAnalyticsHost").innerHTML = renderNutritionGrowthAnalytics(filteredReports);
+    renderNutritionGrowthTable(filteredReports);
+  }
+
+  document.getElementById("nutritionGrowthSearchButton").addEventListener("click", () => loadReports().catch(error => showToast(error.message)));
+  document.getElementById("nutritionGrowthSearchInput").addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      loadReports().catch(error => showToast(error.message));
+    }
+  });
+  document.getElementById("nutritionGrowthCenterFilter").addEventListener("change", () => loadReports().catch(error => showToast(error.message)));
+
+  renderNutritionGrowthTable(reports);
+}
+
+function renderNutritionGrowthTable(reports = []) {
+  document.getElementById("nutritionGrowthCount").textContent = `${reports.length} shown`;
+
+  if (!reports.length) {
+    document.getElementById("nutritionGrowthTableHost").innerHTML = emptyState("No nutrition growth monitoring reports yet.");
+    return;
+  }
+
+  document.getElementById("nutritionGrowthTableHost").innerHTML = `
+    <div class="data-table-scroll">
+      <table class="data-table nutrition-growth-table">
+        <thead>
+          <tr>
+            <th class="sticky-column">Actions</th>
+            <th>Month</th>
+            <th>Feeding Center</th>
+            <th>Submitted</th>
+            <th>Children</th>
+            <th>Severely Underweight</th>
+            <th>Underweight</th>
+            <th>Normal</th>
+            <th>Overweight</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${reports.map(report => `
+            <tr>
+              <td class="sticky-column">
+                <div class="table-actions">
+                  <button type="button" class="icon-button" title="Edit" data-nutrition-growth-edit-id="${report.id}">${icon("edit")}</button>
+                  <button type="button" class="icon-button" title="Print" data-nutrition-growth-print-id="${report.id}">${icon("print")}</button>
+                </div>
+              </td>
+              <td>${escapeHtml(reportMonthLabel(report.report_month))}</td>
+              <td>${escapeHtml(report.center_name || "")}</td>
+              <td>${escapeHtml(report.submitted_date || "")}</td>
+              <td>${escapeHtml(report.child_count || 0)}</td>
+              <td>${escapeHtml(report.severely_underweight_count || 0)}</td>
+              <td>${escapeHtml(report.underweight_count || 0)}</td>
+              <td>${escapeHtml(report.normal_count || 0)}</td>
+              <td>${escapeHtml(report.overweight_count || 0)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+  attachNutritionGrowthTableHandlers(elements.pageRoot);
+}
+
+function attachNutritionGrowthTableHandlers(scope = document) {
+  scope.querySelectorAll("[data-nutrition-growth-edit-id]").forEach(button => {
+    button.addEventListener("click", () => navigate("nutrition-growth", button.dataset.nutritionGrowthEditId));
+  });
+  scope.querySelectorAll("[data-nutrition-growth-print-id]").forEach(button => {
+    button.addEventListener("click", async () => {
+      try {
+        const report = await loadNutritionGrowthReport(button.dataset.nutritionGrowthPrintId);
+        printNutritionGrowthReport(report);
+      } catch (error) {
+        showToast(error.message);
+      }
+    });
+  });
+}
+
+async function renderNutritionGrowthEditorPage(id = "", isNew = false) {
+  const [centers, cgs] = await Promise.all([
+    loadNutritionCenters(),
+    loadNutritionCgsReference()
+  ]);
+  state.nutritionCgsReference = cgs;
+  const report = isNew ? blankNutritionGrowthReport() : await loadNutritionGrowthDraft({ id });
+  state.currentNutritionGrowthReport = report;
+
+  setTitle(isNew ? "New Growth Monitoring Report" : "Growth Monitoring Report");
+  setTopbarActions([
+    { id: "nutritionGrowthBack", label: "Reports", icon: "table", onClick: () => navigate("nutrition-growth") },
+    { id: "nutritionGrowthRefresh", label: "Refresh Children", icon: "refresh", onClick: () => refreshNutritionGrowthDraft().catch(error => showToast(error.message)) },
+    { id: "nutritionGrowthSave", label: "Save", icon: "save", variant: "primary", onClick: () => saveCurrentNutritionGrowthReport().catch(error => showToast(error.message)) },
+    { id: "nutritionGrowthPrint", label: "Print", icon: "print", onClick: () => printNutritionGrowthReport(collectNutritionGrowthReport(true)) },
+    ...(!isNew ? [
+      { id: "nutritionGrowthDelete", label: "Delete", icon: "bin", variant: "danger", onClick: () => deleteCurrentNutritionGrowthReport(id).catch(error => showToast(error.message)) }
+    ] : [])
+  ]);
+
+  elements.pageRoot.innerHTML = renderNutritionGrowthForm(report, centers);
+  attachNutritionGrowthFormHandlers();
+}
+
+function renderNutritionGrowthForm(report, centers = []) {
+  const selectedId = Number(report.center_id || 0);
+  const hasSelected = centers.some(center => Number(center.id) === selectedId);
+
+  return `
+    <section class="application-paper nutrition-paper nutrition-growth-paper editable">
+      <header class="monitoring-heading">
+        <img src="/assets/paofi-logo.png" alt="">
+        <div>
+          <h2>Payatas Orione Foundation Inc.</h2>
+          <h3>Nutrition Program - Supplemental Feeding Growth Monitoring</h3>
+        </div>
+      </header>
+      <section class="paper-section">
+        <h3>Monthly Report Details</h3>
+        <div class="monitoring-identity-grid">
+          <div class="paper-field wide">
+            <label for="nutritionGrowthCenter">Feeding Center</label>
+            <select id="nutritionGrowthCenter" data-growth-field="center_id">
+              <option value="" ${selectedId ? "" : "selected"}></option>
+              ${!hasSelected && selectedId ? `<option value="${selectedId}" selected>${escapeHtml(report.center_name || `Center ${selectedId}`)}</option>` : ""}
+              ${centers.map(center => `<option value="${center.id}" ${Number(center.id) === selectedId ? "selected" : ""}>${escapeHtml(center.center_name)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="paper-field">
+            <label for="nutritionGrowthMonth">Report Month</label>
+            <input id="nutritionGrowthMonth" type="month" data-growth-field="report_month" value="${escapeHtml(report.report_month || currentReportMonth())}">
+          </div>
+          <div class="paper-field">
+            <label for="nutritionGrowthSubmittedDate">Date of Submission</label>
+            <input id="nutritionGrowthSubmittedDate" type="date" data-growth-field="submitted_date" value="${escapeHtml(nutritionDateInputValue(report.submitted_date || nutritionTodayDate()) || todayDate())}">
+          </div>
+        </div>
+      </section>
+      <section class="paper-section">
+        <div class="family-section-header">
+          <h3>Child Growth Records</h3>
+          <span id="nutritionGrowthEntryCount" class="table-count">${(report.entries || []).length} child${(report.entries || []).length === 1 ? "" : "ren"}</span>
+        </div>
+        <div id="nutritionGrowthEntriesHost">
+          ${renderNutritionGrowthEntries(report)}
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function renderNutritionGrowthEntries(report) {
+  const entries = report.entries || [];
+  if (!report.center_id) {
+    return emptyState("Select a feeding center and report month, then refresh children.");
+  }
+
+  if (!entries.length) {
+    return emptyState("No beneficiaries are linked to this feeding center yet.");
+  }
+
+  return `
+    <div class="data-table-scroll nutrition-growth-entry-wrap">
+      <table class="family-table nutrition-growth-entry-table">
+        <thead>
+          <tr>
+            <th>Beneficiary</th>
+            <th>Gender</th>
+            <th>Birth Date</th>
+            <th>Age in Months</th>
+            <th>Latest Growth Monitoring Record</th>
+            <th>Height (cm)</th>
+            <th>Weight (kg)</th>
+            <th>Height Change</th>
+            <th>Weight Change</th>
+            <th>CGS Classification</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${entries.map(entry => renderNutritionGrowthEntryRow(entry)).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderNutritionGrowthEntryRow(entry = {}) {
+  const latest = [
+    entry.previous_record_date ? `Date: ${entry.previous_record_date}` : "",
+    entry.previous_height_cm ? `Height: ${entry.previous_height_cm} cm` : "",
+    entry.previous_weight_kg ? `Weight: ${entry.previous_weight_kg} kg` : "",
+    entry.previous_cgs_classification ? `CGS: ${entry.previous_cgs_classification}` : ""
+  ].filter(Boolean).join(" | ") || "No prior record";
+
+  return `
+    <tr
+      data-growth-entry-row
+      data-beneficiary-id="${escapeHtml(entry.beneficiary_id || "")}"
+      data-beneficiary-no="${escapeHtml(entry.beneficiary_no || "")}"
+      data-beneficiary-name="${escapeHtml(entry.beneficiary_name || "")}"
+      data-gender="${escapeHtml(entry.gender || "")}"
+      data-birth-date="${escapeHtml(entry.birth_date || "")}"
+      data-previous-height="${escapeHtml(entry.previous_height_cm || "")}"
+      data-previous-weight="${escapeHtml(entry.previous_weight_kg || "")}"
+      data-previous-date="${escapeHtml(entry.previous_record_date || "")}"
+      data-previous-classification="${escapeHtml(entry.previous_cgs_classification || "")}"
+    >
+      <td>
+        <strong>${escapeHtml(entry.beneficiary_name || "")}</strong>
+        <span class="subtle-cell">${escapeHtml(entry.beneficiary_no || "")}</span>
+      </td>
+      <td>${escapeHtml(entry.gender || "")}</td>
+      <td>${escapeHtml(entry.birth_date || "")}</td>
+      <td data-growth-computed="age_months">${escapeHtml(entry.age_months || "")}</td>
+      <td class="latest-growth-cell">${escapeHtml(latest)}</td>
+      <td><input type="number" step="0.01" data-growth-entry-field="height_cm" value="${escapeHtml(entry.height_cm || "")}"></td>
+      <td><input type="number" step="0.01" data-growth-entry-field="weight_kg" value="${escapeHtml(entry.weight_kg || "")}"></td>
+      <td data-growth-computed="height_change_cm">${escapeHtml(entry.height_change_cm || "")}</td>
+      <td data-growth-computed="weight_change_kg">${escapeHtml(entry.weight_change_kg || "")}</td>
+      <td data-growth-computed="cgs_classification">${escapeHtml(entry.cgs_classification || "")}</td>
+    </tr>
+  `;
+}
+
+function nutritionGrowthNumber(value) {
+  const number = nutritionNumber(value);
+  return number === null ? null : number;
+}
+
+function nutritionGrowthFormatNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "";
+  return Number(number.toFixed(2)).toString();
+}
+
+function nutritionGrowthDelta(current, previous) {
+  const currentNumber = nutritionGrowthNumber(current);
+  const previousNumber = nutritionGrowthNumber(previous);
+  if (currentNumber === null || previousNumber === null) return "";
+  return nutritionGrowthFormatNumber(currentNumber - previousNumber);
+}
+
+function nutritionGrowthGenderKey(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (text.startsWith("m")) return "male";
+  if (text.startsWith("f")) return "female";
+  return "";
+}
+
+function nutritionGrowthReportMonthReference(reportMonth) {
+  const match = /^(\d{4})-(\d{1,2})$/.exec(String(reportMonth || ""));
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]), 0);
+}
+
+function nutritionGrowthAgeMonths(birthDate, reportMonth) {
+  const birth = parseNutritionDate(birthDate);
+  const reference = nutritionGrowthReportMonthReference(reportMonth);
+  if (!birth || !reference || reference < birth) return "";
+
+  let months = (reference.getFullYear() - birth.getFullYear()) * 12;
+  months += reference.getMonth() - birth.getMonth();
+  if (reference.getDate() < birth.getDate()) months -= 1;
+  return months >= 0 ? String(months) : "";
+}
+
+function classifyNutritionGrowthRow(row, ageMonths, weightKg) {
+  const reference = state.nutritionCgsReference;
+  const genderKey = nutritionGrowthGenderKey(row.dataset.gender);
+  const standards = reference?.standards?.[genderKey] || [];
+  const rowStandard = standards.find(item => Number(item.age_months) === Number(ageMonths));
+  const weight = nutritionGrowthNumber(weightKg);
+  if (!rowStandard || weight === null) return "";
+
+  const roundedWeight = Math.round(weight * 10) / 10;
+  if (roundedWeight <= Number(rowStandard.severely_underweight_max)) return "Severely Underweight";
+  if (roundedWeight <= Number(rowStandard.underweight_max)) return "Underweight";
+  if (roundedWeight <= Number(rowStandard.normal_max)) return "Normal";
+  return "Overweight";
+}
+
+function updateNutritionGrowthComputedRow(row) {
+  const reportMonth = elements.pageRoot.querySelector('[data-growth-field="report_month"]')?.value || currentReportMonth();
+  const heightInput = row.querySelector('[data-growth-entry-field="height_cm"]');
+  const weightInput = row.querySelector('[data-growth-entry-field="weight_kg"]');
+  const ageMonths = nutritionGrowthAgeMonths(row.dataset.birthDate, reportMonth);
+  const heightChange = nutritionGrowthDelta(heightInput?.value, row.dataset.previousHeight);
+  const weightChange = nutritionGrowthDelta(weightInput?.value, row.dataset.previousWeight);
+  const classification = classifyNutritionGrowthRow(row, ageMonths, weightInput?.value);
+
+  row.querySelector('[data-growth-computed="age_months"]').textContent = ageMonths;
+  row.querySelector('[data-growth-computed="height_change_cm"]').textContent = heightChange;
+  row.querySelector('[data-growth-computed="weight_change_kg"]').textContent = weightChange;
+  row.querySelector('[data-growth-computed="cgs_classification"]').textContent = classification;
+}
+
+function updateNutritionGrowthComputedRows() {
+  elements.pageRoot.querySelectorAll("[data-growth-entry-row]").forEach(updateNutritionGrowthComputedRow);
+}
+
+function updateNutritionGrowthEntryCount() {
+  const count = elements.pageRoot.querySelectorAll("[data-growth-entry-row]").length;
+  const target = document.getElementById("nutritionGrowthEntryCount");
+  if (target) target.textContent = `${count} child${count === 1 ? "" : "ren"}`;
+}
+
+function collectNutritionGrowthReport(includeComputed = false) {
+  const report = {};
+  if (state.currentNutritionGrowthReport?.id) report.id = state.currentNutritionGrowthReport.id;
+
+  elements.pageRoot.querySelectorAll("[data-growth-field]").forEach(input => {
+    report[input.dataset.growthField] = input.dataset.growthField === "submitted_date"
+      ? normalizeNutritionDateValue(input.value)
+      : input.value;
+  });
+
+  report.center_name = elements.pageRoot.querySelector("#nutritionGrowthCenter option:checked")?.textContent.trim() || state.currentNutritionGrowthReport?.center_name || "";
+  report.entries = [...elements.pageRoot.querySelectorAll("[data-growth-entry-row]")].map((row, index) => {
+    const entry = {
+      beneficiary_id: row.dataset.beneficiaryId,
+      beneficiary_no: row.dataset.beneficiaryNo,
+      beneficiary_name: row.dataset.beneficiaryName,
+      gender: row.dataset.gender,
+      birth_date: row.dataset.birthDate,
+      height_cm: row.querySelector('[data-growth-entry-field="height_cm"]')?.value || "",
+      weight_kg: row.querySelector('[data-growth-entry-field="weight_kg"]')?.value || "",
+      previous_record_date: row.dataset.previousDate,
+      previous_height_cm: row.dataset.previousHeight,
+      previous_weight_kg: row.dataset.previousWeight,
+      previous_cgs_classification: row.dataset.previousClassification,
+      row_order: index
+    };
+
+    if (includeComputed) {
+      entry.age_months = row.querySelector('[data-growth-computed="age_months"]')?.textContent || "";
+      entry.height_change_cm = row.querySelector('[data-growth-computed="height_change_cm"]')?.textContent || "";
+      entry.weight_change_kg = row.querySelector('[data-growth-computed="weight_change_kg"]')?.textContent || "";
+      entry.cgs_classification = row.querySelector('[data-growth-computed="cgs_classification"]')?.textContent || "";
+    }
+
+    return entry;
+  });
+
+  return report;
+}
+
+async function refreshNutritionGrowthDraft() {
+  const current = collectNutritionGrowthReport(true);
+  const centerId = current.center_id || "";
+  const reportMonth = current.report_month || "";
+  if (!centerId || !reportMonth) {
+    showToast("Select a feeding center and report month first.");
+    return;
+  }
+
+  const currentEntryMap = new Map(current.entries.map(entry => [Number(entry.beneficiary_id), entry]));
+  const draft = await loadNutritionGrowthDraft({
+    id: current.id || "",
+    centerId,
+    reportMonth,
+    submittedDate: current.submitted_date
+  });
+
+  draft.entries = (draft.entries || []).map(entry => {
+    const currentEntry = currentEntryMap.get(Number(entry.beneficiary_id));
+    return currentEntry
+      ? { ...entry, height_cm: currentEntry.height_cm, weight_kg: currentEntry.weight_kg }
+      : entry;
+  });
+  state.currentNutritionGrowthReport = draft;
+  document.getElementById("nutritionGrowthEntriesHost").innerHTML = renderNutritionGrowthEntries(draft);
+  attachNutritionGrowthEntryHandlers();
+  updateNutritionGrowthComputedRows();
+  updateNutritionGrowthEntryCount();
+}
+
+function attachNutritionGrowthEntryHandlers(root = elements.pageRoot) {
+  root.querySelectorAll("[data-growth-entry-field]").forEach(input => {
+    input.addEventListener("input", () => updateNutritionGrowthComputedRow(input.closest("[data-growth-entry-row]")));
+  });
+}
+
+function attachNutritionGrowthFormHandlers() {
+  document.getElementById("nutritionGrowthCenter")?.addEventListener("change", () => refreshNutritionGrowthDraft().catch(error => showToast(error.message)));
+  document.getElementById("nutritionGrowthMonth")?.addEventListener("change", () => refreshNutritionGrowthDraft().catch(error => showToast(error.message)));
+  document.getElementById("nutritionGrowthSubmittedDate")?.addEventListener("blur", event => {
+    if (event.target.type !== "date") event.target.value = normalizeNutritionDateValue(event.target.value);
+  });
+  attachNutritionGrowthEntryHandlers();
+  updateNutritionGrowthComputedRows();
+  updateNutritionGrowthEntryCount();
+}
+
+async function saveCurrentNutritionGrowthReport() {
+  updateNutritionGrowthComputedRows();
+  const report = collectNutritionGrowthReport();
+  if (!report.center_id) {
+    showToast("Feeding center is required.");
+    return;
+  }
+  if (!report.report_month) {
+    showToast("Report month is required.");
+    return;
+  }
+
+  const payload = await api("/api/nutrition/growth/reports", {
+    method: "POST",
+    body: JSON.stringify(report)
+  });
+
+  state.currentNutritionGrowthReport = payload.report;
+  await refreshStats();
+  showToast("Growth monitoring report saved.");
+  history.replaceState(null, "", `#/nutrition-growth/${payload.report.id}`);
+  await renderNutritionGrowthEditorPage(String(payload.report.id), false);
+}
+
+async function deleteCurrentNutritionGrowthReport(id) {
+  const report = state.currentNutritionGrowthReport || await loadNutritionGrowthReport(id);
+  const confirmed = window.confirm(`Delete this growth monitoring report?\n\n${reportMonthLabel(report.report_month)}\n${report.center_name}`);
+  if (!confirmed) return;
+
+  await api(`/api/nutrition/growth/reports/${id}`, { method: "DELETE" });
+  await refreshStats();
+  showToast("Growth monitoring report deleted.");
+  navigate("nutrition-growth");
+}
+
+function monthKeyLabel(reportMonth = "") {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(reportMonth || ""));
+  if (!match) return reportMonth || "No Month";
+
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, 1);
+  return date.toLocaleDateString(undefined, { month: "short" });
+}
+
+function nutritionGrowthYearlyRows(reports = []) {
+  return reports
+    .flatMap(report => (report.entries || []).map(entry => ({ report, entry })))
+    .sort((left, right) => {
+      const monthSort = String(left.report.report_month || "").localeCompare(String(right.report.report_month || ""));
+      if (monthSort) return monthSort;
+      const centerSort = String(left.report.center_name || "").localeCompare(String(right.report.center_name || ""));
+      if (centerSort) return centerSort;
+      return String(left.entry.beneficiary_name || "").localeCompare(String(right.entry.beneficiary_name || ""));
+    });
+}
+
+function nutritionGrowthCountEntries(items = [], labeler) {
+  const map = new Map();
+  items.forEach(item => {
+    const label = labeler(item) || "Not Classified";
+    map.set(label, (map.get(label) || 0) + 1);
+  });
+  return [...map.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+}
+
+function printBarChart(title, rows = [], total = 0) {
+  const denominator = Math.max(total, ...rows.map(row => row.count), 1);
+  return `
+    <section class="chart-card">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="chart-bars">
+        ${rows.length ? rows.map(row => `
+          <div class="chart-row">
+            <span>${escapeHtml(row.label)}</span>
+            <div><i style="width:${Math.max(4, Math.round((row.count / denominator) * 100))}%"></i></div>
+            <strong>${escapeHtml(row.count)}</strong>
+          </div>
+        `).join("") : `<p>No records.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function printNutritionGrowthYearlyTableRows(rows = []) {
+  if (!rows.length) {
+    return `<tr><td colspan="13">No growth monitoring records found for this year.</td></tr>`;
+  }
+
+  return rows.map(({ report, entry }) => `
+    <tr>
+      <td>${escapeHtml(reportMonthLabel(report.report_month))}</td>
+      <td>${escapeHtml(report.submitted_date || "")}</td>
+      <td>${escapeHtml(report.center_name || "")}</td>
+      <td>${escapeHtml(entry.beneficiary_no || "")}</td>
+      <td>${escapeHtml(entry.beneficiary_name || "")}</td>
+      <td>${escapeHtml(entry.gender || "")}</td>
+      <td>${escapeHtml(entry.age_months || "")}</td>
+      <td>${escapeHtml(entry.previous_record_date || "")}</td>
+      <td>${escapeHtml(entry.height_cm || "")}</td>
+      <td>${escapeHtml(entry.weight_kg || "")}</td>
+      <td>${escapeHtml(entry.height_change_cm || "")}</td>
+      <td>${escapeHtml(entry.weight_change_kg || "")}</td>
+      <td>${escapeHtml(entry.cgs_classification || "")}</td>
+    </tr>
+  `).join("");
+}
+
+async function printNutritionGrowthYearlySummary() {
+  const defaultYear = String(new Date().getFullYear());
+  const year = String(window.prompt("Print growth monitoring yearly summary for which year?", defaultYear) || "").trim();
+  if (!year) return;
+  if (!/^\d{4}$/.test(year)) {
+    showToast("Enter a valid 4-digit year.");
+    return;
+  }
+
+  const reports = (await loadNutritionGrowthReports({ search: year }))
+    .filter(report => String(report.report_month || "").startsWith(`${year}-`));
+  if (!reports.length) {
+    showToast(`No growth monitoring reports found for ${year}.`);
+    return;
+  }
+
+  const detailedReports = [];
+  for (const report of reports) {
+    detailedReports.push(await loadNutritionGrowthReport(report.id));
+  }
+
+  const rows = nutritionGrowthYearlyRows(detailedReports);
+  const statusCounts = nutritionGrowthCountEntries(rows, item => item.entry.cgs_classification);
+  const centerCounts = nutritionGrowthCountEntries(rows, item => item.report.center_name);
+  const monthCounts = nutritionGrowthCountEntries(rows, item => monthKeyLabel(item.report.report_month))
+    .sort((left, right) => {
+      const order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return order.indexOf(left.label) - order.indexOf(right.label);
+    });
+  const needsFollowUp = rows.filter(item => ["Severely Underweight", "Underweight"].includes(item.entry.cgs_classification)).length;
+  const normalCount = rows.filter(item => item.entry.cgs_classification === "Normal").length;
+  const printWindow = window.open("", "_blank", "width=1200,height=820");
+  if (!printWindow) {
+    showToast("Allow popups to print yearly summaries.");
+    return;
+  }
+
+  const logoSrc = `${window.location.origin}/assets/paofi-logo.png`;
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>Nutrition Growth Monitoring ${escapeHtml(year)} Summary</title>
+        <style>
+          @page { size: letter landscape; margin: 8mm; }
+          * { box-sizing: border-box; }
+          body { margin: 0; color: #1d2520; font-family: "Segoe UI", Arial, sans-serif; font-size: 8.2px; }
+          button { margin: 10px; border: 1px solid #bdd3c6; border-radius: 7px; background: #ffffff; padding: 8px 12px; color: #155b3c; font-weight: 700; }
+          .sheet { width: 11in; min-height: 8.5in; margin: 0 auto; padding: 0.2in; background: #ffffff; }
+          .header { display: grid; grid-template-columns: 48px minmax(0, 1fr) 2.1in; gap: 10px; align-items: center; border-bottom: 2px solid #1f7a4f; padding-bottom: 7px; }
+          .header img { width: 44px; height: 44px; object-fit: contain; }
+          h1, h2, h3, p { margin: 0; }
+          h1 { color: #2f68b1; font-family: Georgia, "Times New Roman", serif; font-size: 14px; text-transform: uppercase; }
+          h2 { color: #1d2520; font-size: 11px; text-transform: uppercase; }
+          .meta { text-align: right; color: #4f5e55; }
+          .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
+          .kpi { border: 1px solid #cddbd2; border-radius: 6px; padding: 6px; background: #f6faf8; }
+          .kpi span { display: block; color: #5b6861; font-size: 6.8px; text-transform: uppercase; font-weight: 800; }
+          .kpi strong { color: #155b3c; font-size: 13px; }
+          .charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 8px; }
+          .chart-card { border: 1px solid #cddbd2; border-radius: 7px; padding: 7px; break-inside: avoid; }
+          .chart-card h3 { color: #143d33; font-size: 8px; margin-bottom: 6px; text-transform: uppercase; }
+          .chart-row { display: grid; grid-template-columns: 1fr 1.8fr 24px; gap: 5px; align-items: center; margin-bottom: 4px; }
+          .chart-row span { overflow-wrap: anywhere; }
+          .chart-row div { height: 9px; border-radius: 999px; background: #eaf0ed; overflow: hidden; }
+          .chart-row i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #1f7a4f, #3f88c5); }
+          .chart-row strong { text-align: right; font-variant-numeric: tabular-nums; }
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+          th, td { border: 1px solid #cbd8d0; padding: 2.5px 3px; vertical-align: top; overflow-wrap: anywhere; }
+          th { background: #eaf6ef; color: #143d33; font-size: 6.4px; text-transform: uppercase; }
+          td { font-size: 6.6px; }
+          @media print { button { display: none; } .sheet { width: auto; min-height: auto; margin: 0; padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <button onclick="window.print()">Print</button>
+        <main class="sheet">
+          <header class="header">
+            <img src="${escapeHtml(logoSrc)}" alt="">
+            <div>
+              <h1>Payatas Orione Foundation Inc.</h1>
+              <h2>Nutrition Program - Supplemental Feeding Growth Monitoring Yearly Summary</h2>
+            </div>
+            <div class="meta">
+              <p><strong>${escapeHtml(year)}</strong></p>
+              <p>${detailedReports.length} monthly report${detailedReports.length === 1 ? "" : "s"}</p>
+              <p>${rows.length} raw child record${rows.length === 1 ? "" : "s"}</p>
+            </div>
+          </header>
+          <section class="kpis">
+            <div class="kpi"><span>Monthly Reports</span><strong>${detailedReports.length}</strong></div>
+            <div class="kpi"><span>Raw Records</span><strong>${rows.length}</strong></div>
+            <div class="kpi"><span>Needs Follow-Up</span><strong>${needsFollowUp}</strong></div>
+            <div class="kpi"><span>Normal</span><strong>${normalCount}</strong></div>
+          </section>
+          <section class="charts">
+            ${printBarChart("CGS Classification", statusCounts, rows.length)}
+            ${printBarChart("Records by Center", centerCounts, rows.length)}
+            ${printBarChart("Records by Month", monthCounts, rows.length)}
+          </section>
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Submitted</th>
+                <th>Center</th>
+                <th>Beneficiary No.</th>
+                <th>Beneficiary</th>
+                <th>Gender</th>
+                <th>Age Months</th>
+                <th>Previous Record</th>
+                <th>Height</th>
+                <th>Weight</th>
+                <th>Height Change</th>
+                <th>Weight Change</th>
+                <th>CGS</th>
+              </tr>
+            </thead>
+            <tbody>${printNutritionGrowthYearlyTableRows(rows)}</tbody>
+          </table>
+        </main>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+function printNutritionGrowthReport(report) {
+  const printWindow = window.open("", "_blank", "width=1040,height=760");
+  if (!printWindow) {
+    showToast("Allow popups to print growth monitoring reports.");
+    return;
+  }
+
+  const entries = report.entries || [];
+  const logoSrc = `${window.location.origin}/assets/paofi-logo.png`;
+  const statusCounts = nutritionGrowthStatusCounts(entries);
+  const statusSummary = renderBarList(statusCounts, Math.max(entries.length, 1), 4);
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>${escapeHtml(report.center_name || "Growth Monitoring")} - ${escapeHtml(reportMonthLabel(report.report_month))}</title>
+        <style>
+          @page { size: letter landscape; margin: 8mm; }
+          * { box-sizing: border-box; }
+          body { margin: 0; color: #1d2520; font-family: "Segoe UI", Arial, sans-serif; font-size: 9px; }
+          button { margin: 10px; border: 1px solid #bdd3c6; border-radius: 7px; background: #ffffff; padding: 8px 12px; color: #155b3c; font-weight: 700; }
+          .sheet { width: 11in; min-height: 8.5in; margin: 0 auto; padding: 0.22in; background: #ffffff; }
+          .header { display: grid; grid-template-columns: 48px minmax(0, 1fr) 2.2in; gap: 10px; align-items: center; border-bottom: 2px solid #1f7a4f; padding-bottom: 7px; }
+          .header img { width: 44px; height: 44px; object-fit: contain; }
+          h1, h2, h3, p { margin: 0; }
+          h1 { color: #2f68b1; font-family: Georgia, "Times New Roman", serif; font-size: 14px; text-transform: uppercase; }
+          h2 { color: #1d2520; font-size: 12px; text-transform: uppercase; }
+          .meta { display: grid; gap: 3px; color: #4f5e55; text-align: right; }
+          .summary { margin: 8px 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+          .summary div { border: 1px solid #cddbd2; border-radius: 6px; padding: 5px; background: #f6faf8; }
+          .summary span { display: block; color: #5b6861; font-size: 7px; text-transform: uppercase; font-weight: 800; }
+          .summary strong { font-size: 12px; color: #155b3c; }
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+          th, td { border: 1px solid #cbd8d0; padding: 3px 4px; vertical-align: top; overflow-wrap: anywhere; }
+          th { background: #eaf6ef; color: #143d33; font-size: 7.2px; text-transform: uppercase; }
+          td { font-size: 7.4px; }
+          .latest { width: 21%; }
+          .name { width: 16%; }
+          @media print { button { display: none; } .sheet { width: auto; min-height: auto; margin: 0; padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <button onclick="window.print()">Print</button>
+        <main class="sheet">
+          <header class="header">
+            <img src="${escapeHtml(logoSrc)}" alt="">
+            <div>
+              <h1>Payatas Orione Foundation Inc.</h1>
+              <h2>Nutrition Program - Supplemental Feeding Growth Monitoring</h2>
+            </div>
+            <div class="meta">
+              <p><strong>${escapeHtml(report.center_name || "")}</strong></p>
+              <p>${escapeHtml(reportMonthLabel(report.report_month))}</p>
+              <p>Submitted: ${escapeHtml(report.submitted_date || "")}</p>
+            </div>
+          </header>
+          <section class="summary">
+            <div><span>Children</span><strong>${entries.length}</strong></div>
+            <div><span>Severely Underweight</span><strong>${analyticsCount(statusCounts, "Severely Underweight")}</strong></div>
+            <div><span>Underweight</span><strong>${analyticsCount(statusCounts, "Underweight")}</strong></div>
+            <div><span>Normal</span><strong>${analyticsCount(statusCounts, "Normal")}</strong></div>
+          </section>
+          <table>
+            <thead>
+              <tr>
+                <th class="name">Beneficiary</th>
+                <th>Gender</th>
+                <th>Birth Date</th>
+                <th>Age Months</th>
+                <th class="latest">Latest Growth Monitoring Record</th>
+                <th>Height</th>
+                <th>Weight</th>
+                <th>Height Change</th>
+                <th>Weight Change</th>
+                <th>CGS Classification</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${entries.map(entry => `
+                <tr>
+                  <td class="name">${escapeHtml(entry.beneficiary_name || "")}<br>${escapeHtml(entry.beneficiary_no || "")}</td>
+                  <td>${escapeHtml(entry.gender || "")}</td>
+                  <td>${escapeHtml(entry.birth_date || "")}</td>
+                  <td>${escapeHtml(entry.age_months || "")}</td>
+                  <td class="latest">${escapeHtml([
+                    entry.previous_record_date ? `Date: ${entry.previous_record_date}` : "",
+                    entry.previous_height_cm ? `Height: ${entry.previous_height_cm} cm` : "",
+                    entry.previous_weight_kg ? `Weight: ${entry.previous_weight_kg} kg` : "",
+                    entry.previous_cgs_classification ? `CGS: ${entry.previous_cgs_classification}` : ""
+                  ].filter(Boolean).join(" | ") || "No prior record")}</td>
+                  <td>${escapeHtml(entry.height_cm || "")}</td>
+                  <td>${escapeHtml(entry.weight_kg || "")}</td>
+                  <td>${escapeHtml(entry.height_change_cm || "")}</td>
+                  <td>${escapeHtml(entry.weight_change_kg || "")}</td>
+                  <td>${escapeHtml(entry.cgs_classification || "")}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </main>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
 async function renderMonitoringPage(id = "") {
   if (id && id !== "new") {
     await renderMonitoringEditorPage(id);
@@ -3440,7 +4399,7 @@ function renderMonitoringList(reports) {
             <th>Project</th>
             <th>Sales</th>
             <th>Expenses</th>
-            <th>Net Income</th>
+            <th>Running Income</th>
           </tr>
         </thead>
         <tbody>
@@ -3562,7 +4521,7 @@ function renderMonitoringForm(report) {
         <div class="income-grid">
           <div class="paper-field">
             <label for="forwardedBalance">Forwarded Balance (last month)</label>
-            <input id="forwardedBalance" type="number" step="0.01" data-monitoring-field="forwarded_balance" value="${escapeHtml(moneyInputValue(report.forwarded_balance))}">
+            <input id="forwardedBalance" type="number" step="0.01" data-monitoring-field="forwarded_balance" value="${escapeHtml(String(Number(report.forwarded_balance || 0)))}" readonly>
           </div>
           <div class="paper-field">
             <label>Add (B) Sales</label>
@@ -3573,7 +4532,7 @@ function renderMonitoringForm(report) {
             <div class="display-value" id="monitoringTotalExpenses">${escapeHtml(formatMoney(report.total_expenses))}</div>
           </div>
           <div class="paper-field">
-            <label>Net Income</label>
+            <label>Net Income / Running Balance</label>
             <div class="display-value strong-value" id="monitoringNetIncome">${escapeHtml(formatMoney(report.net_income))}</div>
           </div>
         </div>
@@ -3581,12 +4540,12 @@ function renderMonitoringForm(report) {
 
       <section class="paper-section">
         <h3>E. Challenges / Issues Encountered</h3>
-        <textarea rows="3" data-monitoring-field="challenges" data-capitalize="words" autocapitalize="words">${escapeHtml(report.challenges || "")}</textarea>
+        <textarea rows="3" data-monitoring-field="challenges" data-capitalize="sentence" autocapitalize="sentences">${escapeHtml(report.challenges || "")}</textarea>
       </section>
 
       <section class="paper-section">
         <h3>F. Success Stories / Good Practices</h3>
-        <textarea rows="3" data-monitoring-field="success_stories" data-capitalize="words" autocapitalize="words">${escapeHtml(report.success_stories || "")}</textarea>
+        <textarea rows="3" data-monitoring-field="success_stories" data-capitalize="sentence" autocapitalize="sentences">${escapeHtml(report.success_stories || "")}</textarea>
       </section>
 
       <section class="paper-section">
@@ -3734,12 +4693,19 @@ function collectMonitoringRows(type) {
     .filter(row => Object.values(row).some(value => String(value || "").trim()));
 }
 
+function normalizeMonitoringFieldValue(name, value) {
+  if (name === "contact_no") return normalizeContactNumber(value);
+  if (["challenges", "success_stories"].includes(name)) return sentenceCaseValue(value);
+  if (["forwarded_balance", "total_sales", "total_expenses", "net_income"].includes(name)) return moneyInputValue(value);
+  return titleCaseValue(value);
+}
+
 function collectMonitoringReport() {
   const report = {};
   if (state.currentMonitoringReport?.id) report.id = state.currentMonitoringReport.id;
 
   elements.pageRoot.querySelectorAll("[data-monitoring-field]").forEach(input => {
-    report[input.dataset.monitoringField] = input.value;
+    report[input.dataset.monitoringField] = normalizeMonitoringFieldValue(input.dataset.monitoringField, input.value);
   });
 
   report.materials = collectMonitoringRows("materials");
@@ -3748,14 +4714,43 @@ function collectMonitoringReport() {
   return report;
 }
 
-function updateMonitoringBeneficiarySnapshot() {
+function setMonitoringPreparedBy(value, force = false) {
+  const input = elements.pageRoot.querySelector('[data-monitoring-field="prepared_by"]');
+  if (!input) return;
+  if (force || !String(input.value || "").trim()) input.value = value || "";
+}
+
+async function updateMonitoringForwardedBalance() {
+  const beneficiaryId = document.getElementById("monitoringBeneficiary")?.value || "";
+  const reportMonth = elements.pageRoot.querySelector('[data-monitoring-field="report_month"]')?.value || "";
+  const target = elements.pageRoot.querySelector('[data-monitoring-field="forwarded_balance"]');
+  if (!target) return;
+
+  if (!beneficiaryId || !reportMonth) {
+    target.value = "0";
+    recalculateMonitoringTotals();
+    return;
+  }
+
+  const params = new URLSearchParams({
+    beneficiaryId,
+    reportMonth,
+    excludeId: String(state.currentMonitoringReport?.id || 0)
+  });
+  const payload = await api(`/api/monitoring/forwarded-balance?${params.toString()}`);
+  target.value = String(Number(payload.forwardedBalance || 0));
+  recalculateMonitoringTotals();
+}
+
+async function updateMonitoringBeneficiarySnapshot() {
   const select = document.getElementById("monitoringBeneficiary");
   const beneficiary = state.monitoringBeneficiaries.find(record => Number(record.id) === Number(select?.value || 0));
   if (!beneficiary) return;
 
+  const beneficiaryName = fullName(beneficiary);
   const values = {
     control_no: beneficiary.control_no || "",
-    beneficiary_name: fullName(beneficiary),
+    beneficiary_name: beneficiaryName,
     chapel: fieldValue("field_c12", beneficiary.field_c12),
     contact_no: fieldValue("field_l11", beneficiary.field_l11)
   };
@@ -3769,6 +4764,9 @@ function updateMonitoringBeneficiarySnapshot() {
   if (projectInput && !projectInput.value) {
     projectInput.value = projectFromBeneficiary(beneficiary);
   }
+
+  setMonitoringPreparedBy(beneficiaryName, true);
+  await updateMonitoringForwardedBalance();
 }
 
 function recalculateMonitoringTotals() {
@@ -3807,7 +4805,12 @@ function attachMonitoringRowHandlers(root = elements.pageRoot) {
 }
 
 function attachMonitoringFormHandlers() {
-  document.getElementById("monitoringBeneficiary")?.addEventListener("change", updateMonitoringBeneficiarySnapshot);
+  document.getElementById("monitoringBeneficiary")?.addEventListener("change", () => {
+    updateMonitoringBeneficiarySnapshot().catch(error => showToast(error.message));
+  });
+  document.getElementById("monitoringMonth")?.addEventListener("change", () => {
+    updateMonitoringForwardedBalance().catch(error => showToast(error.message));
+  });
   elements.pageRoot.querySelectorAll("[data-add-monitoring-row]").forEach(button => {
     button.addEventListener("click", () => addMonitoringEntryRow(button.dataset.addMonitoringRow));
   });
@@ -3818,9 +4821,12 @@ function attachMonitoringFormHandlers() {
   });
   attachCapitalizationHandlers(elements.pageRoot);
   attachMonitoringRowHandlers(elements.pageRoot);
+  setMonitoringPreparedBy(elements.pageRoot.querySelector('[data-monitoring-field="beneficiary_name"]')?.value || "", false);
+  updateMonitoringForwardedBalance().catch(error => showToast(error.message));
 }
 
 async function saveCurrentMonitoringReport() {
+  await updateMonitoringForwardedBalance();
   const report = collectMonitoringReport();
 
   if (!report.beneficiary_id) {
@@ -4065,7 +5071,7 @@ function printMonitoringReport(report) {
                 <tr><td>Forwarded Balance (last month)</td><td>${escapeHtml(formatMoney(report.forwarded_balance))}</td></tr>
                 <tr><td>Add (B) Sales</td><td>${escapeHtml(formatMoney(report.total_sales))}</td></tr>
                 <tr><td>Less (C) Expenses</td><td>${escapeHtml(formatMoney(report.total_expenses))}</td></tr>
-                <tr><td>Net Income</td><td>${escapeHtml(formatMoney(report.net_income))}</td></tr>
+                <tr><td>Net Income / Running Balance</td><td>${escapeHtml(formatMoney(report.net_income))}</td></tr>
               </tbody>
             </table>
           </section>
@@ -4192,7 +5198,10 @@ function renderApplicationForm(record, mode, monitoringReports = []) {
       <section class="form-certification">
         <p>Pinapatunayan ko na ang lahat ng detalye sa itaas ay totoo at wasto.</p>
         <p>Ako ay seryosong makikibahagi at tatapusin ang buong proseso ng livelihood project hanggang Disyembre 2026</p>
-        <div>Name and Signature of the Applicant</div>
+        <div>
+          <strong id="applicantSignatureName">${escapeHtml(beneficiarySignatureName(record))}</strong>
+          <span>Name and Signature of the Applicant</span>
+        </div>
       </section>
     </section>
   `;
@@ -4418,6 +5427,11 @@ function attachCapitalizationHandlers(root) {
       input.value = titleCaseValue(input.value);
     });
   });
+  root.querySelectorAll('[data-capitalize="sentence"]').forEach(input => {
+    input.addEventListener("blur", () => {
+      input.value = sentenceCaseValue(input.value);
+    });
+  });
 }
 
 function addFamilyMemberRow() {
@@ -4461,6 +5475,17 @@ function readPictureFile(file) {
   reader.readAsDataURL(file);
 }
 
+function updateApplicantSignatureName() {
+  const target = document.getElementById("applicantSignatureName");
+  if (!target) return;
+
+  target.textContent = beneficiarySignatureName({
+    last_name: elements.pageRoot.querySelector('[data-field="last_name"]')?.value,
+    first_name: elements.pageRoot.querySelector('[data-field="first_name"]')?.value,
+    middle_name: elements.pageRoot.querySelector('[data-field="middle_name"]')?.value
+  });
+}
+
 function attachEditorFormHandlers() {
   const fileInput = document.getElementById("pictureInput");
   fileInput?.addEventListener("change", () => {
@@ -4497,6 +5522,12 @@ function attachEditorFormHandlers() {
   });
 
   attachCapitalizationHandlers(elements.pageRoot);
+
+  elements.pageRoot.querySelectorAll('[data-field="last_name"], [data-field="first_name"], [data-field="middle_name"]').forEach(input => {
+    input.addEventListener("input", updateApplicantSignatureName);
+    input.addEventListener("blur", updateApplicantSignatureName);
+  });
+  updateApplicantSignatureName();
 
   document.getElementById("removePictureButton")?.addEventListener("click", () => {
     setPictureData("");

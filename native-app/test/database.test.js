@@ -105,14 +105,41 @@ test("creates, updates, lists, exports, and deletes monitoring reports", () => {
   assert.equal(created.control_no, "LP-2026-010");
   assert.equal(created.beneficiary_name, "Dela Cruz, Maria");
   assert.equal(created.project_type, "Dishwashing Liquid Production");
+  assert.equal(created.forwarded_balance, 0);
   assert.equal(created.total_sales, 300);
   assert.equal(created.total_expenses, 75);
-  assert.equal(created.net_income, 325);
+  assert.equal(created.net_income, 225);
+  assert.equal(created.challenges, "Slow sales");
+  assert.equal(created.success_stories, "Repeat buyers");
+  assert.equal(created.prepared_by, "Dela Cruz, Maria");
   assert.equal(created.materials.length, 1);
   assert.equal(created.sales.length, 1);
   assert.equal(created.expenses.length, 1);
   assert.equal(db.stats().monitoringReports, 1);
   assert.equal(db.listMonitoringReports({ search: "dela" }).length, 1);
+
+  const nextMonth = db.saveMonitoringReport({
+    beneficiary_id: beneficiary.id,
+    report_month: "2026-04",
+    project_type: "dishwashing liquid production",
+    forwarded_balance: 9999,
+    sales: [
+      {
+        quantity_sold: "10",
+        price_per_unit: "20"
+      }
+    ],
+    expenses: [
+      {
+        payee: "supplier",
+        description: "soap",
+        amount: "50"
+      }
+    ]
+  });
+
+  assert.equal(nextMonth.forwarded_balance, 225);
+  assert.equal(nextMonth.net_income, 375);
 
   const updated = db.saveMonitoringReport({
     ...created,
@@ -121,14 +148,20 @@ test("creates, updates, lists, exports, and deletes monitoring reports", () => {
   });
 
   assert.equal(updated.id, created.id);
+  assert.equal(updated.forwarded_balance, 0);
   assert.equal(updated.total_expenses, 0);
-  assert.equal(updated.net_income, 350);
+  assert.equal(updated.net_income, 300);
+  assert.equal(db.getMonitoringReport(nextMonth.id).forwarded_balance, 300);
+  assert.equal(db.getMonitoringReport(nextMonth.id).net_income, 450);
 
   const exported = db.exportData();
-  assert.equal(exported.monitoringReports.length, 1);
-  assert.equal(exported.monitoringReports[0].sales[0].total_sales, 300);
+  assert.equal(exported.monitoringReports.length, 2);
+  assert.equal(exported.monitoringReports.find(report => report.id === created.id).sales[0].total_sales, 300);
 
   db.deleteMonitoringReport(created.id);
+  assert.equal(db.getMonitoringReport(nextMonth.id).forwarded_balance, 0);
+  assert.equal(db.getMonitoringReport(nextMonth.id).net_income, 150);
+  db.deleteMonitoringReport(nextMonth.id);
   assert.equal(db.stats().monitoringReports, 0);
 
   db.close();
@@ -288,6 +321,124 @@ test("creates, updates, lists, exports, and deletes nutrition core records", () 
   assert.equal(db.stats().nutritionBeneficiaries, 0);
   db.deleteNutritionCenter(center.id);
   assert.equal(db.stats().nutritionCenters, 0);
+
+  db.close();
+});
+
+test("creates monthly nutrition growth reports per feeding center", () => {
+  const db = new BeneficiaryDatabase(tempDbPath());
+  const center = db.saveNutritionCenter({
+    center_name: "molave feeding center"
+  });
+  const child = db.saveNutritionBeneficiary({
+    beneficiary_no: "NP-2026-010",
+    center_id: center.id,
+    child_last_name: "growth",
+    child_first_name: "child",
+    birth_date: "2020-01-15",
+    gender: "male",
+    admission_date: "2020-01-01",
+    initial_weight_kg: "3",
+    initial_height_cm: "50",
+    initial_nutrition_status: "Normal",
+    current_update_date: "2020-01-01",
+    current_age_months: "0",
+    current_weight_kg: "3",
+    current_height_cm: "50",
+    current_nutrition_status: "normal"
+  });
+
+  const draft = db.buildNutritionGrowthDraft({
+    center_id: center.id,
+    report_month: "2020-01",
+    submitted_date: "2020-02-05"
+  });
+
+  assert.equal(draft.entries.length, 1);
+  assert.equal(draft.entries[0].beneficiary_id, child.id);
+  assert.equal(draft.entries[0].age_months, "0");
+  assert.equal(draft.entries[0].previous_weight_kg, "3");
+  assert.equal(draft.entries[0].previous_height_cm, "50");
+
+  const saved = db.saveNutritionGrowthReport({
+    ...draft,
+    entries: [
+      {
+        beneficiary_id: child.id,
+        height_cm: "51",
+        weight_kg: "3.2"
+      }
+    ]
+  });
+
+  assert.equal(saved.center_name, "Molave Feeding Center");
+  assert.equal(saved.submitted_date, "02/05/2020");
+  assert.equal(saved.report_month, "2020-01");
+  assert.equal(saved.child_count, 1);
+  assert.equal(saved.entries[0].age_months, "0");
+  assert.equal(saved.entries[0].height_change_cm, "1");
+  assert.equal(saved.entries[0].weight_change_kg, "0.2");
+  assert.equal(saved.entries[0].cgs_classification, "Normal");
+
+  const updatedChild = db.getNutritionBeneficiary(child.id);
+  assert.equal(updatedChild.current_update_date, "02/05/2020");
+  assert.equal(updatedChild.current_age_months, "0");
+  assert.equal(updatedChild.current_weight_kg, "3.2");
+  assert.equal(updatedChild.current_height_cm, "51");
+  assert.equal(updatedChild.current_nutrition_status, "Normal");
+
+  const editDraft = db.buildNutritionGrowthDraft({ id: saved.id });
+  assert.equal(editDraft.entries[0].previous_weight_kg, "3");
+  assert.equal(editDraft.entries[0].previous_height_cm, "50");
+  assert.equal(editDraft.entries[0].weight_change_kg, "0.2");
+  assert.equal(editDraft.entries[0].height_change_cm, "1");
+
+  const nextDraft = db.buildNutritionGrowthDraft({
+    center_id: center.id,
+    report_month: "2020-02",
+    submitted_date: "2020-03-03"
+  });
+
+  assert.equal(nextDraft.entries[0].age_months, "1");
+  assert.equal(nextDraft.entries[0].previous_record_date, "2020-01");
+  assert.equal(nextDraft.entries[0].previous_weight_kg, "3.2");
+
+  const nextReport = db.saveNutritionGrowthReport({
+    ...nextDraft,
+    entries: [
+      {
+        beneficiary_id: child.id,
+        height_cm: "52",
+        weight_kg: "2.9"
+      }
+    ]
+  });
+
+  assert.equal(nextReport.entries[0].height_change_cm, "1");
+  assert.equal(nextReport.entries[0].weight_change_kg, "-0.3");
+  assert.equal(nextReport.entries[0].cgs_classification, "Severely Underweight");
+  assert.equal(db.stats().nutritionGrowthReports, 2);
+  assert.equal(db.listNutritionGrowthReports({ centerId: center.id }).length, 2);
+
+  const protectedSnapshot = db.saveNutritionBeneficiary({
+    ...db.getNutritionBeneficiary(child.id),
+    current_update_date: "01/01/1999",
+    current_weight_kg: "99",
+    current_height_cm: "199",
+    current_nutrition_status: "Overweight"
+  });
+  assert.equal(protectedSnapshot.current_update_date, "03/03/2020");
+  assert.equal(protectedSnapshot.current_weight_kg, "2.9");
+  assert.equal(protectedSnapshot.current_height_cm, "52");
+  assert.equal(protectedSnapshot.current_nutrition_status, "Severely Underweight");
+
+  const exported = db.exportData();
+  assert.equal(exported.nutritionGrowthReports.length, 2);
+  assert.equal(exported.nutritionGrowthReports[0].entries.length, 1);
+
+  db.deleteNutritionGrowthReport(saved.id);
+  db.deleteNutritionGrowthReport(nextReport.id);
+  assert.equal(db.stats().nutritionGrowthReports, 0);
 
   db.close();
 });

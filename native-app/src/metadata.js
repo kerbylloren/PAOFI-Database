@@ -10,7 +10,27 @@ const BENEFICIARY_FIELDS = [
   { name: "field_c11", label: "Age", section: "I. Personal Information", input: "text" },
   { name: "field_h11", label: "Gender", section: "I. Personal Information", input: "select", options: ["Female", "Male"] },
   { name: "field_l11", label: "Contact No.", section: "I. Personal Information", input: "text" },
-  { name: "field_c12", label: "Chapel", section: "I. Personal Information", input: "text" },
+  {
+    name: "field_c12",
+    label: "Chapel",
+    section: "I. Personal Information",
+    input: "select",
+    options: [
+      "Ascension",
+      "Lourdes",
+      "MDPP/Center",
+      "Nazareno",
+      "Benedict",
+      "Sto. Nino",
+      "Molave",
+      "Sagrada",
+      "San Isidro",
+      "Litex",
+      "Sta. Cruz",
+      "ICC",
+      "Fatima"
+    ]
+  },
   { name: "field_c13", label: "Address", section: "I. Personal Information", input: "textarea", rows: 2 },
   { name: "field_c14", label: "Special Circumstance", section: "I. Personal Information", input: "text" },
 
