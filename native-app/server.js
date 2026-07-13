@@ -13,6 +13,9 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 const BODY_LIMIT_BYTES = 40 * 1024 * 1024;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const sessions = new Map();
+const responseCache = new Map();
+const SHORT_CACHE_MS = 15 * 1000;
+const MEDIUM_CACHE_MS = 60 * 1000;
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -34,8 +37,80 @@ function sendJson(res, statusCode, payload) {
   res.end(body);
 }
 
+async function sendCachedJson(res, key, ttlMs, producer) {
+  const now = Date.now();
+  const cached = responseCache.get(key);
+
+  if (cached && cached.expiresAt > now) {
+    sendJson(res, 200, cached.payload);
+    return;
+  }
+
+  const payload = await producer();
+  responseCache.set(key, {
+    payload,
+    expiresAt: now + ttlMs
+  });
+  sendJson(res, 200, payload);
+}
+
+async function sendRecordFromCache(req, res, url, producer, payloadKey = "record") {
+  const key = cacheKey(req, url);
+  const now = Date.now();
+  const cached = responseCache.get(key);
+
+  if (cached && cached.expiresAt > now) {
+    sendJson(res, 200, cached.payload);
+    return cached.payload[payloadKey] || null;
+  }
+
+  const record = await producer();
+  if (!record) return null;
+
+  const payload = { [payloadKey]: record };
+  responseCache.set(key, {
+    payload,
+    expiresAt: now + SHORT_CACHE_MS
+  });
+  sendJson(res, 200, payload);
+  return record;
+}
+
+function cacheKey(req, url) {
+  return `${req.method}:${url.pathname}?${url.searchParams.toString()}`;
+}
+
+function clearResponseCache() {
+  responseCache.clear();
+}
+
 function sendError(res, statusCode, message) {
   sendJson(res, statusCode, { error: message });
+}
+
+function databaseConnectionMessage(error) {
+  const message = String(error?.message || "");
+  const cause = String(error?.cause?.message || "");
+
+  if (/fetch failed|timeout|connect/i.test(`${message} ${cause}`)) {
+    return "Cloud database connection failed. Check the internet connection and try again.";
+  }
+
+  return message ? `Database connection failed: ${message}` : "Database connection failed.";
+}
+
+function statusCodeForError(error) {
+  const message = String(error?.message || "");
+  const cause = String(error?.cause?.message || "");
+
+  if (message === "Invalid username or password.") return 401;
+  if (message === "Invalid JSON body.") return 400;
+  if (message === "Request is too large.") return 413;
+  if (/fetch failed|timeout|connect|econnreset|econnrefused|socket|network/i.test(`${message} ${cause}`)) {
+    return 503;
+  }
+
+  return 500;
 }
 
 function createSession(user) {
@@ -158,14 +233,41 @@ function recordIdFromPath(pathname, prefix) {
   return Number.isInteger(id) && id > 0 ? id : 0;
 }
 
-function createServer(database) {
-  return http.createServer(async (req, res) => {
+function createServer(database, startupError = null, reconnectDatabase = null) {
+  let databaseError = startupError;
+
+  async function requireDatabaseConnection(res) {
+    if (database) return database;
+
+    if (typeof reconnectDatabase === "function") {
+      try {
+        database = await reconnectDatabase();
+        databaseError = null;
+        return database;
+      } catch (error) {
+        databaseError = error;
+      }
+    }
+
+    sendError(res, 503, databaseConnectionMessage(databaseError));
+    return null;
+  }
+
+  const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
       const pathname = url.pathname;
 
       if (pathname === "/api/health" && req.method === "GET") {
-        sendJson(res, 200, { ok: true });
+        sendJson(res, 200, {
+          ok: true,
+          database: Boolean(database),
+          error: database ? "" : databaseConnectionMessage(databaseError)
+        });
+        return;
+      }
+
+      if (pathname.startsWith("/api/") && !await requireDatabaseConnection(res)) {
         return;
       }
 
@@ -200,6 +302,7 @@ function createServer(database) {
       if (pathname === "/api/users" && req.method === "POST") {
         if (!requireSuperadmin(req, res)) return;
         const payload = await readJsonBody(req);
+        clearResponseCache();
         sendJson(res, 200, { user: await database.saveUser(payload) });
         return;
       }
@@ -209,51 +312,55 @@ function createServer(database) {
       }
 
       if (pathname === "/api/metadata" && req.method === "GET") {
-        sendJson(res, 200, {
+        await sendCachedJson(res, cacheKey(req, url), MEDIUM_CACHE_MS, async () => ({
           fields: BENEFICIARY_FIELDS,
           sections: fieldSectionMap()
-        });
+        }));
         return;
       }
 
       if (pathname === "/api/stats" && req.method === "GET") {
-        sendJson(res, 200, await database.stats());
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, () => database.stats());
         return;
       }
 
       if (pathname === "/api/next-control-no" && req.method === "GET") {
         const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
-        sendJson(res, 200, { controlNo: await database.nextControlNo(year) });
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({ controlNo: await database.nextControlNo(year) }));
         return;
       }
 
       if (pathname === "/api/records" && req.method === "GET") {
-        sendJson(res, 200, {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
           records: await database.listRecords({
             search: url.searchParams.get("search") || "",
             limit: url.searchParams.get("limit") || 50,
+            offset: url.searchParams.get("offset") || 0,
             detail: url.searchParams.get("detail") || "summary"
-          })
-        });
+          }),
+          total: typeof database.countRecords === "function"
+            ? await database.countRecords({ search: url.searchParams.get("search") || "" })
+            : 0
+        }));
         return;
       }
 
       if (pathname === "/api/records" && req.method === "POST") {
         const payload = await readJsonBody(req);
+        clearResponseCache();
         sendJson(res, 200, { record: await database.saveRecord(payload) });
         return;
       }
 
       if (pathname.startsWith("/api/records/") && req.method === "GET") {
         const id = recordIdFromPath(pathname, "/api/records/");
-        const record = id ? await database.getRecord(id) : null;
+        const record = id ? await sendRecordFromCache(req, res, url, () => database.getRecord(id)) : null;
 
         if (!record) {
           sendError(res, 404, "Record was not found.");
           return;
         }
 
-        sendJson(res, 200, { record });
         return;
       }
 
@@ -266,23 +373,32 @@ function createServer(database) {
           return;
         }
 
+        clearResponseCache();
         sendJson(res, 200, { record });
         return;
       }
 
       if (pathname === "/api/monitoring/reports" && req.method === "GET") {
-        sendJson(res, 200, {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
           reports: await database.listMonitoringReports({
             search: url.searchParams.get("search") || "",
             beneficiaryId: url.searchParams.get("beneficiaryId") || "",
-            limit: url.searchParams.get("limit") || 200
-          })
-        });
+            limit: url.searchParams.get("limit") || 200,
+            offset: url.searchParams.get("offset") || 0
+          }),
+          total: typeof database.countMonitoringReports === "function"
+            ? await database.countMonitoringReports({
+              search: url.searchParams.get("search") || "",
+              beneficiaryId: url.searchParams.get("beneficiaryId") || ""
+            })
+            : 0
+        }));
         return;
       }
 
       if (pathname === "/api/monitoring/reports" && req.method === "POST") {
         const payload = await readJsonBody(req);
+        clearResponseCache();
         sendJson(res, 200, { report: await database.saveMonitoringReport(payload) });
         return;
       }
@@ -298,14 +414,13 @@ function createServer(database) {
 
       if (pathname.startsWith("/api/monitoring/reports/") && req.method === "GET") {
         const id = recordIdFromPath(pathname, "/api/monitoring/reports/");
-        const report = id ? await database.getMonitoringReport(id) : null;
+        const report = id ? await sendRecordFromCache(req, res, url, () => database.getMonitoringReport(id), "report") : null;
 
         if (!report) {
           sendError(res, 404, "Monitoring report was not found.");
           return;
         }
 
-        sendJson(res, 200, { report });
         return;
       }
 
@@ -318,12 +433,17 @@ function createServer(database) {
           return;
         }
 
+        clearResponseCache();
         sendJson(res, 200, { report });
         return;
       }
 
       if (pathname === "/api/nutrition/overview" && req.method === "GET") {
-        sendJson(res, 200, await database.nutritionOverview());
+        if (url.searchParams.get("summary") === "dashboard" && typeof database.nutritionDashboardSummary === "function") {
+          await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, () => database.nutritionDashboardSummary());
+          return;
+        }
+        await sendCachedJson(res, cacheKey(req, url), MEDIUM_CACHE_MS, () => database.nutritionOverview());
         return;
       }
 
@@ -340,18 +460,25 @@ function createServer(database) {
       }
 
       if (pathname === "/api/nutrition/growth/cgs" && req.method === "GET") {
-        sendJson(res, 200, await database.nutritionCgsReference());
+        await sendCachedJson(res, cacheKey(req, url), MEDIUM_CACHE_MS, () => database.nutritionCgsReference());
         return;
       }
 
       if (pathname === "/api/nutrition/growth/reports" && req.method === "GET") {
-        sendJson(res, 200, {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
           reports: await database.listNutritionGrowthReports({
             search: url.searchParams.get("search") || "",
             centerId: url.searchParams.get("centerId") || "",
-            limit: url.searchParams.get("limit") || 200
-          })
-        });
+            limit: url.searchParams.get("limit") || 200,
+            offset: url.searchParams.get("offset") || 0
+          }),
+          total: typeof database.countNutritionGrowthReports === "function"
+            ? await database.countNutritionGrowthReports({
+              search: url.searchParams.get("search") || "",
+              centerId: url.searchParams.get("centerId") || ""
+            })
+            : 0
+        }));
         return;
       }
 
@@ -369,20 +496,20 @@ function createServer(database) {
 
       if (pathname === "/api/nutrition/growth/reports" && req.method === "POST") {
         const payload = await readJsonBody(req);
+        clearResponseCache();
         sendJson(res, 200, { report: await database.saveNutritionGrowthReport(payload) });
         return;
       }
 
       if (pathname.startsWith("/api/nutrition/growth/reports/") && req.method === "GET") {
         const id = recordIdFromPath(pathname, "/api/nutrition/growth/reports/");
-        const report = id ? await database.getNutritionGrowthReport(id) : null;
+        const report = id ? await sendRecordFromCache(req, res, url, () => database.getNutritionGrowthReport(id), "report") : null;
 
         if (!report) {
           sendError(res, 404, "Growth monitoring report was not found.");
           return;
         }
 
-        sendJson(res, 200, { report });
         return;
       }
 
@@ -395,36 +522,38 @@ function createServer(database) {
           return;
         }
 
+        clearResponseCache();
         sendJson(res, 200, { report });
         return;
       }
 
       if (pathname === "/api/nutrition/centers" && req.method === "GET") {
-        sendJson(res, 200, {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
           centers: await database.listNutritionCenters({
             search: url.searchParams.get("search") || "",
-            limit: url.searchParams.get("limit") || 200
+            limit: url.searchParams.get("limit") || 200,
+            offset: url.searchParams.get("offset") || 0
           })
-        });
+        }));
         return;
       }
 
       if (pathname === "/api/nutrition/centers" && req.method === "POST") {
         const payload = await readJsonBody(req);
+        clearResponseCache();
         sendJson(res, 200, { center: await database.saveNutritionCenter(payload) });
         return;
       }
 
       if (pathname.startsWith("/api/nutrition/centers/") && req.method === "GET") {
         const id = recordIdFromPath(pathname, "/api/nutrition/centers/");
-        const center = id ? await database.getNutritionCenter(id) : null;
+        const center = id ? await sendRecordFromCache(req, res, url, () => database.getNutritionCenter(id), "center") : null;
 
         if (!center) {
           sendError(res, 404, "Feeding center was not found.");
           return;
         }
 
-        sendJson(res, 200, { center });
         return;
       }
 
@@ -437,37 +566,45 @@ function createServer(database) {
           return;
         }
 
+        clearResponseCache();
         sendJson(res, 200, { center });
         return;
       }
 
       if (pathname === "/api/nutrition/beneficiaries" && req.method === "GET") {
-        sendJson(res, 200, {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
           beneficiaries: await database.listNutritionBeneficiaries({
             search: url.searchParams.get("search") || "",
             centerId: url.searchParams.get("centerId") || "",
-            limit: url.searchParams.get("limit") || 200
-          })
-        });
+            limit: url.searchParams.get("limit") || 200,
+            offset: url.searchParams.get("offset") || 0
+          }),
+          total: typeof database.countNutritionBeneficiaries === "function"
+            ? await database.countNutritionBeneficiaries({
+              search: url.searchParams.get("search") || "",
+              centerId: url.searchParams.get("centerId") || ""
+            })
+            : 0
+        }));
         return;
       }
 
       if (pathname === "/api/nutrition/beneficiaries" && req.method === "POST") {
         const payload = await readJsonBody(req);
+        clearResponseCache();
         sendJson(res, 200, { beneficiary: await database.saveNutritionBeneficiary(payload) });
         return;
       }
 
       if (pathname.startsWith("/api/nutrition/beneficiaries/") && req.method === "GET") {
         const id = recordIdFromPath(pathname, "/api/nutrition/beneficiaries/");
-        const beneficiary = id ? await database.getNutritionBeneficiary(id) : null;
+        const beneficiary = id ? await sendRecordFromCache(req, res, url, () => database.getNutritionBeneficiary(id), "beneficiary") : null;
 
         if (!beneficiary) {
           sendError(res, 404, "Nutrition beneficiary was not found.");
           return;
         }
 
-        sendJson(res, 200, { beneficiary });
         return;
       }
 
@@ -480,17 +617,25 @@ function createServer(database) {
           return;
         }
 
+        clearResponseCache();
         sendJson(res, 200, { beneficiary });
         return;
       }
 
       if (pathname === "/api/bin" && req.method === "GET") {
-        sendJson(res, 200, { records: await database.listDeletedRecords() });
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
+          records: await database.listDeletedRecords({
+            limit: url.searchParams.get("limit") || 100,
+            offset: url.searchParams.get("offset") || 0
+          }),
+          total: typeof database.countDeletedRecords === "function" ? await database.countDeletedRecords() : 0
+        }));
         return;
       }
 
       if (pathname.startsWith("/api/bin/") && pathname.endsWith("/restore") && req.method === "POST") {
         const id = recordIdFromPath(pathname, "/api/bin/");
+        clearResponseCache();
         sendJson(res, 200, { record: await database.restoreDeletedRecord(id) });
         return;
       }
@@ -507,9 +652,25 @@ function createServer(database) {
 
       sendStatic(req, res);
     } catch (error) {
-      sendError(res, 500, error.message || "Unexpected server error.");
+      const statusCode = statusCodeForError(error);
+      sendError(
+        res,
+        statusCode,
+        statusCode === 503 ? databaseConnectionMessage(error) : error?.message || "Unexpected server error."
+      );
     }
   });
+
+  server.setDatabase = nextDatabase => {
+    database = nextDatabase;
+    databaseError = null;
+  };
+
+  server.setDatabaseError = error => {
+    databaseError = error;
+  };
+
+  return server;
 }
 
 function openBrowser(url) {
@@ -525,18 +686,47 @@ function openBrowser(url) {
 }
 
 async function main() {
-  const database = await createDatabase();
-  const server = createServer(database);
+  let activeDatabase = null;
+  let startupError = null;
+  let connectPromise = null;
+
+  async function connectDatabase() {
+    if (activeDatabase) return activeDatabase;
+    if (connectPromise) return connectPromise;
+
+    connectPromise = createDatabase()
+      .then(async database => {
+        await database.warmup?.();
+        activeDatabase = database;
+        server.setDatabase(database);
+        console.log(`Database: ${activeDatabase.dbPath}`);
+        return activeDatabase;
+      })
+      .catch(error => {
+        startupError = error;
+        server.setDatabaseError(error);
+        console.error(error?.stack || error?.message || error);
+        throw error;
+      })
+      .finally(() => {
+        connectPromise = null;
+      });
+
+    return connectPromise;
+  }
+
+  const server = createServer(activeDatabase, startupError, connectDatabase);
 
   server.listen(PORT, HOST, () => {
     const url = `http://${HOST}:${PORT}`;
     console.log(`PAOFI Database is running at ${url}`);
-    console.log(`Database: ${database.dbPath}`);
+    console.log("Database: Connecting");
     openBrowser(url);
+    connectDatabase().catch(() => {});
   });
 
   process.on("SIGINT", () => {
-    Promise.resolve(database.close()).finally(() => {
+    Promise.resolve(activeDatabase?.close?.()).finally(() => {
       server.close(() => process.exit(0));
     });
   });

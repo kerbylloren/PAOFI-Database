@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Payatas Orione Foundation Inc. Programs Database</title>
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css?v=flow-data-padding-20260710">
   </head>
   <body>
     <a class="skip-link" href="#pageRoot">Skip to main content</a>
@@ -131,6 +131,10 @@
           </details>
           <details class="nav-program nav-admin hidden">
             <summary>System</summary>
+            <button type="button" data-route="system" class="nav-item">
+              <span class="nav-icon" data-icon="export"></span>
+              <span>System Tools</span>
+            </button>
             <button type="button" data-route="accounts" class="nav-item">
               <span class="nav-icon" data-icon="users"></span>
               <span>Accounts</span>
@@ -174,9 +178,24 @@
           <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
         </label>
         <button type="submit" class="action-button primary">Sign In</button>
+        <div id="loginLoader" class="login-loader hidden" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <strong>Preparing workspace</strong>
+        </div>
         <p id="loginMessage" class="login-message"></p>
       </form>
     </section>
-    <script src="/app.js"></script>
+    <div id="appLoadingOverlay" class="app-loading-overlay hidden" aria-hidden="true">
+      <div class="app-loading-panel">
+        <div class="loading-orbit" aria-hidden="true">
+          <span></span>
+          <span></span>
+        </div>
+        <strong id="appLoadingMessage">Loading</strong>
+      </div>
+    </div>
+    <script src="/app.js?v=analytics-flow2-20260710"></script>
   </body>
 </html>

@@ -46,6 +46,41 @@ test("creates, searches, updates, deletes, and restores a record", () => {
   db.close();
 });
 
+test("uses zero growth change when previous measurements are missing", () => {
+  const db = new BeneficiaryDatabase(tempDbPath());
+  const center = db.saveNutritionCenter({
+    center_name: "molave feeding center"
+  });
+  const child = db.saveNutritionBeneficiary({
+    beneficiary_no: "NP-2026-030",
+    center_id: center.id,
+    child_last_name: "No Reference",
+    child_first_name: "Child",
+    birth_date: "2021-01-15",
+    gender: "female"
+  });
+
+  const saved = db.saveNutritionGrowthReport({
+    center_id: center.id,
+    report_month: "2026-04",
+    submitted_date: "2026-04-20",
+    entries: [
+      {
+        beneficiary_id: child.id,
+        height_cm: "102",
+        weight_kg: "18"
+      }
+    ]
+  });
+
+  assert.equal(saved.entries[0].previous_height_cm, "");
+  assert.equal(saved.entries[0].previous_weight_kg, "");
+  assert.equal(saved.entries[0].height_change_cm, "0");
+  assert.equal(saved.entries[0].weight_change_kg, "0");
+
+  db.close();
+});
+
 test("generates the next control number from active and deleted records", () => {
   const db = new BeneficiaryDatabase(tempDbPath());
 
@@ -430,8 +465,8 @@ test("creates monthly nutrition growth reports per feeding center", () => {
   assert.equal(draft.entries.length, 1);
   assert.equal(draft.entries[0].beneficiary_id, child.id);
   assert.equal(draft.entries[0].age_months, "0");
-  assert.equal(draft.entries[0].previous_weight_kg, "3");
-  assert.equal(draft.entries[0].previous_height_cm, "50");
+  assert.equal(draft.entries[0].previous_weight_kg, "");
+  assert.equal(draft.entries[0].previous_height_cm, "");
 
   const saved = db.saveNutritionGrowthReport({
     ...draft,
@@ -449,8 +484,8 @@ test("creates monthly nutrition growth reports per feeding center", () => {
   assert.equal(saved.report_month, "2020-01");
   assert.equal(saved.child_count, 1);
   assert.equal(saved.entries[0].age_months, "0");
-  assert.equal(saved.entries[0].height_change_cm, "1");
-  assert.equal(saved.entries[0].weight_change_kg, "0.2");
+  assert.equal(saved.entries[0].height_change_cm, "0");
+  assert.equal(saved.entries[0].weight_change_kg, "0");
   assert.equal(saved.entries[0].cgs_classification, "Normal");
 
   const updatedChild = db.getNutritionBeneficiary(child.id);
@@ -461,10 +496,10 @@ test("creates monthly nutrition growth reports per feeding center", () => {
   assert.equal(updatedChild.current_nutrition_status, "Normal");
 
   const editDraft = db.buildNutritionGrowthDraft({ id: saved.id });
-  assert.equal(editDraft.entries[0].previous_weight_kg, "3");
-  assert.equal(editDraft.entries[0].previous_height_cm, "50");
-  assert.equal(editDraft.entries[0].weight_change_kg, "0.2");
-  assert.equal(editDraft.entries[0].height_change_cm, "1");
+  assert.equal(editDraft.entries[0].previous_weight_kg, "");
+  assert.equal(editDraft.entries[0].previous_height_cm, "");
+  assert.equal(editDraft.entries[0].weight_change_kg, "0");
+  assert.equal(editDraft.entries[0].height_change_cm, "0");
 
   const nextDraft = db.buildNutritionGrowthDraft({
     center_id: center.id,

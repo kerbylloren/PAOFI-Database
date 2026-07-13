@@ -75,6 +75,15 @@ const DEFAULT_SUPERADMIN_PASSWORD = process.env.LPDB_SUPERADMIN_PASSWORD || "Cha
 const PASSWORD_ITERATIONS = 210000;
 const PASSWORD_KEY_LENGTH = 32;
 const PASSWORD_DIGEST = "sha256";
+
+function clampLimit(limit, fallback = 50, max = 500) {
+  return Math.min(Math.max(Number(limit) || fallback, 1), max);
+}
+
+function clampOffset(offset) {
+  return Math.max(Number(offset) || 0, 0);
+}
+
 const NUTRITION_CENTER_FIELDS = [
   "center_name",
   "location",
@@ -622,8 +631,10 @@ function formatSignedMeasurement(value) {
 
 function measurementChange(current, previous) {
   const currentNumber = parseMeasurementNumber(current);
+  if (currentNumber === null) return "";
+  if (!normalizeText(previous).trim()) return "0";
   const previousNumber = parseMeasurementNumber(previous);
-  if (currentNumber === null || previousNumber === null) return "";
+  if (previousNumber === null) return "0";
   return formatSignedMeasurement(currentNumber - previousNumber);
 }
 
@@ -902,6 +913,9 @@ class BeneficiaryDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_app_users_username
         ON app_users(username);
+
+      CREATE INDEX IF NOT EXISTS idx_app_users_username_lower
+        ON app_users(lower(username));
     `);
 
     this.ensureBeneficiaryColumns();
@@ -955,21 +969,28 @@ class BeneficiaryDatabase {
     this.db.close();
   }
 
+  warmup() {
+    this.db.prepare("SELECT id FROM app_users WHERE lower(username) = lower(?) LIMIT 1").get("__warmup__");
+  }
+
   stats() {
-    const active = this.db.prepare("SELECT COUNT(*) AS count FROM beneficiaries").get().count;
-    const deleted = this.db.prepare("SELECT COUNT(*) AS count FROM deleted_records").get().count;
-    const monitoringReports = this.db.prepare("SELECT COUNT(*) AS count FROM monitoring_reports").get().count;
-    const nutritionCenters = this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_centers").get().count;
-    const nutritionBeneficiaries = this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_beneficiaries").get().count;
-    const nutritionGrowthReports = this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_growth_reports").get().count;
+    const row = this.db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM beneficiaries) AS active,
+        (SELECT COUNT(*) FROM deleted_records) AS deleted,
+        (SELECT COUNT(*) FROM monitoring_reports) AS monitoringReports,
+        (SELECT COUNT(*) FROM nutrition_centers) AS nutritionCenters,
+        (SELECT COUNT(*) FROM nutrition_beneficiaries) AS nutritionBeneficiaries,
+        (SELECT COUNT(*) FROM nutrition_growth_reports) AS nutritionGrowthReports
+    `).get();
 
     return {
-      active,
-      deleted,
-      monitoringReports,
-      nutritionCenters,
-      nutritionBeneficiaries,
-      nutritionGrowthReports,
+      active: Number(row.active || 0),
+      deleted: Number(row.deleted || 0),
+      monitoringReports: Number(row.monitoringReports || 0),
+      nutritionCenters: Number(row.nutritionCenters || 0),
+      nutritionBeneficiaries: Number(row.nutritionBeneficiaries || 0),
+      nutritionGrowthReports: Number(row.nutritionGrowthReports || 0),
       databasePath: this.dbPath
     };
   }
@@ -1087,17 +1108,40 @@ class BeneficiaryDatabase {
     return `${prefix}${String(highest + 1).padStart(3, "0")}`;
   }
 
-  listRecords({ search = "", limit = 50, detail = "summary" } = {}) {
-    const max = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  countRecords({ search = "" } = {}) {
+    if (!search.trim()) {
+      return Number(this.db.prepare("SELECT COUNT(*) AS count FROM beneficiaries").get().count || 0);
+    }
+
+    const pattern = `%${search.trim().toLowerCase()}%`;
+    return Number(this.db
+      .prepare(`
+        SELECT COUNT(*) AS count
+        FROM beneficiaries
+        WHERE lower(control_no) LIKE ?
+          OR lower(last_name) LIKE ?
+          OR lower(first_name) LIKE ?
+          OR lower(middle_name) LIKE ?
+          OR lower(first_name || ' ' || middle_name || ' ' || last_name) LIKE ?
+          OR lower(last_name || ' ' || first_name || ' ' || middle_name) LIKE ?
+      `)
+      .get(pattern, pattern, pattern, pattern, pattern, pattern).count || 0);
+  }
+
+  listRecords({ search = "", limit = 50, offset = 0, detail = "summary" } = {}) {
+    const max = clampLimit(limit, 50, 500);
+    const skip = clampOffset(offset);
     const selectedFields = detail === "full"
       ? ["id", ...FIELD_NAMES, "created_at", "updated_at"]
-      : SUMMARY_FIELDS;
+      : detail === "table"
+        ? ["id", ...FIELD_NAMES.filter(fieldName => fieldName !== "picture_data" && !FAMILY_FIELDS.includes(fieldName)), "created_at", "updated_at"]
+        : SUMMARY_FIELDS;
     const columns = selectedFields.map(quoted).join(", ");
 
     if (!search.trim()) {
       return this.db
-        .prepare(`SELECT ${columns} FROM beneficiaries ORDER BY updated_at DESC, id DESC LIMIT ?`)
-        .all(max);
+        .prepare(`SELECT ${columns} FROM beneficiaries ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`)
+        .all(max, skip);
     }
 
     const pattern = `%${search.trim().toLowerCase()}%`;
@@ -1112,9 +1156,9 @@ class BeneficiaryDatabase {
           OR lower(first_name || ' ' || middle_name || ' ' || last_name) LIKE ?
           OR lower(last_name || ' ' || first_name || ' ' || middle_name) LIKE ?
         ORDER BY updated_at DESC, id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `)
-      .all(pattern, pattern, pattern, pattern, pattern, pattern, max);
+      .all(pattern, pattern, pattern, pattern, pattern, pattern, max, skip);
   }
 
   getRecord(id) {
@@ -1212,14 +1256,22 @@ class BeneficiaryDatabase {
     return record;
   }
 
-  listDeletedRecords() {
+  countDeletedRecords() {
+    return Number(this.db.prepare("SELECT COUNT(*) AS count FROM deleted_records").get().count || 0);
+  }
+
+  listDeletedRecords({ limit = 100, offset = 0 } = {}) {
+    const max = clampLimit(limit, 100, 500);
+    const skip = clampOffset(offset);
+
     return this.db
       .prepare(`
         SELECT id, original_id, control_no, display_name, deleted_at
         FROM deleted_records
         ORDER BY deleted_at DESC, id DESC
+        LIMIT ? OFFSET ?
       `)
-      .all();
+      .all(max, skip);
   }
 
   restoreDeletedRecord(id) {
@@ -1249,8 +1301,7 @@ class BeneficiaryDatabase {
     }
   }
 
-  listMonitoringReports({ search = "", beneficiaryId = "", limit = 200 } = {}) {
-    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  monitoringReportFilters({ search = "", beneficiaryId = "" } = {}) {
     const conditions = [];
     const args = [];
 
@@ -1271,16 +1322,33 @@ class BeneficiaryDatabase {
       args.push(pattern, pattern, pattern, pattern, pattern);
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    return {
+      where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+      args
+    };
+  }
+
+  countMonitoringReports(options = {}) {
+    const { where, args } = this.monitoringReportFilters(options);
+    return Number(this.db
+      .prepare(`SELECT COUNT(*) AS count FROM monitoring_reports ${where}`)
+      .get(...args).count || 0);
+  }
+
+  listMonitoringReports({ search = "", beneficiaryId = "", limit = 200, offset = 0 } = {}) {
+    const max = clampLimit(limit, 200, 500);
+    const skip = clampOffset(offset);
+    const { where, args } = this.monitoringReportFilters({ search, beneficiaryId });
+
     return this.db
       .prepare(`
         SELECT *
         FROM monitoring_reports
         ${where}
         ORDER BY report_month DESC, updated_at DESC, id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `)
-      .all(...args, max);
+      .all(...args, max, skip);
   }
 
   getMonitoringReport(id) {
@@ -1561,8 +1629,9 @@ class BeneficiaryDatabase {
     `;
   }
 
-  listNutritionCenters({ search = "", limit = 200 } = {}) {
-    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  listNutritionCenters({ search = "", limit = 200, offset = 0 } = {}) {
+    const max = clampLimit(limit, 200, 500);
+    const skip = clampOffset(offset);
     const pattern = `%${search.trim().toLowerCase()}%`;
     const where = search.trim()
       ? `WHERE lower(c.center_name) LIKE ?
@@ -1578,9 +1647,9 @@ class BeneficiaryDatabase {
         ${where}
         GROUP BY c.id
         ORDER BY c.center_name, c.id
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `)
-      .all(...args, max);
+      .all(...args, max, skip);
   }
 
   getNutritionCenter(id) {
@@ -1699,8 +1768,39 @@ class BeneficiaryDatabase {
     `;
   }
 
-  listNutritionBeneficiaries({ search = "", centerId = "", limit = 200 } = {}) {
-    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  nutritionBeneficiaryListSelect() {
+    return `
+      SELECT b.id,
+             b.center_id,
+             b.beneficiary_no,
+             b.feeding_center,
+             b.child_last_name,
+             b.child_first_name,
+             b.child_middle_name,
+             b.birth_date,
+             b.age,
+             b.gender,
+             b.school,
+             b.grade_level,
+             b.mother_name,
+             b.father_name,
+             b.contact_no,
+             b.profile_status,
+             b.remarks,
+             b.current_update_date,
+             b.current_age_months,
+             b.current_weight_kg,
+             b.current_height_cm,
+             b.current_nutrition_status,
+             b.updated_at,
+             c.center_name AS center_name,
+             c.location AS center_location
+      FROM nutrition_beneficiaries b
+      LEFT JOIN nutrition_centers c ON c.id = b.center_id
+    `;
+  }
+
+  nutritionBeneficiaryFilters({ search = "", centerId = "" } = {}) {
     const conditions = [];
     const args = [];
 
@@ -1733,15 +1833,37 @@ class BeneficiaryDatabase {
       );
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    return {
+      where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+      args
+    };
+  }
+
+  countNutritionBeneficiaries(options = {}) {
+    const { where, args } = this.nutritionBeneficiaryFilters(options);
+    return Number(this.db
+      .prepare(`
+        SELECT COUNT(*) AS count
+        FROM nutrition_beneficiaries b
+        LEFT JOIN nutrition_centers c ON c.id = b.center_id
+        ${where}
+      `)
+      .get(...args).count || 0);
+  }
+
+  listNutritionBeneficiaries({ search = "", centerId = "", limit = 200, offset = 0 } = {}) {
+    const max = clampLimit(limit, 200, 500);
+    const skip = clampOffset(offset);
+    const { where, args } = this.nutritionBeneficiaryFilters({ search, centerId });
+
     return this.db
       .prepare(`
-        ${this.nutritionBeneficiarySelect()}
+        ${this.nutritionBeneficiaryListSelect()}
         ${where}
         ORDER BY b.updated_at DESC, b.id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `)
-      .all(...args, max);
+      .all(...args, max, skip);
   }
 
   getNutritionBeneficiary(id) {
@@ -1935,8 +2057,7 @@ class BeneficiaryDatabase {
     `;
   }
 
-  listNutritionGrowthReports({ search = "", centerId = "", limit = 200 } = {}) {
-    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  nutritionGrowthReportFilters({ search = "", centerId = "" } = {}) {
     const conditions = [];
     const args = [];
 
@@ -1955,16 +2076,33 @@ class BeneficiaryDatabase {
       args.push(pattern, pattern, pattern);
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    return {
+      where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+      args
+    };
+  }
+
+  countNutritionGrowthReports(options = {}) {
+    const { where, args } = this.nutritionGrowthReportFilters(options);
+    return Number(this.db
+      .prepare(`SELECT COUNT(*) AS count FROM nutrition_growth_reports r ${where}`)
+      .get(...args).count || 0);
+  }
+
+  listNutritionGrowthReports({ search = "", centerId = "", limit = 200, offset = 0 } = {}) {
+    const max = clampLimit(limit, 200, 500);
+    const skip = clampOffset(offset);
+    const { where, args } = this.nutritionGrowthReportFilters({ search, centerId });
+
     return this.db
       .prepare(`
         ${this.nutritionGrowthReportSelect()}
         ${where}
         GROUP BY r.id
         ORDER BY r.report_month DESC, r.updated_at DESC, r.id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `)
-      .all(...args, max);
+      .all(...args, max, skip);
   }
 
   getNutritionGrowthReport(id) {
@@ -2040,10 +2178,10 @@ class BeneficiaryDatabase {
     }
 
     return {
-      previous_record_date: beneficiary.admission_date || "",
-      previous_height_cm: beneficiary.initial_height_cm || "",
-      previous_weight_kg: beneficiary.initial_weight_kg || "",
-      previous_cgs_classification: beneficiary.initial_nutrition_status || ""
+      previous_record_date: "",
+      previous_height_cm: "",
+      previous_weight_kg: "",
+      previous_cgs_classification: ""
     };
   }
 
@@ -2277,6 +2415,56 @@ class BeneficiaryDatabase {
         beneficiaries: beneficiaries.length,
         activeBeneficiaries: activeBeneficiaries.length,
         growthReports: growthReports.length
+      }
+    };
+  }
+
+  nutritionDashboardSummary() {
+    const stats = this.db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM nutrition_centers) AS centers,
+        (SELECT COUNT(*) FROM nutrition_centers WHERE lower(COALESCE(status, '')) = 'active') AS activeCenters,
+        (SELECT COUNT(*) FROM nutrition_beneficiaries) AS beneficiaries,
+        (
+          SELECT COUNT(*)
+          FROM nutrition_beneficiaries
+          WHERE lower(COALESCE(remarks, '')) = 'active'
+             OR lower(COALESCE(profile_status, '')) = 'active'
+        ) AS activeBeneficiaries,
+        (SELECT COUNT(*) FROM nutrition_growth_reports) AS growthReports
+    `).get();
+
+    const centerCounts = this.db.prepare(`
+      SELECT
+        COALESCE(NULLIF(trim(b.feeding_center), ''), NULLIF(trim(c.center_name), ''), 'No Center') AS label,
+        COUNT(*) AS count
+      FROM nutrition_beneficiaries b
+      LEFT JOIN nutrition_centers c ON c.id = b.center_id
+      GROUP BY label
+      ORDER BY count DESC, label
+      LIMIT 8
+    `).all();
+
+    const nutritionStatusCounts = this.db.prepare(`
+      SELECT COALESCE(NULLIF(trim(current_nutrition_status), ''), 'Not Specified') AS label,
+             COUNT(*) AS count
+      FROM nutrition_beneficiaries
+      GROUP BY label
+      ORDER BY count DESC, label
+      LIMIT 8
+    `).all();
+
+    return {
+      stats: {
+        centers: Number(stats.centers || 0),
+        activeCenters: Number(stats.activeCenters || 0),
+        beneficiaries: Number(stats.beneficiaries || 0),
+        activeBeneficiaries: Number(stats.activeBeneficiaries || 0),
+        growthReports: Number(stats.growthReports || 0)
+      },
+      analytics: {
+        centerCounts,
+        nutritionStatusCounts
       }
     };
   }

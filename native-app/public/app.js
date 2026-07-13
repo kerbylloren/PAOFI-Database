@@ -356,6 +356,7 @@ const ICONS = {
   save: '<svg viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5V3Z"></path><path d="M8 3v6h8V3"></path><path d="M8 21v-7h8v7"></path></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>',
   print: '<svg viewBox="0 0 24 24"><path d="M7 9V3h10v6"></path><path d="M7 17H5a2 2 0 0 1-2-2v-4h18v4a2 2 0 0 1-2 2h-2"></path><path d="M7 14h10v7H7z"></path></svg>',
+  copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>',
   export: '<svg viewBox="0 0 24 24"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>',
   arrow: '<svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>',
   refresh: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v6h-6"></path></svg>'
@@ -439,6 +440,7 @@ const state = {
   sections: {},
   fieldMap: {},
   stats: null,
+  clientCache: new Map(),
   currentRecord: null,
   currentMonitoringReport: null,
   currentNutritionBeneficiary: null,
@@ -446,6 +448,9 @@ const state = {
   currentNutritionGrowthReport: null,
   nutritionCgsReference: null,
   monitoringBeneficiaries: [],
+  dashboardAnalyticsLoaded: false,
+  dashboardAnalyticsLoading: false,
+  vegaRuntimePromise: null,
   pictureData: "",
   nutritionPictureData: "",
   databaseFilters: null,
@@ -453,10 +458,19 @@ const state = {
     analytics: false,
     table: false
   },
+  tablePages: {
+    database: 1,
+    monitoring: 1,
+    nutritionProfiles: 1,
+    nutritionGrowth: 1,
+    bin: 1
+  },
   authToken: localStorage.getItem("lpdbAuthToken") || "",
   currentUser: null,
   route: "menu",
   routeId: "",
+  loadingRequests: 0,
+  loadingTimer: null,
   toastTimer: null
 };
 
@@ -472,6 +486,10 @@ const elements = {
   loginUsername: document.getElementById("loginUsername"),
   loginPassword: document.getElementById("loginPassword"),
   loginMessage: document.getElementById("loginMessage"),
+  loginSubmit: document.querySelector("#loginForm button[type='submit']"),
+  loginLoader: document.getElementById("loginLoader"),
+  appLoadingOverlay: document.getElementById("appLoadingOverlay"),
+  appLoadingMessage: document.getElementById("appLoadingMessage"),
   toast: document.getElementById("toast"),
   navItems: [...document.querySelectorAll(".nav-item")]
 };
@@ -680,22 +698,137 @@ function showToast(message) {
   }, 2600);
 }
 
+function beginLoadingTransition(message = "Loading") {
+  state.loadingRequests += 1;
+  if (elements.appLoadingMessage) {
+    elements.appLoadingMessage.textContent = message;
+  }
+  clearTimeout(state.loadingTimer);
+  state.loadingTimer = setTimeout(() => {
+    if (state.loadingRequests > 0 && elements.appLoadingOverlay) {
+      elements.appLoadingOverlay.classList.remove("hidden");
+      requestAnimationFrame(() => elements.appLoadingOverlay.classList.add("visible"));
+    }
+  }, 380);
+
+  return true;
+}
+
+function endLoadingTransition(token) {
+  if (!token) return;
+  state.loadingRequests = Math.max(0, state.loadingRequests - 1);
+  if (state.loadingRequests > 0) return;
+
+  clearTimeout(state.loadingTimer);
+  state.loadingTimer = null;
+  if (!elements.appLoadingOverlay) return;
+  elements.appLoadingOverlay.classList.remove("visible");
+  setTimeout(() => {
+    if (state.loadingRequests === 0) {
+      elements.appLoadingOverlay.classList.add("hidden");
+    }
+  }, 180);
+}
+
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {}),
-      ...(options.headers || {})
-    },
-    ...options
-  });
-  const payload = await response.json();
+  let response;
+  const {
+    loadingMessage = "Loading",
+    showLoading = true,
+    ...fetchOptions
+  } = options;
+  const method = String(fetchOptions.method || "GET").toUpperCase();
+  const canUseClientCache = method === "GET" && fetchOptions.cache !== "no-store";
+  const cached = canUseClientCache ? state.clientCache.get(path) : null;
+  let loadingToken = false;
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return JSON.parse(JSON.stringify(cached.payload));
+  }
+
+  if (showLoading) {
+    loadingToken = beginLoadingTransition(loadingMessage);
+  }
+
+  try {
+    response = await fetch(path, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {}),
+        ...(fetchOptions.headers || {})
+      },
+      ...fetchOptions
+    });
+  } catch {
+    throw new Error("Cannot reach the PAOFI Database backend. Please keep the app open and try again.");
+  } finally {
+    endLoadingTransition(loadingToken);
+  }
+
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
 
   if (!response.ok) {
     throw new Error(payload.error || "Request failed.");
   }
 
+  if (canUseClientCache) {
+    state.clientCache.set(path, {
+      payload,
+      expiresAt: Date.now() + 10 * 1000
+    });
+  } else if (method !== "GET") {
+    state.clientCache.clear();
+  }
+
   return payload;
+}
+
+async function backendHealth() {
+  try {
+    const response = await fetch("/api/health", { cache: "no-store" });
+    return await response.json();
+  } catch {
+    return { ok: false, database: false, error: "Cannot reach the PAOFI Database backend." };
+  }
+}
+
+function setLoginBusy(isBusy, message = "") {
+  if (elements.loginSubmit) {
+    elements.loginSubmit.disabled = isBusy;
+    elements.loginSubmit.classList.toggle("disabled", isBusy);
+  }
+  elements.loginForm?.classList.toggle("is-loading", isBusy);
+  elements.loginLoader?.classList.toggle("hidden", !isBusy);
+  elements.loginLoader?.setAttribute("aria-hidden", isBusy ? "false" : "true");
+  if (isBusy) {
+    elements.loginMessage.textContent = "";
+  } else if (message) {
+    elements.loginMessage.textContent = message;
+  }
+}
+
+async function waitForDatabaseReady({ updateLogin = false } = {}) {
+  for (let attempt = 0; attempt < 45; attempt += 1) {
+    const health = await backendHealth();
+    if (health.database) {
+      if (updateLogin) setLoginBusy(false, "");
+      return true;
+    }
+
+    if (updateLogin) setLoginBusy(true);
+
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  if (updateLogin) {
+    setLoginBusy(false, "Cloud database is still connecting. Please try again.");
+  }
+  return false;
 }
 
 function setAuthenticatedSession(token, user) {
@@ -737,20 +870,49 @@ async function restoreSession() {
 async function handleLogin(event) {
   event.preventDefault();
   elements.loginMessage.textContent = "";
+  setLoginBusy(true);
 
+  if (!await waitForDatabaseReady({ updateLogin: true })) {
+    return;
+  }
+
+  let payload;
   try {
-    const payload = await api("/api/auth/login", {
+    payload = await api("/api/auth/login", {
       method: "POST",
+      showLoading: false,
       body: JSON.stringify({
         username: elements.loginUsername.value,
         password: elements.loginPassword.value
       })
     });
-    setAuthenticatedSession(payload.token, payload.user);
-    elements.loginPassword.value = "";
-    await loadApplication();
   } catch (error) {
     elements.loginMessage.textContent = error.message;
+    setLoginBusy(false);
+    return;
+  }
+
+  setAuthenticatedSession(payload.token, payload.user);
+  elements.loginPassword.value = "";
+
+  try {
+    await loadApplication();
+  } catch (error) {
+    showToast(error.message);
+    setTitle("Connection Problem");
+    setTopbarActions([]);
+    elements.pageRoot.innerHTML = `
+      <section class="empty-state">
+        <h2>Unable to load the dashboard</h2>
+        <p>${escapeHtml(error.message)}</p>
+        <button type="button" class="btn primary" id="retryLoadApp">${icon("refresh")} Try Again</button>
+      </section>
+    `;
+    document.getElementById("retryLoadApp")?.addEventListener("click", () => {
+      loadApplication().catch(loadError => showToast(loadError.message));
+    });
+  } finally {
+    setLoginBusy(false);
   }
 }
 
@@ -841,7 +1003,7 @@ async function renderRoute() {
   if (!state.currentUser) return;
 
   const parsed = parseRoute();
-  if (parsed.route === "accounts" && state.currentUser.role !== "superadmin") {
+  if (["accounts", "system"].includes(parsed.route) && state.currentUser.role !== "superadmin") {
     navigate("menu");
     return;
   }
@@ -860,6 +1022,7 @@ async function renderRoute() {
     else if (parsed.route === "nutrition-centers") await renderNutritionCentersPage(parsed.id);
     else if (parsed.route === "nutrition-growth") await renderNutritionGrowthPage(parsed.id);
     else if (parsed.route === "bin") await renderBinPage();
+    else if (parsed.route === "system") await renderSystemPage();
     else if (parsed.route === "accounts") await renderAccountsPage();
     else if (COMING_SOON_PAGES[parsed.route]) await renderComingSoonPage(parsed.route);
     else await renderMenuPage();
@@ -887,6 +1050,108 @@ function renderComingSoonPage(route) {
       </div>
     </section>
   `;
+}
+
+function requestYearInput(scopeLabel, defaultYear = String(new Date().getFullYear())) {
+  return new Promise(resolve => {
+    const modal = document.createElement("div");
+    modal.className = "modal-backdrop";
+    modal.innerHTML = `
+      <form class="modal-panel year-modal">
+        <div>
+          <p class="eyebrow">Growth Monitoring</p>
+          <h2>Yearly Summary</h2>
+          <span>Choose the report year for ${escapeHtml(scopeLabel)}.</span>
+        </div>
+        <label>
+          Year
+          <input id="yearSummaryInput" inputmode="numeric" pattern="\\d{4}" maxlength="4" value="${escapeHtml(defaultYear)}" required>
+        </label>
+        <div class="form-actions">
+          <button type="button" class="action-button" data-modal-cancel>Cancel</button>
+          <button type="submit" class="action-button primary">
+            <span class="button-icon">${icon("print")}</span>
+            <span>Preview</span>
+          </button>
+        </div>
+      </form>
+    `;
+
+    function close(value = "") {
+      document.removeEventListener("keydown", handleKeydown);
+      modal.remove();
+      resolve(value);
+    }
+
+    function handleKeydown(event) {
+      if (event.key === "Escape") close("");
+    }
+
+    modal.querySelector("[data-modal-cancel]").addEventListener("click", () => close(""));
+    modal.addEventListener("click", event => {
+      if (event.target === modal) close("");
+    });
+    modal.querySelector("form").addEventListener("submit", event => {
+      event.preventDefault();
+      close(modal.querySelector("#yearSummaryInput").value.trim());
+    });
+    document.addEventListener("keydown", handleKeydown);
+    document.body.appendChild(modal);
+    modal.querySelector("#yearSummaryInput").focus();
+    modal.querySelector("#yearSummaryInput").select();
+  });
+}
+
+function showDocumentPrintPreview(title, documentHtml) {
+  const parsed = new DOMParser().parseFromString(documentHtml, "text/html");
+  parsed.body.querySelectorAll("button").forEach(button => button.remove());
+  const previewHtml = `<!doctype html>${parsed.documentElement.outerHTML}`;
+
+  setTitle(title);
+  setTopbarActions([
+    { id: "printPreviewPrint", label: "Print", icon: "print", variant: "primary", onClick: () => printPreviewFrame() },
+    { id: "printPreviewBack", label: "Back", icon: "arrow", onClick: () => renderRoute().catch(error => showToast(error.message)) }
+  ]);
+
+  elements.pageRoot.innerHTML = `
+    <section class="print-preview-shell">
+      <div class="print-preview-actions">
+        <div>
+          <p class="eyebrow">Print Preview</p>
+          <h2>${escapeHtml(title)}</h2>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="printPreviewBackInline" class="action-button">
+            <span class="button-icon">${icon("arrow")}</span>
+            <span>Back</span>
+          </button>
+          <button type="button" id="printPreviewPrintInline" class="action-button primary">
+            <span class="button-icon">${icon("print")}</span>
+            <span>Print</span>
+          </button>
+        </div>
+      </div>
+      <iframe id="printPreviewFrame" class="print-preview-frame" title="${escapeHtml(title)}"></iframe>
+    </section>
+  `;
+
+  const frame = document.getElementById("printPreviewFrame");
+  frame.srcdoc = previewHtml;
+  document.getElementById("printPreviewBackInline").addEventListener("click", () => {
+    renderRoute().catch(error => showToast(error.message));
+  });
+  document.getElementById("printPreviewPrintInline").addEventListener("click", printPreviewFrame);
+}
+
+function printPreviewFrame() {
+  const frameWindow = document.getElementById("printPreviewFrame")?.contentWindow;
+  if (!frameWindow) {
+    showToast("Print preview is still loading.");
+    return;
+  }
+
+  frameWindow.focus();
+  frameWindow.print();
 }
 
 function recordAvatar(record) {
@@ -975,6 +1240,52 @@ function analyticsPercent(count, total) {
 
 function analyticsPlural(count, singular, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+const TABLE_PAGE_SIZE = 25;
+
+function pagedItems(items = [], key, pageSize = TABLE_PAGE_SIZE) {
+  const total = items.length;
+  const totalPages = Math.max(Math.ceil(total / pageSize), 1);
+  const page = Math.min(Math.max(Number(state.tablePages[key]) || 1, 1), totalPages);
+  const start = total ? (page - 1) * pageSize : 0;
+  const end = Math.min(start + pageSize, total);
+  state.tablePages[key] = page;
+
+  return {
+    items: items.slice(start, end),
+    page,
+    totalPages,
+    start,
+    end,
+    total
+  };
+}
+
+function renderPagination(key, pageInfo) {
+  if (pageInfo.total <= TABLE_PAGE_SIZE) return "";
+
+  return `
+    <div class="pagination-bar" data-pagination-key="${escapeHtml(key)}">
+      <button type="button" class="text-button" data-page-step="-1" ${pageInfo.page <= 1 ? "disabled" : ""}>Previous</button>
+      <span>Page ${pageInfo.page} of ${pageInfo.totalPages}</span>
+      <button type="button" class="text-button" data-page-step="1" ${pageInfo.page >= pageInfo.totalPages ? "disabled" : ""}>Next</button>
+    </div>
+  `;
+}
+
+function bindPagination(scope, key, renderCallback) {
+  scope.querySelectorAll(`[data-pagination-key="${key}"] [data-page-step]`).forEach(button => {
+    button.addEventListener("click", () => {
+      state.tablePages[key] = Math.max((Number(state.tablePages[key]) || 1) + Number(button.dataset.pageStep || 0), 1);
+      renderCallback();
+    });
+  });
+}
+
+function pageCountText(pageInfo, noun = "shown") {
+  if (!pageInfo.total) return `0 ${noun}`;
+  return `${pageInfo.start + 1}-${pageInfo.end} of ${pageInfo.total} ${noun}`;
 }
 
 function parseAnalyticsNumber(value) {
@@ -1274,16 +1585,164 @@ function renderDonutChart(entries, total, limit = 5) {
   `;
 }
 
+function chartCopyButton(title) {
+  const label = `Copy ${title} chart as image`;
+  return `
+    <button type="button" class="icon-button chart-copy-button" data-copy-chart title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
+      ${icon("copy")}
+    </button>
+  `;
+}
+
 function renderAnalyticsCard(title, subtitle, body, className = "") {
   return `
-    <article class="analytics-card ${className}">
+    <article class="analytics-card ${className}" data-chart-copy-surface data-chart-copy-name="${escapeHtml(title)}">
       <div class="analytics-card-head">
-        <h4>${escapeHtml(title)}</h4>
-        <span>${escapeHtml(subtitle)}</span>
+        <div class="analytics-card-title">
+          <h4>${escapeHtml(title)}</h4>
+          <span>${escapeHtml(subtitle)}</span>
+        </div>
+        ${chartCopyButton(title)}
       </div>
-      ${body}
+      <div class="analytics-card-body">${body}</div>
     </article>
   `;
+}
+
+const CHART_EXPORT_STYLE_PROPERTIES = [
+  "align-content", "align-items", "align-self", "background", "background-color", "background-image",
+  "background-position", "background-size", "border", "border-radius", "box-shadow", "box-sizing", "color",
+  "display", "fill", "flex", "flex-basis", "flex-direction", "flex-grow", "flex-shrink", "flex-wrap", "font",
+  "font-family", "font-size", "font-style", "font-weight", "gap", "grid-auto-columns", "grid-auto-flow",
+  "grid-auto-rows", "grid-column", "grid-row", "grid-template-columns", "grid-template-rows", "height",
+  "justify-content", "justify-items", "justify-self", "left", "line-height", "margin", "max-height", "max-width",
+  "min-height", "min-width", "object-fit", "opacity", "overflow", "padding", "position", "right", "stroke",
+  "stroke-dasharray", "stroke-dashoffset", "stroke-linecap", "stroke-linejoin", "stroke-width", "text-align",
+  "text-anchor", "text-overflow", "text-transform", "top", "transform", "transform-origin", "vertical-align",
+  "white-space", "width", "word-break", "z-index"
+];
+
+function inlineChartExportStyles(source, clone) {
+  const sourceNodes = [source, ...source.querySelectorAll("*")];
+  const cloneNodes = [clone, ...clone.querySelectorAll("*")];
+
+  sourceNodes.forEach((node, index) => {
+    const target = cloneNodes[index];
+    if (!target) return;
+    const computed = getComputedStyle(node);
+    CHART_EXPORT_STYLE_PROPERTIES.forEach(property => {
+      const value = computed.getPropertyValue(property);
+      if (!value || /url\s*\(/i.test(value)) return;
+      target.style.setProperty(property, value);
+    });
+  });
+}
+
+function imageFromUrl(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("The chart image could not be rendered."));
+    image.src = url;
+  });
+}
+
+function canvasPngBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error("The chart image could not be prepared."));
+    }, "image/png");
+  });
+}
+
+function blobDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("The chart image could not be read."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function chartSurfacePng(surface) {
+  const bounds = surface.getBoundingClientRect();
+  const width = Math.max(320, Math.ceil(bounds.width));
+  const height = Math.max(180, Math.ceil(bounds.height));
+  const scale = 2;
+  const clone = surface.cloneNode(true);
+  inlineChartExportStyles(surface, clone);
+  clone.querySelectorAll("[data-copy-chart]").forEach(button => button.remove());
+  clone.classList.add("chart-copy-clone");
+  clone.style.width = `${width}px`;
+  clone.style.height = `${height}px`;
+  clone.style.margin = "0";
+  clone.style.animation = "none";
+  clone.style.transform = "none";
+
+  const svgNamespace = "http://www.w3.org/2000/svg";
+  const htmlNamespace = "http://www.w3.org/1999/xhtml";
+  const svg = document.createElementNS(svgNamespace, "svg");
+  svg.setAttribute("xmlns", svgNamespace);
+  svg.setAttribute("width", String(width));
+  svg.setAttribute("height", String(height));
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+  const foreignObject = document.createElementNS(svgNamespace, "foreignObject");
+  foreignObject.setAttribute("width", "100%");
+  foreignObject.setAttribute("height", "100%");
+
+  const wrapper = document.createElementNS(htmlNamespace, "div");
+  wrapper.setAttribute("xmlns", htmlNamespace);
+  wrapper.setAttribute("class", "chart-copy-export-root");
+  wrapper.setAttribute("style", `width:${width}px;height:${height}px;overflow:hidden;background:#f7faf8;`);
+
+  wrapper.append(clone);
+  foreignObject.append(wrapper);
+  svg.append(foreignObject);
+
+  const svgText = new XMLSerializer().serializeToString(svg);
+  const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+  const image = await imageFromUrl(svgUrl);
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const context = canvas.getContext("2d");
+  context.scale(scale, scale);
+  context.fillStyle = "#f7faf8";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+  return canvasPngBlob(canvas);
+}
+
+async function writeChartImageToClipboard(blob) {
+  if (window.paofiClipboard?.copyPng) {
+    await window.paofiClipboard.copyPng(await blobDataUrl(blob));
+    return;
+  }
+
+  if (!navigator.clipboard?.write || typeof window.ClipboardItem !== "function") {
+    throw new Error("Image copying is unavailable in this browser. Use the installed desktop app.");
+  }
+
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+}
+
+async function copyChartAsImage(button) {
+  const surface = button.closest("[data-chart-copy-surface]");
+  if (!surface) return;
+
+  button.disabled = true;
+  button.classList.add("is-copying");
+
+  try {
+    const image = await chartSurfacePng(surface);
+    await writeChartImageToClipboard(image);
+    showToast(`${surface.dataset.chartCopyName || "Chart"} copied as an image.`);
+  } finally {
+    button.disabled = false;
+    button.classList.remove("is-copying");
+  }
 }
 
 function renderMenuAnalytics(analytics) {
@@ -1316,10 +1775,20 @@ function renderMenuAnalytics(analytics) {
 }
 
 function renderNutritionDashboardSummary(overview = {}) {
+  const summaryStats = overview.stats || {};
+  const summaryAnalytics = overview.analytics || null;
   const centers = overview.centers || [];
   const beneficiaries = overview.beneficiaries || [];
-  const analytics = buildNutritionAnalytics(beneficiaries, centers);
+  const analytics = summaryAnalytics ? {
+    total: Number(summaryStats.beneficiaries || 0),
+    active: Number(summaryStats.activeBeneficiaries || 0),
+    centers: Number(summaryStats.centers || 0),
+    activeCenters: Number(summaryStats.activeCenters || 0),
+    centerCounts: summaryAnalytics.centerCounts || [],
+    nutritionStatusCounts: summaryAnalytics.nutritionStatusCounts || []
+  } : buildNutritionAnalytics(beneficiaries, centers);
   const topCenter = topAnalyticsEntry(analytics.centerCounts);
+  const growthReportCount = Number(summaryStats.growthReports ?? (overview.growthReports || []).length) || 0;
 
   return `
     <section class="analytics-summary">
@@ -1333,7 +1802,7 @@ function renderNutritionDashboardSummary(overview = {}) {
       <div class="analytics-kpi-grid">
         ${renderAnalyticsKpi("Child Profiles", String(analytics.total), `${analytics.active} active`, "green")}
         ${renderAnalyticsKpi("Feeding Centers", String(analytics.centers), `${analytics.activeCenters} active`, "blue")}
-        ${renderAnalyticsKpi("Growth Reports", String((overview.growthReports || []).length), "monthly center reports", "violet")}
+        ${renderAnalyticsKpi("Growth Reports", String(growthReportCount), "monthly center reports", "violet")}
         ${renderAnalyticsKpi("Top Center", topCenter.label, analyticsPlural(topCenter.count, "child", "children"), "amber")}
       </div>
       <div class="analytics-preview-grid">
@@ -1353,7 +1822,7 @@ function renderDatabaseAnalytics(analytics) {
   const willingCount = analyticsCount(analytics.willingnessCounts, "Oo");
 
   return `
-    <section class="database-analytics">
+    <section class="database-analytics flow-analytics database-flow-analytics">
       <div class="analytics-title-row">
         <div>
           <span class="analytics-eyebrow">Detailed Analytics</span>
@@ -1361,7 +1830,7 @@ function renderDatabaseAnalytics(analytics) {
         </div>
         <span class="analytics-note">Last updated: ${escapeHtml(analytics.latestUpdate)}</span>
       </div>
-      <div class="analytics-kpi-grid detailed">
+      <div class="analytics-kpi-grid detailed analytics-signal-strip">
         ${renderAnalyticsKpi("Records Analyzed", String(analytics.total), "Current active database", "green")}
         ${renderAnalyticsKpi("Top Group", topGroup.label, analyticsPlural(topGroup.count, "record"), "blue")}
         ${renderAnalyticsKpi("Has Small Business", String(hasBusiness), `${analyticsPercent(hasBusiness, analytics.total)}% of applicants`, "amber")}
@@ -1369,7 +1838,7 @@ function renderDatabaseAnalytics(analytics) {
         ${renderAnalyticsKpi("Attended Seminar", String(attendedSeminar), `${analyticsPercent(attendedSeminar, analytics.total)}% of applicants`, "red")}
         ${renderAnalyticsKpi("Ready for Training", String(willingCount), `${analyticsPercent(willingCount, analytics.total)}% willing`, "green")}
       </div>
-      <div class="analytics-chart-grid">
+      <div class="analytics-chart-grid flow-chart-grid">
         ${renderAnalyticsCard("Gender Distribution", "Applicant profile", renderDonutChart(analytics.genderCounts, analytics.total), "wide")}
         ${renderAnalyticsCard("Age Groups", `Average age: ${analytics.averageAge || "N/A"}`, renderBarList(analytics.ageCounts, analytics.total, 6))}
         ${renderAnalyticsCard("Livelihood Groups", "Dishwashing, Sewing, and Rag Making", renderBarList(analytics.groupCounts, analytics.total, 4))}
@@ -1399,116 +1868,497 @@ function renderDatabaseAnalytics(analytics) {
 
 async function renderMenuPage() {
   setTitle("Programs Dashboard");
-  setTopbarActions([
-    { id: "menuExport", label: "Export", icon: "export", onClick: () => exportData().catch(error => showToast(error.message)) }
-  ]);
+  setTopbarActions([]);
+  state.dashboardAnalyticsLoaded = false;
+  state.dashboardAnalyticsLoading = false;
 
-  const [stats, recentPayload, binPayload, exportPayload, nutritionOverview] = await Promise.all([
+  const [stats, recordsPayload] = await Promise.all([
     refreshStats(),
-    api("/api/records?limit=5"),
-    api("/api/bin"),
-    api("/api/export"),
-    api("/api/nutrition/overview")
+    api("/api/records?limit=8&detail=table")
   ]);
-  const analytics = buildAnalytics(exportPayload.records || []);
+  const recentUpdates = (recordsPayload.records || []).slice(0, 6);
 
   elements.pageRoot.innerHTML = `
-    <section class="menu-hero">
-      <div class="menu-hero-copy">
-        <p class="eyebrow">Payatas Orione Foundation Inc.</p>
-        <h2>Programs Database</h2>
-        <strong>Integrated Program Records</strong>
-        <span>"A simple effort can make a great impact"</span>
-      </div>
-      <div class="form-miniature" aria-hidden="true">
-        <div></div><div></div><div></div><div></div>
-        <div></div><div></div><div></div><div></div>
-      </div>
-    </section>
-
-    <section class="stat-grid">
-      <button type="button" class="stat-card" data-menu-route="database">
-        <span>Active Records</span>
-        <strong>${stats.active}</strong>
-      </button>
-      <button type="button" class="stat-card blue" data-menu-route="monitoring">
-        <span>Monitoring Reports</span>
-        <strong>${stats.monitoringReports || 0}</strong>
-      </button>
-      <button type="button" class="stat-card accent" data-menu-route="bin">
-        <span>Record Bin</span>
-        <strong>${stats.deleted}</strong>
-      </button>
-      <button type="button" class="stat-card" data-menu-route="editor">
-        <span>Next Control No.</span>
-        <strong id="nextControlNo">...</strong>
-      </button>
-      <button type="button" class="stat-card blue" data-menu-route="nutrition-profiles">
-        <span>Nutrition Profiles</span>
-        <strong>${stats.nutritionBeneficiaries || 0}</strong>
-      </button>
-      <button type="button" class="stat-card accent" data-menu-route="nutrition-centers">
-        <span>Feeding Centers</span>
-        <strong>${stats.nutritionCenters || 0}</strong>
-      </button>
-    </section>
-
-    ${renderMenuAnalytics(analytics)}
-    ${renderNutritionDashboardSummary(nutritionOverview)}
-
-    <section class="menu-grid">
-      ${menuTile("search", "search", "Search Records")}
-      ${menuTile("editor", "edit", "New Application")}
-      ${menuTile("viewer", "view", "Record Viewer")}
-      ${menuTile("database", "table", "Database Table")}
-      ${menuTile("monitoring", "monitoring", "Monitoring Reports")}
-      ${menuTile("nutrition-profiles", "users", "Nutrition Profiles")}
-      ${menuTile("nutrition-growth", "monitoring", "Growth Monitoring")}
-      ${menuTile("nutrition-centers", "home", "Feeding Centers")}
-    </section>
-
-    <section class="split-layout">
-      <div class="tool-panel">
-        <div class="panel-title-row">
-          <h3>Recent Records</h3>
-          <button type="button" class="text-button" data-menu-route="database">Open Table</button>
+    <section class="dashboard-page">
+      <section class="dashboard-intro scroll-reveal">
+        <div class="dashboard-intro-copy">
+          <p class="eyebrow">Organization-wide records</p>
+          <h2>Program work at a glance</h2>
+          <span>Key records and latest changes across the active PAOFI database sections.</span>
         </div>
-        <div class="record-stack">
-          ${recentPayload.records.length ? recentPayload.records.map(record => recordCard(record)).join("") : emptyState("No records yet.")}
+        <div class="dashboard-metrics-strip" aria-label="Key database summaries">
+          ${dashboardMetric("LP Records", stats.active, "database")}
+          ${dashboardMetric("LP Reports", stats.monitoringReports || 0, "monitoring")}
+          ${dashboardMetric("Feeding Profiles", stats.nutritionBeneficiaries || 0, "nutrition-profiles")}
+          ${dashboardMetric("Growth Reports", stats.nutritionGrowthReports || 0, "nutrition-growth")}
+          ${dashboardMetric("Centers", stats.nutritionCenters || 0, "nutrition-centers")}
         </div>
-      </div>
-      <div class="tool-panel">
-        <div class="panel-title-row">
-          <h3>Record Bin</h3>
-          <button type="button" class="text-button" data-menu-route="bin">Open Bin</button>
-        </div>
-        <div class="bin-preview">
-          ${binPayload.records.length ? binPayload.records.slice(0, 5).map(binPreviewRow).join("") : emptyState("Bin is empty.")}
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <footer class="dashboard-copyright">
-      <span>&copy; 2026 Kerby Lloren</span>
-      <span>&copy; Payatas Orione Foundation Inc.</span>
-      <span>PAOFI Programs Database</span>
-    </footer>
+      <section class="dashboard-workspace scroll-reveal">
+        <div class="dashboard-actions-panel">
+          <div class="dashboard-section-heading">
+            <h3>Open a workspace</h3>
+            <span>Common day-to-day paths</span>
+          </div>
+          <div class="dashboard-command-list">
+            ${dashboardCommand("search", "search", "Search Records", "Find an existing Livelihood Program profile")}
+            ${dashboardCommand("editor", "edit", "New LP Application", "Create or update a livelihood beneficiary profile")}
+            ${dashboardCommand("database", "table", "LP Database & Analytics", "Review records, filters, and detailed analytics")}
+            ${dashboardCommand("monitoring", "monitoring", "LP Monitoring Reports", "Encode monthly livelihood reports")}
+            ${dashboardCommand("nutrition-profiles", "users", "Feeding Beneficiary Profiles", "Manage supplemental feeding child profiles")}
+            ${dashboardCommand("nutrition-growth", "monitoring", "Growth Monitoring", "Encode and print monthly or yearly growth reports")}
+            ${dashboardCommand("nutrition-centers", "home", "Feeding Centers", "View center profiles and child rosters")}
+          </div>
+        </div>
+
+        <div class="dashboard-activity-panel">
+          <div class="dashboard-section-heading">
+            <h3>Recent Updates</h3>
+            <button type="button" class="text-button" data-menu-route="database">Open Table</button>
+          </div>
+          <div class="recent-update-list">
+            ${recentUpdates.length ? recentUpdates.map(recentUpdateRow).join("") : emptyState("No recent updates yet.")}
+          </div>
+        </div>
+      </section>
+
+      ${renderDashboardAnalyticsPlaceholder()}
+
+      <footer class="dashboard-copyright scroll-reveal">
+        <span>&copy; 2026 Kerby Lloren</span>
+        <span>&copy; Payatas Orione Foundation Inc.</span>
+        <span>PAOFI Programs Database</span>
+      </footer>
+    </section>
   `;
-
-  const next = await api("/api/next-control-no");
-  document.getElementById("nextControlNo").textContent = next.controlNo;
 
   document.querySelectorAll("[data-menu-route]").forEach(button => {
     button.addEventListener("click", () => navigate(button.dataset.menuRoute));
   });
   attachRecordOpenHandlers(elements.pageRoot);
+  setupDashboardScrollEffects();
+  setupDashboardAnalyticsLazyLoad();
 }
 
-function menuTile(route, iconName, label) {
+function renderDashboardAnalyticsPlaceholder() {
   return `
-    <button type="button" class="menu-tile" data-menu-route="${route}">
-      <span>${icon(iconName)}</span>
-      <strong>${label}</strong>
+    <section id="dashboardAnalyticsSection" class="dashboard-analytics-section scroll-reveal" data-dashboard-analytics>
+      <div class="dashboard-section-heading">
+        <div>
+          <p class="eyebrow">Growth and Records</p>
+          <h3>Analytics Summary</h3>
+        </div>
+        <span>Loads when this section appears</span>
+      </div>
+      <div id="dashboardAnalyticsHost" class="dashboard-analytics-loading">
+        <div class="analytics-skeleton wide"></div>
+        <div class="analytics-skeleton"></div>
+        <div class="analytics-skeleton"></div>
+      </div>
+    </section>
+  `;
+}
+
+function setupDashboardScrollEffects() {
+  const targets = elements.pageRoot.querySelectorAll(".scroll-reveal");
+  if (!targets.length) return;
+  if (!("IntersectionObserver" in window)) {
+    targets.forEach(target => target.classList.add("is-visible"));
+    return;
+  }
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      }
+    });
+  }, {
+    root: elements.pageRoot,
+    rootMargin: "0px 0px -8% 0px",
+    threshold: 0.08
+  });
+
+  targets.forEach(target => observer.observe(target));
+}
+
+function setupDashboardAnalyticsLazyLoad() {
+  const section = document.getElementById("dashboardAnalyticsSection");
+  if (!section) return;
+  let observer = null;
+
+  function isSectionNearView() {
+    const rootRect = elements.pageRoot.getBoundingClientRect();
+    const sectionRect = section.getBoundingClientRect();
+    return sectionRect.top < rootRect.bottom + 220 && sectionRect.bottom > rootRect.top - 120;
+  }
+
+  function triggerIfReady() {
+    if (!isSectionNearView()) return;
+    cleanup();
+    loadDashboardAnalytics().catch(error => showToast(error.message));
+  }
+
+  function handleViewportChange() {
+    triggerIfReady();
+  }
+
+  function cleanup() {
+    elements.pageRoot.removeEventListener("scroll", handleViewportChange);
+    window.removeEventListener("resize", handleViewportChange);
+    observer?.disconnect();
+  }
+
+  if (!("IntersectionObserver" in window)) {
+    elements.pageRoot.addEventListener("scroll", handleViewportChange, { passive: true });
+    window.addEventListener("resize", handleViewportChange);
+    return;
+  }
+
+  observer = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) triggerIfReady();
+  }, {
+    root: elements.pageRoot,
+    rootMargin: "240px 0px 240px 0px",
+    threshold: 0.01
+  });
+
+  elements.pageRoot.addEventListener("scroll", handleViewportChange, { passive: true });
+  window.addEventListener("resize", handleViewportChange);
+  observer.observe(section);
+}
+
+function loadScriptOnce(src) {
+  const existing = document.querySelector(`script[src="${src}"]`);
+  if (existing?.dataset.loaded === "true") return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const script = existing || document.createElement("script");
+    script.src = src;
+    script.async = false;
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      resolve();
+    };
+    script.onerror = () => reject(new Error(`Unable to load chart runtime: ${src}`));
+    if (!existing) document.head.appendChild(script);
+  });
+}
+
+async function loadVegaRuntime() {
+  if (window.vegaEmbed) return;
+  if (!state.vegaRuntimePromise) {
+    state.vegaRuntimePromise = Promise.resolve()
+      .then(() => loadScriptOnce("/vendor/vega/vega.min.js"))
+      .then(() => loadScriptOnce("/vendor/vega/vega-lite.min.js"))
+      .then(() => loadScriptOnce("/vendor/vega/vega-embed.min.js"));
+  }
+
+  await state.vegaRuntimePromise;
+}
+
+async function loadDashboardAnalytics() {
+  if (state.dashboardAnalyticsLoaded || state.dashboardAnalyticsLoading) return;
+  state.dashboardAnalyticsLoading = true;
+  const host = document.getElementById("dashboardAnalyticsHost");
+  if (host) host.classList.add("is-loading");
+
+  try {
+    const [recordsPayload, growthReports] = await Promise.all([
+      api("/api/records?limit=250&detail=table", { loadingMessage: "Building analytics" }),
+      loadNutritionGrowthReports()
+    ]);
+    const records = recordsPayload.records || [];
+    const reports = growthReports || [];
+    const activeHost = document.getElementById("dashboardAnalyticsHost");
+    if (!activeHost) return;
+    activeHost.className = "dashboard-analytics-content";
+    activeHost.innerHTML = renderDashboardAnalytics(records, reports);
+    await renderDashboardVegaCharts(records, reports);
+    requestAnimationFrame(() => activeHost.classList.add("is-ready"));
+    state.dashboardAnalyticsLoaded = true;
+  } catch (error) {
+    const activeHost = document.getElementById("dashboardAnalyticsHost");
+    if (activeHost) {
+      activeHost.className = "dashboard-analytics-error";
+      activeHost.innerHTML = `
+        <strong>Analytics could not be loaded.</strong>
+        <span>${escapeHtml(error.message)}</span>
+        <button type="button" class="text-button" id="dashboardAnalyticsRetry">Retry</button>
+      `;
+      document.getElementById("dashboardAnalyticsRetry")?.addEventListener("click", () => {
+        state.dashboardAnalyticsLoading = false;
+        loadDashboardAnalytics().catch(loadError => showToast(loadError.message));
+      });
+    }
+  } finally {
+    state.dashboardAnalyticsLoading = false;
+  }
+}
+
+function renderDashboardAnalytics(records = [], growthReports = []) {
+  const recordAnalytics = buildAnalytics(records);
+  const growthAnalytics = buildNutritionGrowthAnalytics(growthReports, []);
+  const needsFollowUp = growthAnalytics.statusCounts
+    .filter(entry => ["Severely Underweight", "Underweight"].includes(entry.label))
+    .reduce((sum, entry) => sum + entry.count, 0);
+  const topGroup = topAnalyticsEntry(recordAnalytics.groupCounts);
+  const topStatus = topAnalyticsEntry(growthAnalytics.statusCounts.filter(entry => entry.count > 0));
+
+  return `
+    <div class="dashboard-analytics-landscape">
+      <div class="analytics-ribbon">
+        ${dashboardAnalyticsStat("Records Reviewed", recordAnalytics.total, "latest active LP rows")}
+        ${dashboardAnalyticsStat("Top LP Group", topGroup.label, analyticsPlural(topGroup.count, "record"))}
+        ${dashboardAnalyticsStat("Growth Reports", growthAnalytics.reports, "monthly center reports")}
+        ${dashboardAnalyticsStat("Needs Follow-Up", needsFollowUp, "nutrition cases")}
+      </div>
+      <section class="analytics-shape growth-pulse" data-chart-copy-surface data-chart-copy-name="Growth Classification">
+        <div class="analytics-shape-heading">
+          <span>Growth Classification</span>
+          <div class="analytics-shape-insight">
+            <strong>${escapeHtml(topStatus.label || "No Data")}</strong>
+            ${chartCopyButton("Growth Classification")}
+          </div>
+        </div>
+        <div id="dashboardGrowthStatusChart" class="vega-chart"></div>
+      </section>
+      <section class="analytics-shape month-flow" data-chart-copy-surface data-chart-copy-name="Monthly Filing Flow">
+        <div class="analytics-shape-heading">
+          <span>Monthly Filing Flow</span>
+          <div class="analytics-shape-insight">
+            <strong>${escapeHtml(growthAnalytics.latestMonth)}</strong>
+            ${chartCopyButton("Monthly Filing Flow")}
+          </div>
+        </div>
+        <div id="dashboardGrowthMonthChart" class="vega-chart"></div>
+      </section>
+      <section class="analytics-shape group-current" data-chart-copy-surface data-chart-copy-name="Livelihood Groups">
+        <div class="analytics-shape-heading">
+          <span>Livelihood Groups</span>
+          <div class="analytics-shape-insight">
+            <strong>${escapeHtml(topGroup.label)}</strong>
+            ${chartCopyButton("Livelihood Groups")}
+          </div>
+        </div>
+        <div id="dashboardLpGroupChart" class="vega-chart"></div>
+      </section>
+      <section class="analytics-shape status-stream" data-chart-copy-surface data-chart-copy-name="Record Status">
+        <div class="analytics-shape-heading">
+          <span>Record Status</span>
+          <div class="analytics-shape-insight">
+            <strong>Database mix</strong>
+            ${chartCopyButton("Record Status")}
+          </div>
+        </div>
+        <div id="dashboardRecordStatusChart" class="vega-chart"></div>
+      </section>
+    </div>
+  `;
+}
+
+function dashboardAnalyticsStat(label, value, caption) {
+  return `
+    <div class="dashboard-analytics-stat">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <em>${escapeHtml(caption)}</em>
+    </div>
+  `;
+}
+
+function vegaValues(entries = [], fallbackLabel = "No Data") {
+  const values = entries
+    .filter(entry => Number(entry.count || 0) > 0)
+    .map(entry => ({ label: entry.label || fallbackLabel, count: Number(entry.count || 0) }));
+  return values.length ? values : [{ label: fallbackLabel, count: 0 }];
+}
+
+function dashboardVegaBase(width = "container", height = 210) {
+  return {
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "width": width,
+    "height": height,
+    "padding": { "left": 10, "right": 12, "top": 10, "bottom": 10 },
+    "autosize": { "type": "fit", "contains": "padding" },
+    "background": "transparent",
+    "config": {
+      "view": { "stroke": null },
+      "axis": {
+        "labelColor": "#66746d",
+        "labelFont": "Segoe UI",
+        "labelFontSize": 12,
+        "labelFontWeight": 400,
+        "labelPadding": 8,
+        "title": null,
+        "gridColor": "#dfe8e2",
+        "domain": false,
+        "tickColor": "#cbd8d0",
+        "tickSize": 4
+      },
+      "legend": {
+        "labelColor": "#44524a",
+        "labelFont": "Segoe UI",
+        "labelFontSize": 12,
+        "labelFontWeight": 400,
+        "labelLimit": 190,
+        "columnPadding": 18,
+        "rowPadding": 8,
+        "symbolSize": 150,
+        "title": null,
+        "orient": "bottom"
+      }
+    }
+  };
+}
+
+function dashboardVegaSpecs(records = [], growthReports = []) {
+  const recordAnalytics = buildAnalytics(records);
+  const growthAnalytics = buildNutritionGrowthAnalytics(growthReports, []);
+  const palette = ["#0d5637", "#9be87d", "#3f88c5", "#f4c84c", "#8f7bdc"];
+
+  return {
+    dashboardGrowthStatusChart: {
+      ...dashboardVegaBase("container", 404),
+      "data": { "values": vegaValues(growthAnalytics.statusCounts, "No Classification") },
+      "mark": { "type": "arc", "innerRadius": 76, "outerRadius": 138, "cornerRadius": 8, "padAngle": 0.035 },
+      "encoding": {
+        "theta": { "field": "count", "type": "quantitative" },
+        "color": {
+          "field": "label",
+          "type": "nominal",
+          "scale": { "range": palette },
+          "legend": { "orient": "bottom", "columns": 2, "labelLimit": 170, "columnPadding": 16, "rowPadding": 10 }
+        },
+        "tooltip": [
+          { "field": "label", "type": "nominal", "title": "Classification" },
+          { "field": "count", "type": "quantitative", "title": "Children" }
+        ]
+      }
+    },
+    dashboardGrowthMonthChart: {
+      ...dashboardVegaBase("container", 184),
+      "data": { "values": vegaValues(growthAnalytics.monthCounts, "No Month") },
+      "mark": {
+        "type": "area",
+        "interpolate": "monotone",
+        "line": { "color": "#0d5637", "strokeWidth": 3.5 },
+        "point": { "filled": true, "fill": "#ffffff", "stroke": "#0d5637", "strokeWidth": 2, "size": 72 },
+        "color": "#9be87d",
+        "opacity": 0.42
+      },
+      "encoding": {
+        "x": { "field": "label", "type": "ordinal", "sort": null, "axis": { "labelAngle": 0 } },
+        "y": { "field": "count", "type": "quantitative", "axis": { "tickCount": 5 } },
+        "tooltip": [
+          { "field": "label", "type": "ordinal", "title": "Month" },
+          { "field": "count", "type": "quantitative", "title": "Reports" }
+        ]
+      }
+    },
+    dashboardLpGroupChart: {
+      ...dashboardVegaBase("container", 172),
+      "data": { "values": vegaValues(recordAnalytics.groupCounts, "No Group") },
+      "mark": { "type": "bar", "cornerRadiusEnd": 10 },
+      "encoding": {
+        "y": { "field": "label", "type": "nominal", "sort": "-x", "axis": { "labelLimit": 170 } },
+        "x": { "field": "count", "type": "quantitative", "axis": { "tickCount": 5 } },
+        "color": { "field": "label", "type": "nominal", "legend": null, "scale": { "range": palette } },
+        "tooltip": [
+          { "field": "label", "type": "nominal", "title": "Group" },
+          { "field": "count", "type": "quantitative", "title": "Records" }
+        ]
+      }
+    },
+    dashboardRecordStatusChart: {
+      ...dashboardVegaBase("container", 178),
+      "data": { "values": vegaValues(recordAnalytics.statusCounts, "No Status") },
+      "mark": { "type": "bar", "cornerRadiusEnd": 12, "height": { "band": 0.56 } },
+      "encoding": {
+        "y": { "field": "label", "type": "nominal", "sort": "-x", "axis": { "labelLimit": 130 } },
+        "x": { "field": "count", "type": "quantitative", "axis": { "tickCount": 8 } },
+        "color": { "field": "label", "type": "nominal", "legend": null, "scale": { "range": palette } },
+        "tooltip": [
+          { "field": "label", "type": "nominal", "title": "Status" },
+          { "field": "count", "type": "quantitative", "title": "Records" }
+        ]
+      }
+    }
+  };
+}
+
+async function renderDashboardVegaCharts(records = [], growthReports = []) {
+  await loadVegaRuntime();
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const specs = dashboardVegaSpecs(records, growthReports);
+  await Promise.all(Object.entries(specs).map(([id, spec]) => {
+    const target = document.getElementById(id);
+    if (!target || !window.vegaEmbed) return Promise.resolve();
+    const bounds = target.getBoundingClientRect();
+    const measuredSpec = {
+      ...spec,
+      width: Math.max(220, Math.floor(bounds.width)),
+      height: Math.max(150, Math.floor(bounds.height))
+    };
+    return window.vegaEmbed(target, measuredSpec, {
+      actions: false,
+      renderer: "svg",
+      theme: "none"
+    });
+  }));
+}
+
+function dashboardMetric(label, value, route) {
+  return `
+    <button type="button" class="dashboard-metric" data-menu-route="${escapeHtml(route)}">
+      <strong>${escapeHtml(value)}</strong>
+      <span>${escapeHtml(label)}</span>
+    </button>
+  `;
+}
+
+function dashboardCommand(route, iconName, label, caption) {
+  return `
+    <button type="button" class="dashboard-command" data-menu-route="${escapeHtml(route)}">
+      <span class="dashboard-command-icon">${icon(iconName)}</span>
+      <span>
+        <strong>${escapeHtml(label)}</strong>
+        <em>${escapeHtml(caption)}</em>
+      </span>
+      <i>${icon("arrow")}</i>
+    </button>
+  `;
+}
+
+function dashboardSummaryRow(label, value, caption, route) {
+  return `
+    <button type="button" class="dashboard-summary-row" data-menu-route="${escapeHtml(route)}">
+      <div>
+        <strong>${escapeHtml(label)}</strong>
+        <span>${escapeHtml(caption)}</span>
+      </div>
+      <em>${escapeHtml(value)}</em>
+    </button>
+  `;
+}
+
+function formatRecentUpdateDate(record) {
+  return fieldValue("date_updated", record.date_updated)
+    || fieldValue("updated_at", record.updated_at)
+    || "Recently updated";
+}
+
+function recentUpdateRow(record) {
+  return `
+    <button type="button" class="recent-update-row" data-view-id="${record.id}">
+      <div>
+        <strong>${escapeHtml(fullName(record))}</strong>
+        <span>${escapeHtml(record.control_no || "")} | ${escapeHtml(record.status || "")}</span>
+      </div>
+      <time>${escapeHtml(formatRecentUpdateDate(record))}</time>
+      <i>${icon("arrow")}</i>
     </button>
   `;
 }
@@ -1770,7 +2620,7 @@ function renderMonitoringOverview(reports) {
   const overview = monitoringOverview(reports);
 
   return `
-    <section class="monitoring-overview">
+    <section class="monitoring-overview flow-analytics monitoring-flow-analytics">
       <div class="analytics-title-row">
         <div>
           <span class="analytics-eyebrow">Monitoring Dashboard</span>
@@ -1778,13 +2628,13 @@ function renderMonitoringOverview(reports) {
         </div>
         <span class="analytics-note">${overview.months} month${overview.months === 1 ? "" : "s"} covered</span>
       </div>
-      <div class="analytics-kpi-grid">
+      <div class="analytics-kpi-grid analytics-signal-strip four-signals">
         ${renderAnalyticsKpi("Reports Filed", String(overview.count), "Submitted monthly forms", "green")}
         ${renderAnalyticsKpi("Total Sales", formatMoney(overview.sales), "Production and sales", "blue")}
         ${renderAnalyticsKpi("Total Expenses", formatMoney(overview.expenses), "Reported expenses", "amber")}
         ${renderAnalyticsKpi("Current Fund", formatMoney(overview.currentFund), "Latest running balances", "violet")}
       </div>
-      <div class="analytics-preview-grid">
+      <div class="analytics-preview-grid flow-chart-grid">
         ${renderAnalyticsCard("Reports by Month", "Monthly submission volume", renderBarList(overview.monthCounts, overview.count, 6))}
         ${renderAnalyticsCard("Financial Position", "All monitoring reports", `
           <div class="finance-summary">
@@ -1849,7 +2699,7 @@ function renderNutritionAnalytics(beneficiaries = [], centers = []) {
   const topNutritionStatus = topAnalyticsEntry(analytics.nutritionStatusCounts);
 
   return `
-    <section class="database-analytics nutrition-analytics">
+    <section class="database-analytics nutrition-analytics flow-analytics nutrition-flow-analytics nutrition-profile-flow-analytics">
       <div class="analytics-title-row">
         <div>
           <span class="analytics-eyebrow">Nutrition Program</span>
@@ -1857,13 +2707,13 @@ function renderNutritionAnalytics(beneficiaries = [], centers = []) {
         </div>
         <span class="analytics-note">${analytics.active} active child${analytics.active === 1 ? "" : "ren"}</span>
       </div>
-      <div class="analytics-kpi-grid">
+      <div class="analytics-kpi-grid analytics-signal-strip four-signals">
         ${renderAnalyticsKpi("Beneficiaries", String(analytics.total), "Child profile records", "green")}
         ${renderAnalyticsKpi("Active Children", String(analytics.active), `${analyticsPercent(analytics.active, analytics.total)}% of profiles`, "blue")}
         ${renderAnalyticsKpi("Feeding Centers", String(analytics.centers), `${analytics.activeCenters} active centers`, "amber")}
         ${renderAnalyticsKpi("Top Status", topNutritionStatus.label, analyticsPlural(topNutritionStatus.count, "child", "children"), "violet")}
       </div>
-      <div class="analytics-preview-grid">
+      <div class="analytics-preview-grid flow-chart-grid">
         ${renderAnalyticsCard("Feeding Centers", `Top: ${topCenter.label}`, renderBarList(analytics.centerCounts, analytics.total, 5))}
         ${renderAnalyticsCard("Nutrition Status", "Current profile snapshot", renderBarList(analytics.nutritionStatusCounts, analytics.total, 5))}
       </div>
@@ -1944,13 +2794,15 @@ async function renderNutritionProfilesPage(id = "") {
     { id: "nutritionCenters", label: "Centers", icon: "home", onClick: () => navigate("nutrition-centers") }
   ]);
 
-  const overview = await loadNutritionOverview();
-  const centers = overview.centers || [];
-  const beneficiaries = overview.beneficiaries || [];
+  const [centers, beneficiariesPayload] = await Promise.all([
+    loadNutritionCenters(),
+    api("/api/nutrition/beneficiaries?limit=100")
+  ]);
+  const beneficiaries = beneficiariesPayload.beneficiaries || [];
 
   elements.pageRoot.innerHTML = `
     <div id="nutritionAnalyticsHost">${renderNutritionAnalytics(beneficiaries, centers)}</div>
-    <section class="database-page nutrition-page">
+    <section class="database-page nutrition-page flow-data-section">
       <div class="table-toolbar">
         <div class="search-band compact with-button">
           <span class="search-icon">${icon("search")}</span>
@@ -1981,7 +2833,8 @@ async function renderNutritionProfilesPage(id = "") {
   async function loadProfiles() {
     const search = encodeURIComponent(document.getElementById("nutritionSearchInput").value.trim());
     const centerId = encodeURIComponent(document.getElementById("nutritionCenterFilter").value);
-    const payload = await api(`/api/nutrition/beneficiaries?search=${search}&centerId=${centerId}&limit=500`);
+    state.tablePages.nutritionProfiles = 1;
+    const payload = await api(`/api/nutrition/beneficiaries?search=${search}&centerId=${centerId}&limit=100`);
     const records = payload.beneficiaries || [];
     document.getElementById("nutritionAnalyticsHost").innerHTML = renderNutritionAnalytics(records, centers);
     renderNutritionProfileTable(records);
@@ -2000,7 +2853,8 @@ async function renderNutritionProfilesPage(id = "") {
 }
 
 function renderNutritionProfileTable(records = []) {
-  document.getElementById("nutritionCount").textContent = `${records.length} shown`;
+  const pageInfo = pagedItems(records, "nutritionProfiles");
+  document.getElementById("nutritionCount").textContent = pageCountText(pageInfo, "profiles");
 
   if (!records.length) {
     document.getElementById("nutritionTableHost").innerHTML = emptyState("No nutrition beneficiary profiles found.");
@@ -2026,7 +2880,7 @@ function renderNutritionProfileTable(records = []) {
           </tr>
         </thead>
         <tbody>
-          ${records.map(record => `
+          ${pageInfo.items.map(record => `
             <tr>
               <td class="sticky-column">
                 <div class="table-actions">
@@ -2049,7 +2903,9 @@ function renderNutritionProfileTable(records = []) {
         </tbody>
       </table>
     </div>
+    ${renderPagination("nutritionProfiles", pageInfo)}
   `;
+  bindPagination(document.getElementById("nutritionTableHost"), "nutritionProfiles", () => renderNutritionProfileTable(records));
   attachNutritionProfileTableHandlers(elements.pageRoot);
 }
 
@@ -3277,7 +4133,7 @@ function renderNutritionCenterAnalytics(centers = [], beneficiaries = []) {
   const topCenter = topAnalyticsEntry(analytics.centerCounts);
 
   return `
-    <section class="database-analytics nutrition-analytics">
+    <section class="database-analytics nutrition-analytics flow-analytics nutrition-flow-analytics">
       <div class="analytics-title-row">
         <div>
           <span class="analytics-eyebrow">Feeding Center Analytics</span>
@@ -3285,13 +4141,13 @@ function renderNutritionCenterAnalytics(centers = [], beneficiaries = []) {
         </div>
         <span class="analytics-note">${analytics.activeCenters} active of ${analytics.centers} centers</span>
       </div>
-      <div class="analytics-kpi-grid">
+      <div class="analytics-kpi-grid analytics-signal-strip four-signals">
         ${renderAnalyticsKpi("Centers", String(analytics.centers), "Profile records", "green")}
         ${renderAnalyticsKpi("Active Centers", String(analytics.activeCenters), "Currently operating", "blue")}
         ${renderAnalyticsKpi("Beneficiaries", String(analytics.total), "Children linked to centers", "amber")}
         ${renderAnalyticsKpi("Largest Center", topCenter.label, analyticsPlural(topCenter.count, "child", "children"), "violet")}
       </div>
-      <div class="analytics-preview-grid">
+      <div class="analytics-preview-grid flow-chart-grid">
         ${renderAnalyticsCard("Children by Center", "Profile distribution", renderBarList(analytics.centerCounts, analytics.total, 6))}
         ${renderAnalyticsCard("Current Nutrition Status", "Across all centers", renderBarList(analytics.nutritionStatusCounts, analytics.total, 5))}
       </div>
@@ -3589,7 +4445,7 @@ async function loadNutritionCgsReference() {
 }
 
 async function loadNutritionGrowthReports({ search = "", centerId = "" } = {}) {
-  const params = new URLSearchParams({ search, centerId, limit: "500" });
+  const params = new URLSearchParams({ search, centerId, limit: "100" });
   const payload = await api(`/api/nutrition/growth/reports?${params.toString()}`);
   return payload.reports || [];
 }
@@ -3597,6 +4453,10 @@ async function loadNutritionGrowthReports({ search = "", centerId = "" } = {}) {
 async function loadNutritionGrowthReport(id) {
   const payload = await api(`/api/nutrition/growth/reports/${id}`);
   return payload.report;
+}
+
+async function loadDetailedNutritionGrowthReports(reports = []) {
+  return Promise.all(reports.map(report => loadNutritionGrowthReport(report.id)));
 }
 
 async function loadNutritionGrowthDraft({ id = "", centerId = "", reportMonth = "", submittedDate = "" } = {}) {
@@ -3623,7 +4483,74 @@ function nutritionGrowthStatusCounts(entries = []) {
   return countBy(entries, entry => nutritionText(entry.cgs_classification, "Not Classified"));
 }
 
-function buildNutritionGrowthAnalytics(reports = []) {
+function nutritionGrowthDetailedRows(reports = []) {
+  return reports.flatMap(report => (report.entries || []).map(entry => ({ report, entry })));
+}
+
+function nutritionGrowthAgeBucket(ageMonths) {
+  const age = nutritionGrowthNumber(ageMonths);
+  if (age === null) return "Not Recorded";
+  const years = Math.floor(age / 12);
+  if (years < 1) return "Under 1 Year";
+  if (years >= 10) return "10+ Years";
+  return `${years} Year${years === 1 ? "" : "s"}`;
+}
+
+function nutritionGrowthAgeBucketRank(label) {
+  const text = String(label || "");
+  if (text === "10+ Years") return 10;
+  if (text === "Under 1 Year") return 0;
+  const match = /^(\d+) Year/.exec(text);
+  if (match) return Number(match[1]);
+  return -1;
+}
+
+function sortNutritionGrowthAgeCounts(entries = []) {
+  return [...entries].sort((left, right) => {
+    const rankSort = nutritionGrowthAgeBucketRank(right.label) - nutritionGrowthAgeBucketRank(left.label);
+    return rankSort || left.label.localeCompare(right.label);
+  });
+}
+
+function nutritionGrowthChangeBucket(value, noun) {
+  const number = nutritionGrowthNumber(value);
+  if (number === null) return "Not Recorded";
+  if (number < 0) return `Lost ${noun}`;
+  if (number === 0) return "No Change";
+  if (noun === "Weight" && number <= 0.5) return "Gained 0.1-0.5 kg";
+  if (noun === "Weight" && number <= 1) return "Gained 0.6-1.0 kg";
+  if (noun === "Weight") return "Gained > 1.0 kg";
+  if (number <= 1) return "Gained 0.1-1.0 cm";
+  if (number <= 3) return "Gained 1.1-3.0 cm";
+  return "Gained > 3.0 cm";
+}
+
+function nutritionGrowthAverage(rows = [], fieldName) {
+  const values = rows
+    .map(({ entry }) => nutritionGrowthNumber(entry[fieldName]))
+    .filter(value => value !== null);
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function nutritionGrowthSignedValue(value, unit) {
+  if (value === null || !Number.isFinite(value)) return "N/A";
+  const rounded = Math.round(value * 100) / 100;
+  const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return `${rounded > 0 ? "+" : ""}${text} ${unit}`;
+}
+
+function nutritionGrowthLatestMonth(reports = []) {
+  const latest = [...reports]
+    .map(report => report.report_month)
+    .filter(Boolean)
+    .sort()
+    .pop();
+  return latest ? reportMonthLabel(latest) : "No Month";
+}
+
+function buildNutritionGrowthAnalytics(reports = [], detailedReports = reports) {
+  const rows = nutritionGrowthDetailedRows(detailedReports);
   const totals = reports.reduce((summary, report) => {
     summary.children += Number(report.child_count || 0);
     summary.severelyUnderweight += Number(report.severely_underweight_count || 0);
@@ -3631,6 +4558,7 @@ function buildNutritionGrowthAnalytics(reports = []) {
     summary.normal += Number(report.normal_count || 0);
     summary.overweight += Number(report.overweight_count || 0);
     summary.centerCounts.set(report.center_name || "No Center", (summary.centerCounts.get(report.center_name || "No Center") || 0) + 1);
+    summary.monthCounts.set(monthKeyLabel(report.report_month), (summary.monthCounts.get(monthKeyLabel(report.report_month)) || 0) + 1);
     return summary;
   }, {
     children: 0,
@@ -3638,31 +4566,50 @@ function buildNutritionGrowthAnalytics(reports = []) {
     underweight: 0,
     normal: 0,
     overweight: 0,
-    centerCounts: new Map()
+    centerCounts: new Map(),
+    monthCounts: new Map()
   });
+  const averageWeightChange = nutritionGrowthAverage(rows, "weight_change_kg");
+  const averageHeightChange = nutritionGrowthAverage(rows, "height_change_cm");
 
   return {
     reports: reports.length,
-    children: totals.children,
+    children: rows.length || totals.children,
     statusCounts: [
       { label: "Severely Underweight", count: totals.severelyUnderweight },
       { label: "Underweight", count: totals.underweight },
       { label: "Normal", count: totals.normal },
       { label: "Overweight", count: totals.overweight }
     ],
-    centerCounts: [...totals.centerCounts.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count)
+    centerCounts: [...totals.centerCounts.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count),
+    monthCounts: [...totals.monthCounts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((left, right) => {
+        const order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        return order.indexOf(left.label) - order.indexOf(right.label);
+      }),
+    ageCounts: sortNutritionGrowthAgeCounts(nutritionGrowthCountEntries(rows, item => nutritionGrowthAgeBucket(item.entry.age_months))),
+    weightChangeCounts: nutritionGrowthCountEntries(rows, item => nutritionGrowthChangeBucket(item.entry.weight_change_kg, "Weight")),
+    heightChangeCounts: nutritionGrowthCountEntries(rows, item => nutritionGrowthChangeBucket(item.entry.height_change_cm, "Height")),
+    averageWeightChange,
+    averageHeightChange,
+    latestMonth: nutritionGrowthLatestMonth(reports)
   };
 }
 
-function renderNutritionGrowthAnalytics(reports = []) {
-  const analytics = buildNutritionGrowthAnalytics(reports);
+function renderNutritionGrowthAnalytics(reports = [], detailedReports = reports, { centerId = "" } = {}) {
+  const analytics = buildNutritionGrowthAnalytics(reports, detailedReports);
   const topCenter = topAnalyticsEntry(analytics.centerCounts);
   const needsFollowUp = analytics.statusCounts
     .filter(entry => ["Severely Underweight", "Underweight"].includes(entry.label))
     .reduce((sum, entry) => sum + entry.count, 0);
+  const isAllCenters = !centerId;
+  const fourthKpi = isAllCenters
+    ? renderAnalyticsKpi("Top Center", topCenter.label, analyticsPlural(topCenter.count, "report"), "amber")
+    : renderAnalyticsKpi("Latest Month", analytics.latestMonth, "latest filtered report", "amber");
 
   return `
-    <section class="database-analytics nutrition-analytics">
+    <section class="database-analytics nutrition-analytics flow-analytics nutrition-flow-analytics nutrition-growth-flow-analytics">
       <div class="analytics-title-row">
         <div>
           <span class="analytics-eyebrow">Nutrition Growth Monitoring</span>
@@ -3670,15 +4617,21 @@ function renderNutritionGrowthAnalytics(reports = []) {
         </div>
         <span class="analytics-note">${analytics.reports} report${analytics.reports === 1 ? "" : "s"} filed</span>
       </div>
-      <div class="analytics-kpi-grid">
+      <div class="analytics-kpi-grid analytics-signal-strip">
         ${renderAnalyticsKpi("Reports", String(analytics.reports), "center-month records", "green")}
         ${renderAnalyticsKpi("Children Monitored", String(analytics.children), "rows across reports", "blue")}
         ${renderAnalyticsKpi("Needs Follow-Up", String(needsFollowUp), "SU + Underweight", "red")}
-        ${renderAnalyticsKpi("Top Center", topCenter.label, analyticsPlural(topCenter.count, "report"), "amber")}
+        ${fourthKpi}
+        ${renderAnalyticsKpi("Avg Weight Change", nutritionGrowthSignedValue(analytics.averageWeightChange, "kg"), "across child rows", "green")}
+        ${renderAnalyticsKpi("Avg Height Change", nutritionGrowthSignedValue(analytics.averageHeightChange, "cm"), "across child rows", "blue")}
       </div>
-      <div class="analytics-preview-grid">
+      <div class="analytics-preview-grid flow-chart-grid">
         ${renderAnalyticsCard("CGS Classification", "All displayed reports", renderBarList(analytics.statusCounts, Math.max(analytics.children, 1), 4))}
-        ${renderAnalyticsCard("Reports by Center", "Monitoring coverage", renderBarList(analytics.centerCounts, Math.max(analytics.reports, 1), 6))}
+        ${renderAnalyticsCard("Age Distribution", "Age in years", renderBarList(analytics.ageCounts, Math.max(analytics.children, 1), 7))}
+        ${renderAnalyticsCard("Weight Change", "From latest reference to current record", renderBarList(analytics.weightChangeCounts, Math.max(analytics.children, 1), 6))}
+        ${renderAnalyticsCard("Height Change", "From latest reference to current record", renderBarList(analytics.heightChangeCounts, Math.max(analytics.children, 1), 6))}
+        ${isAllCenters ? renderAnalyticsCard("Reports by Center", "Monitoring coverage", renderBarList(analytics.centerCounts, Math.max(analytics.reports, 1), 6)) : ""}
+        ${isAllCenters ? renderAnalyticsCard("Reports per Month", "Monthly report filing", renderBarList(analytics.monthCounts, Math.max(analytics.reports, 1), 12)) : ""}
       </div>
     </section>
   `;
@@ -3695,18 +4648,17 @@ async function renderNutritionGrowthPage(id = "") {
   setTitle("Nutrition Growth Monitoring");
   setTopbarActions([
     { id: "nutritionGrowthNew", label: "New Report", icon: "plus", variant: "primary", onClick: () => navigate("nutrition-growth", "new") },
-    { id: "nutritionGrowthYearly", label: "Yearly Summary", icon: "print", onClick: () => printNutritionGrowthYearlySummary().catch(error => showToast(error.message)) }
+    { id: "nutritionGrowthYearly", label: "Yearly Summary", icon: "print", onClick: () => printNutritionGrowthYearlySummary(currentNutritionGrowthCenterFilter()).catch(error => showToast(error.message)) }
   ]);
 
-  const [overview, reports] = await Promise.all([
-    loadNutritionOverview(),
+  const [centers, reports] = await Promise.all([
+    loadNutritionCenters(),
     loadNutritionGrowthReports()
   ]);
-  const centers = overview.centers || [];
 
   elements.pageRoot.innerHTML = `
-    <div id="nutritionGrowthAnalyticsHost">${renderNutritionGrowthAnalytics(reports)}</div>
-    <section class="database-page nutrition-page">
+    <div id="nutritionGrowthAnalyticsHost">${renderNutritionGrowthAnalytics(reports, [])}</div>
+    <section class="database-page nutrition-page flow-data-section">
       <div class="table-toolbar">
         <div class="search-band compact with-button">
           <span class="search-icon">${icon("search")}</span>
@@ -3737,9 +4689,17 @@ async function renderNutritionGrowthPage(id = "") {
   async function loadReports() {
     const search = document.getElementById("nutritionGrowthSearchInput").value.trim();
     const centerId = document.getElementById("nutritionGrowthCenterFilter").value;
+    state.tablePages.nutritionGrowth = 1;
     const filteredReports = await loadNutritionGrowthReports({ search, centerId });
-    document.getElementById("nutritionGrowthAnalyticsHost").innerHTML = renderNutritionGrowthAnalytics(filteredReports);
+    document.getElementById("nutritionGrowthAnalyticsHost").innerHTML = renderNutritionGrowthAnalytics(filteredReports, [], { centerId });
     renderNutritionGrowthTable(filteredReports);
+    loadDetailedNutritionGrowthReports(filteredReports)
+      .then(filteredDetailedReports => {
+        if (document.getElementById("nutritionGrowthAnalyticsHost")) {
+          document.getElementById("nutritionGrowthAnalyticsHost").innerHTML = renderNutritionGrowthAnalytics(filteredReports, filteredDetailedReports, { centerId });
+        }
+      })
+      .catch(error => showToast(error.message));
   }
 
   document.getElementById("nutritionGrowthSearchButton").addEventListener("click", () => loadReports().catch(error => showToast(error.message)));
@@ -3752,10 +4712,18 @@ async function renderNutritionGrowthPage(id = "") {
   document.getElementById("nutritionGrowthCenterFilter").addEventListener("change", () => loadReports().catch(error => showToast(error.message)));
 
   renderNutritionGrowthTable(reports);
+  loadDetailedNutritionGrowthReports(reports)
+    .then(detailedReports => {
+      if (document.getElementById("nutritionGrowthAnalyticsHost")) {
+        document.getElementById("nutritionGrowthAnalyticsHost").innerHTML = renderNutritionGrowthAnalytics(reports, detailedReports);
+      }
+    })
+    .catch(error => showToast(error.message));
 }
 
 function renderNutritionGrowthTable(reports = []) {
-  document.getElementById("nutritionGrowthCount").textContent = `${reports.length} shown`;
+  const pageInfo = pagedItems(reports, "nutritionGrowth");
+  document.getElementById("nutritionGrowthCount").textContent = pageCountText(pageInfo, "reports");
 
   if (!reports.length) {
     document.getElementById("nutritionGrowthTableHost").innerHTML = emptyState("No nutrition growth monitoring reports yet.");
@@ -3779,7 +4747,7 @@ function renderNutritionGrowthTable(reports = []) {
           </tr>
         </thead>
         <tbody>
-          ${reports.map(report => `
+          ${pageInfo.items.map(report => `
             <tr>
               <td class="sticky-column">
                 <div class="table-actions">
@@ -3800,8 +4768,20 @@ function renderNutritionGrowthTable(reports = []) {
         </tbody>
       </table>
     </div>
+    ${renderPagination("nutritionGrowth", pageInfo)}
   `;
+  bindPagination(document.getElementById("nutritionGrowthTableHost"), "nutritionGrowth", () => renderNutritionGrowthTable(reports));
   attachNutritionGrowthTableHandlers(elements.pageRoot);
+}
+
+function currentNutritionGrowthCenterFilter() {
+  const select = document.getElementById("nutritionGrowthCenterFilter");
+  const centerId = select?.value || "";
+  const selected = select?.options[select.selectedIndex];
+  return {
+    centerId,
+    centerName: centerId ? String(selected?.textContent || "").trim() : ""
+  };
 }
 
 function attachNutritionGrowthTableHandlers(scope = document) {
@@ -3932,7 +4912,7 @@ function renderNutritionGrowthEntryRow(entry = {}) {
     entry.previous_height_cm ? `Height: ${entry.previous_height_cm} cm` : "",
     entry.previous_weight_kg ? `Weight: ${entry.previous_weight_kg} kg` : "",
     entry.previous_cgs_classification ? `CGS: ${entry.previous_cgs_classification}` : ""
-  ].filter(Boolean).join(" | ") || "No prior record";
+  ].filter(Boolean).join(" | ") || "No Previous records";
 
   return `
     <tr
@@ -3978,7 +4958,8 @@ function nutritionGrowthFormatNumber(value) {
 function nutritionGrowthDelta(current, previous) {
   const currentNumber = nutritionGrowthNumber(current);
   const previousNumber = nutritionGrowthNumber(previous);
-  if (currentNumber === null || previousNumber === null) return "";
+  if (currentNumber === null) return "";
+  if (previousNumber === null) return "0";
   return nutritionGrowthFormatNumber(currentNumber - previousNumber);
 }
 
@@ -4217,79 +5198,198 @@ function printBarChart(title, rows = [], total = 0) {
   `;
 }
 
-function printNutritionGrowthYearlyTableRows(rows = []) {
-  if (!rows.length) {
-    return `<tr><td colspan="13">No growth monitoring records found for this year.</td></tr>`;
-  }
-
-  return rows.map(({ report, entry }) => `
-    <tr>
-      <td>${escapeHtml(reportMonthLabel(report.report_month))}</td>
-      <td>${escapeHtml(report.submitted_date || "")}</td>
-      <td>${escapeHtml(report.center_name || "")}</td>
-      <td>${escapeHtml(entry.beneficiary_no || "")}</td>
-      <td>${escapeHtml(entry.beneficiary_name || "")}</td>
-      <td>${escapeHtml(entry.gender || "")}</td>
-      <td>${escapeHtml(entry.age_months || "")}</td>
-      <td>${escapeHtml(entry.previous_record_date || "")}</td>
-      <td>${escapeHtml(entry.height_cm || "")}</td>
-      <td>${escapeHtml(entry.weight_kg || "")}</td>
-      <td>${escapeHtml(entry.height_change_cm || "")}</td>
-      <td>${escapeHtml(entry.weight_change_kg || "")}</td>
-      <td>${escapeHtml(entry.cgs_classification || "")}</td>
-    </tr>
-  `).join("");
+function nutritionGrowthSignedText(value, unit) {
+  return nutritionGrowthSignedValue(nutritionGrowthNumber(value), unit);
 }
 
-async function printNutritionGrowthYearlySummary() {
+function nutritionGrowthDisplayValue(value, unit = "") {
+  const number = nutritionGrowthNumber(value);
+  if (number === null) return "";
+  return `${nutritionGrowthFormatNumber(number)}${unit ? ` ${unit}` : ""}`;
+}
+
+function nutritionGrowthYearlyMonths(rows = []) {
+  return [...new Set(rows.map(({ report }) => report.report_month).filter(Boolean))]
+    .sort();
+}
+
+function nutritionGrowthChildKey(report = {}, entry = {}) {
+  return String(entry.beneficiary_id || `${report.center_name || ""}|${entry.beneficiary_no || ""}|${entry.beneficiary_name || ""}`).trim();
+}
+
+function nutritionGrowthYearlyChildren(rows = []) {
+  const children = new Map();
+
+  rows.forEach(({ report, entry }) => {
+    const key = nutritionGrowthChildKey(report, entry);
+    if (!key) return;
+
+    if (!children.has(key)) {
+      children.set(key, {
+        center_name: report.center_name || "",
+        beneficiary_no: entry.beneficiary_no || "",
+        beneficiary_name: entry.beneficiary_name || "",
+        gender: entry.gender || "",
+        birth_date: entry.birth_date || "",
+        months: new Map()
+      });
+    }
+
+    children.get(key).months.set(report.report_month, entry);
+  });
+
+  return [...children.values()].sort((left, right) => {
+    return String(left.center_name || "").localeCompare(String(right.center_name || ""))
+      || String(left.beneficiary_name || "").localeCompare(String(right.beneficiary_name || ""))
+      || String(left.beneficiary_no || "").localeCompare(String(right.beneficiary_no || ""));
+  });
+}
+
+const NUTRITION_GROWTH_YEARLY_COLUMNS = [
+  { key: "age_months", label: "Age", average: rows => nutritionGrowthSignedValue(nutritionGrowthAverage(rows, "age_months"), "mo").replace(/^\+/, "") },
+  { key: "height_cm", label: "Height", average: rows => nutritionGrowthSignedValue(nutritionGrowthAverage(rows, "height_cm"), "cm").replace(/^\+/, "") },
+  { key: "weight_kg", label: "Weight", average: rows => nutritionGrowthSignedValue(nutritionGrowthAverage(rows, "weight_kg"), "kg").replace(/^\+/, "") },
+  { key: "height_change_cm", label: "H. Change", average: rows => nutritionGrowthSignedValue(nutritionGrowthAverage(rows, "height_change_cm"), "cm") },
+  { key: "weight_change_kg", label: "W. Change", average: rows => nutritionGrowthSignedValue(nutritionGrowthAverage(rows, "weight_change_kg"), "kg") },
+  { key: "cgs_classification", label: "CGS", average: rows => {
+    const topStatus = nutritionGrowthCountEntries(rows, item => item.entry.cgs_classification)[0];
+    return topStatus ? `${topStatus.label} (${topStatus.count})` : "";
+  } }
+];
+
+function nutritionGrowthYearlyCellValue(entry, column) {
+  if (!entry) return "";
+
+  if (column.key === "age_months") return entry.age_months ? `${entry.age_months} mo` : "";
+  if (column.key === "height_cm") return nutritionGrowthDisplayValue(entry.height_cm, "cm");
+  if (column.key === "weight_kg") return nutritionGrowthDisplayValue(entry.weight_kg, "kg");
+  if (column.key === "height_change_cm") return nutritionGrowthSignedText(entry.height_change_cm, "cm");
+  if (column.key === "weight_change_kg") return nutritionGrowthSignedText(entry.weight_change_kg, "kg");
+  return entry[column.key] || "";
+}
+
+function printNutritionGrowthMonthCells(entry) {
+  return NUTRITION_GROWTH_YEARLY_COLUMNS
+    .map(column => `<td class="${entry ? "" : "growth-muted"}">${escapeHtml(nutritionGrowthYearlyCellValue(entry, column) || "-")}</td>`)
+    .join("");
+}
+
+function printNutritionGrowthMonthlyAverageCells(rows = []) {
+  return NUTRITION_GROWTH_YEARLY_COLUMNS
+    .map(column => `<td>${escapeHtml(rows.length ? column.average(rows) || "-" : "-")}</td>`)
+    .join("");
+}
+
+function printNutritionGrowthYearlyPivotTable(rows = [], { includeCenter = false } = {}) {
+  if (!rows.length) {
+    const fixedColumns = includeCenter ? 5 : 4;
+    const colspan = fixedColumns + NUTRITION_GROWTH_YEARLY_COLUMNS.length;
+    return `
+      <table class="yearly-pivot">
+        <tbody><tr><td colspan="${colspan}">No growth monitoring records found for this year.</td></tr></tbody>
+      </table>
+    `;
+  }
+
+  const months = nutritionGrowthYearlyMonths(rows);
+  const children = nutritionGrowthYearlyChildren(rows);
+  const fixedColumnCount = includeCenter ? 5 : 4;
+
+  return `
+    <table class="yearly-pivot">
+      <thead>
+        <tr>
+          ${includeCenter ? `<th class="child-center" rowspan="2">Center</th>` : ""}
+          <th class="child-info" rowspan="2">Beneficiary No.</th>
+          <th class="child-name" rowspan="2">Child</th>
+          <th class="child-info" rowspan="2">Gender</th>
+          <th class="child-info" rowspan="2">Birth Date</th>
+          ${months.map(month => `<th class="month-group" colspan="${NUTRITION_GROWTH_YEARLY_COLUMNS.length}">${escapeHtml(reportMonthLabel(month))}</th>`).join("")}
+        </tr>
+        <tr>
+          ${months.map(() => NUTRITION_GROWTH_YEARLY_COLUMNS.map(column => `<th class="month-stat">${escapeHtml(column.label)}</th>`).join("")).join("")}
+        </tr>
+      </thead>
+      <tbody>
+        ${children.map(child => `
+          <tr>
+            ${includeCenter ? `<td class="child-center">${escapeHtml(child.center_name)}</td>` : ""}
+            <td class="child-info">${escapeHtml(child.beneficiary_no)}</td>
+            <td class="child-name">${escapeHtml(child.beneficiary_name)}</td>
+            <td class="child-info">${escapeHtml(child.gender)}</td>
+            <td class="child-info">${escapeHtml(child.birth_date)}</td>
+            ${months.map(month => printNutritionGrowthMonthCells(child.months.get(month))).join("")}
+          </tr>
+        `).join("")}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="${fixedColumnCount}"><strong>Monthly Average</strong></td>
+          ${months.map(month => {
+            const monthRows = rows.filter(({ report }) => report.report_month === month);
+            return printNutritionGrowthMonthlyAverageCells(monthRows);
+          }).join("")}
+        </tr>
+      </tfoot>
+    </table>
+  `;
+}
+
+async function printNutritionGrowthYearlySummary({ centerId = "", centerName = "" } = {}) {
   const defaultYear = String(new Date().getFullYear());
-  const year = String(window.prompt("Print growth monitoring yearly summary for which year?", defaultYear) || "").trim();
+  const scopeLabel = centerName || "All Centers";
+  const year = String(await requestYearInput(scopeLabel, defaultYear) || "").trim();
   if (!year) return;
   if (!/^\d{4}$/.test(year)) {
     showToast("Enter a valid 4-digit year.");
     return;
   }
 
-  const reports = (await loadNutritionGrowthReports({ search: year }))
+  const reports = (await loadNutritionGrowthReports({ search: year, centerId }))
     .filter(report => String(report.report_month || "").startsWith(`${year}-`));
   if (!reports.length) {
-    showToast(`No growth monitoring reports found for ${year}.`);
+    showToast(`No growth monitoring reports found for ${scopeLabel} in ${year}.`);
     return;
   }
 
-  const detailedReports = [];
-  for (const report of reports) {
-    detailedReports.push(await loadNutritionGrowthReport(report.id));
-  }
+  const detailedReports = await loadDetailedNutritionGrowthReports(reports);
 
   const rows = nutritionGrowthYearlyRows(detailedReports);
   const statusCounts = nutritionGrowthCountEntries(rows, item => item.entry.cgs_classification);
-  const centerCounts = nutritionGrowthCountEntries(rows, item => item.report.center_name);
-  const monthCounts = nutritionGrowthCountEntries(rows, item => monthKeyLabel(item.report.report_month))
+  const centerCounts = nutritionGrowthCountEntries(detailedReports, report => report.center_name);
+  const monthCounts = nutritionGrowthCountEntries(detailedReports, report => monthKeyLabel(report.report_month))
     .sort((left, right) => {
       const order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       return order.indexOf(left.label) - order.indexOf(right.label);
     });
+  const ageCounts = sortNutritionGrowthAgeCounts(nutritionGrowthCountEntries(rows, item => nutritionGrowthAgeBucket(item.entry.age_months)));
+  const weightChangeCounts = nutritionGrowthCountEntries(rows, item => nutritionGrowthChangeBucket(item.entry.weight_change_kg, "Weight"));
+  const heightChangeCounts = nutritionGrowthCountEntries(rows, item => nutritionGrowthChangeBucket(item.entry.height_change_cm, "Height"));
+  const averageWeightChange = nutritionGrowthAverage(rows, "weight_change_kg");
   const needsFollowUp = rows.filter(item => ["Severely Underweight", "Underweight"].includes(item.entry.cgs_classification)).length;
-  const normalCount = rows.filter(item => item.entry.cgs_classification === "Normal").length;
-  const printWindow = window.open("", "_blank", "width=1200,height=820");
-  if (!printWindow) {
-    showToast("Allow popups to print yearly summaries.");
-    return;
-  }
+  const isAllCenters = !centerId;
+  const chartMarkup = [
+    printBarChart("CGS Classification", statusCounts, rows.length),
+    isAllCenters ? printBarChart("Reports by Center", centerCounts, detailedReports.length) : "",
+    isAllCenters ? printBarChart("Reports per Month", monthCounts, detailedReports.length) : "",
+    printBarChart("Age Distribution (Years)", ageCounts, rows.length),
+    printBarChart("Weight Change", weightChangeCounts, rows.length),
+    printBarChart("Height Change", heightChangeCounts, rows.length)
+  ].filter(Boolean).join("");
+  const yearlyTableMarkup = printNutritionGrowthYearlyPivotTable(rows, { includeCenter: isAllCenters });
 
   const logoSrc = `${window.location.origin}/assets/paofi-logo.png`;
-  printWindow.document.write(`
+  const documentHtml = `
     <!doctype html>
     <html>
       <head>
         <title>Nutrition Growth Monitoring ${escapeHtml(year)} Summary</title>
         <style>
-          @page { size: letter landscape; margin: 8mm; }
+          @page { size: 13in 8.5in; margin: 7mm; }
           * { box-sizing: border-box; }
-          body { margin: 0; color: #1d2520; font-family: "Segoe UI", Arial, sans-serif; font-size: 8.2px; }
+          body { margin: 0; color: #1d2520; font-family: "Segoe UI", Arial, sans-serif; font-size: 7.8px; }
           button { margin: 10px; border: 1px solid #bdd3c6; border-radius: 7px; background: #ffffff; padding: 8px 12px; color: #155b3c; font-weight: 700; }
-          .sheet { width: 11in; min-height: 8.5in; margin: 0 auto; padding: 0.2in; background: #ffffff; }
+          .sheet { width: 13in; min-height: 0; margin: 0 auto; padding: 0.16in; background: #ffffff; }
           .header { display: grid; grid-template-columns: 48px minmax(0, 1fr) 2.1in; gap: 10px; align-items: center; border-bottom: 2px solid #1f7a4f; padding-bottom: 7px; }
           .header img { width: 44px; height: 44px; object-fit: contain; }
           h1, h2, h3, p { margin: 0; }
@@ -4300,7 +5400,7 @@ async function printNutritionGrowthYearlySummary() {
           .kpi { border: 1px solid #cddbd2; border-radius: 6px; padding: 6px; background: #f6faf8; }
           .kpi span { display: block; color: #5b6861; font-size: 6.8px; text-transform: uppercase; font-weight: 800; }
           .kpi strong { color: #155b3c; font-size: 13px; }
-          .charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 8px; }
+          .charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 7px; }
           .chart-card { border: 1px solid #cddbd2; border-radius: 7px; padding: 7px; break-inside: avoid; }
           .chart-card h3 { color: #143d33; font-size: 8px; margin-bottom: 6px; text-transform: uppercase; }
           .chart-row { display: grid; grid-template-columns: 1fr 1.8fr 24px; gap: 5px; align-items: center; margin-bottom: 4px; }
@@ -4312,6 +5412,14 @@ async function printNutritionGrowthYearlySummary() {
           th, td { border: 1px solid #cbd8d0; padding: 2.5px 3px; vertical-align: top; overflow-wrap: anywhere; }
           th { background: #eaf6ef; color: #143d33; font-size: 6.4px; text-transform: uppercase; }
           td { font-size: 6.6px; }
+          .yearly-pivot th, .yearly-pivot td { padding: 1.8px 2px; font-size: 5.5px; line-height: 1.18; text-align: center; }
+          .yearly-pivot .month-group { background: #dcefe5; color: #0f5f3e; font-size: 6px; }
+          .yearly-pivot .month-stat { background: #eef8f3; font-size: 4.8px; }
+          .yearly-pivot .child-center { width: 0.78in; text-align: left; }
+          .yearly-pivot .child-info { width: 0.68in; }
+          .yearly-pivot .child-name { width: 1.05in; text-align: left; }
+          .growth-muted { color: #89958f; font-style: italic; }
+          tfoot td { background: #f6faf8; font-weight: 700; }
           @media print { button { display: none; } .sheet { width: auto; min-height: auto; margin: 0; padding: 0; } }
         </style>
       </head>
@@ -4326,6 +5434,7 @@ async function printNutritionGrowthYearlySummary() {
             </div>
             <div class="meta">
               <p><strong>${escapeHtml(year)}</strong></p>
+              <p>${escapeHtml(scopeLabel)}</p>
               <p>${detailedReports.length} monthly report${detailedReports.length === 1 ? "" : "s"}</p>
               <p>${rows.length} raw child record${rows.length === 1 ? "" : "s"}</p>
             </div>
@@ -4334,38 +5443,18 @@ async function printNutritionGrowthYearlySummary() {
             <div class="kpi"><span>Monthly Reports</span><strong>${detailedReports.length}</strong></div>
             <div class="kpi"><span>Raw Records</span><strong>${rows.length}</strong></div>
             <div class="kpi"><span>Needs Follow-Up</span><strong>${needsFollowUp}</strong></div>
-            <div class="kpi"><span>Normal</span><strong>${normalCount}</strong></div>
+            <div class="kpi"><span>Avg Weight Change</span><strong>${escapeHtml(nutritionGrowthSignedValue(averageWeightChange, "kg"))}</strong></div>
           </section>
           <section class="charts">
-            ${printBarChart("CGS Classification", statusCounts, rows.length)}
-            ${printBarChart("Records by Center", centerCounts, rows.length)}
-            ${printBarChart("Records by Month", monthCounts, rows.length)}
+            ${chartMarkup}
           </section>
-          <table>
-            <thead>
-              <tr>
-                <th>Month</th>
-                <th>Submitted</th>
-                <th>Center</th>
-                <th>Beneficiary No.</th>
-                <th>Beneficiary</th>
-                <th>Gender</th>
-                <th>Age Months</th>
-                <th>Previous Record</th>
-                <th>Height</th>
-                <th>Weight</th>
-                <th>Height Change</th>
-                <th>Weight Change</th>
-                <th>CGS</th>
-              </tr>
-            </thead>
-            <tbody>${printNutritionGrowthYearlyTableRows(rows)}</tbody>
-          </table>
+          ${yearlyTableMarkup}
         </main>
       </body>
     </html>
-  `);
-  printWindow.document.close();
+  `;
+
+  showDocumentPrintPreview(`Growth Monitoring ${year} Summary`, documentHtml);
 }
 
 function printNutritionGrowthReport(report) {
@@ -4458,7 +5547,7 @@ function printNutritionGrowthReport(report) {
                     entry.previous_height_cm ? `Height: ${entry.previous_height_cm} cm` : "",
                     entry.previous_weight_kg ? `Weight: ${entry.previous_weight_kg} kg` : "",
                     entry.previous_cgs_classification ? `CGS: ${entry.previous_cgs_classification}` : ""
-                  ].filter(Boolean).join(" | ") || "No prior record")}</td>
+                  ].filter(Boolean).join(" | ") || "No Previous records")}</td>
                   <td>${escapeHtml(entry.height_cm || "")}</td>
                   <td>${escapeHtml(entry.weight_kg || "")}</td>
                   <td>${escapeHtml(entry.height_change_cm || "")}</td>
@@ -4491,12 +5580,12 @@ async function renderMonitoringPage(id = "") {
     { id: "monitoringNew", label: "New Report", icon: "plus", variant: "primary", onClick: () => navigate("monitoring", "new") }
   ]);
 
-  const payload = await api("/api/monitoring/reports?limit=500");
+  const payload = await api("/api/monitoring/reports?limit=100");
   const reports = payload.reports || [];
 
   elements.pageRoot.innerHTML = `
-    ${renderMonitoringOverview(reports)}
-    <section class="monitoring-page">
+    <div id="monitoringAnalyticsHost">${renderMonitoringOverview(reports)}</div>
+    <section class="monitoring-page flow-data-section">
       <div class="table-toolbar">
         <div class="search-band compact with-button">
           <span class="search-icon">${icon("search")}</span>
@@ -4514,8 +5603,11 @@ async function renderMonitoringPage(id = "") {
 
   async function loadReports() {
     const search = encodeURIComponent(document.getElementById("monitoringSearchInput").value.trim());
-    const reportPayload = await api(`/api/monitoring/reports?search=${search}&limit=500`);
-    renderMonitoringList(reportPayload.reports || []);
+    state.tablePages.monitoring = 1;
+    const reportPayload = await api(`/api/monitoring/reports?search=${search}&limit=100`);
+    const filteredReports = reportPayload.reports || [];
+    document.getElementById("monitoringAnalyticsHost").innerHTML = renderMonitoringOverview(filteredReports);
+    renderMonitoringList(filteredReports);
   }
 
   document.getElementById("monitoringSearchButton").addEventListener("click", () => loadReports().catch(error => showToast(error.message)));
@@ -4530,7 +5622,8 @@ async function renderMonitoringPage(id = "") {
 }
 
 function renderMonitoringList(reports) {
-  document.getElementById("monitoringCount").textContent = `${reports.length} shown`;
+  const pageInfo = pagedItems(reports, "monitoring");
+  document.getElementById("monitoringCount").textContent = pageCountText(pageInfo, "reports");
 
   if (!reports.length) {
     document.getElementById("monitoringListHost").innerHTML = emptyState("No monitoring reports yet.");
@@ -4553,7 +5646,7 @@ function renderMonitoringList(reports) {
           </tr>
         </thead>
         <tbody>
-          ${reports.map(report => `
+          ${pageInfo.items.map(report => `
             <tr>
               <td class="sticky-column">
                 <div class="table-actions">
@@ -4573,7 +5666,9 @@ function renderMonitoringList(reports) {
         </tbody>
       </table>
     </div>
+    ${renderPagination("monitoring", pageInfo)}
   `;
+  bindPagination(document.getElementById("monitoringListHost"), "monitoring", () => renderMonitoringList(reports));
   attachMonitoringReportHandlers(elements.pageRoot);
 }
 
@@ -5780,8 +6875,8 @@ async function renderDatabasePage() {
     { id: "databaseExport", label: "Export", icon: "export", onClick: () => exportData().catch(error => showToast(error.message)) }
   ]);
 
-  const exportPayload = await api("/api/export");
-  const allRecords = exportPayload.records || [];
+  const recordsPayload = await api("/api/records?limit=500&detail=table");
+  const allRecords = recordsPayload.records || [];
   setDatabaseFilterState(databaseFilterState());
 
   elements.pageRoot.innerHTML = `
@@ -5803,24 +6898,28 @@ async function renderDatabasePage() {
   function bindDatabaseFilterPanel(scope) {
     scope.querySelectorAll("[data-db-filter-search]").forEach(input => {
       input.addEventListener("input", () => {
+        state.tablePages.database = 1;
         setDatabaseFilterState({ search: input.value });
         applyFilters();
       });
     });
     scope.querySelectorAll("[data-db-filter-min-age]").forEach(input => {
       input.addEventListener("input", () => {
+        state.tablePages.database = 1;
         setDatabaseFilterState({ minAge: input.value });
         applyFilters();
       });
     });
     scope.querySelectorAll("[data-db-filter-max-age]").forEach(input => {
       input.addEventListener("input", () => {
+        state.tablePages.database = 1;
         setDatabaseFilterState({ maxAge: input.value });
         applyFilters();
       });
     });
     scope.querySelectorAll("[data-db-filter-field]").forEach(input => {
       input.addEventListener("change", () => {
+        state.tablePages.database = 1;
         setDatabaseFilterState({ fields: { [input.dataset.dbFilterField]: input.value } });
         applyFilters();
       });
@@ -5833,6 +6932,7 @@ async function renderDatabasePage() {
           maxAge: "",
           fields: {}
         };
+        state.tablePages.database = 1;
         applyFilters();
       });
     });
@@ -5892,7 +6992,8 @@ async function renderDatabasePage() {
 }
 
 function renderDatabaseTable(records) {
-  document.getElementById("databaseCount").textContent = `${records.length} shown`;
+  const pageInfo = pagedItems(records, "database");
+  document.getElementById("databaseCount").textContent = pageCountText(pageInfo, "records");
 
   if (!records.length) {
     document.getElementById("databaseTableHost").innerHTML = emptyState("No records found.");
@@ -5910,7 +7011,7 @@ function renderDatabaseTable(records) {
           </tr>
         </thead>
         <tbody>
-          ${records.map(record => `
+          ${pageInfo.items.map(record => `
             <tr>
               <td class="sticky-column">
                 <div class="table-actions">
@@ -5924,7 +7025,9 @@ function renderDatabaseTable(records) {
         </tbody>
       </table>
     </div>
+    ${renderPagination("database", pageInfo)}
   `;
+  bindPagination(document.getElementById("databaseTableHost"), "database", () => renderDatabaseTable(records));
   attachRecordOpenHandlers(elements.pageRoot);
 }
 
@@ -5934,15 +7037,17 @@ async function renderBinPage() {
     { id: "binRefresh", label: "Refresh", icon: "refresh", onClick: () => renderBinPage().catch(error => showToast(error.message)) }
   ]);
 
-  const payload = await api("/api/bin");
+  const payload = await api("/api/bin?limit=100");
+  const records = payload.records || [];
+  const pageInfo = pagedItems(records, "bin");
   elements.pageRoot.innerHTML = `
     <section class="tool-panel">
       <div class="panel-title-row">
         <h3>Deleted Records</h3>
-        <span>${payload.records.length} total</span>
+        <span>${pageCountText(pageInfo, "records")}</span>
       </div>
       <div class="bin-list-modern">
-        ${payload.records.length ? payload.records.map(record => `
+        ${records.length ? pageInfo.items.map(record => `
           <article class="bin-record">
             <div>
               <strong>${escapeHtml(record.display_name)}</strong>
@@ -5955,8 +7060,10 @@ async function renderBinPage() {
           </article>
         `).join("") : emptyState("Bin is empty.")}
       </div>
+      ${renderPagination("bin", pageInfo)}
     </section>
   `;
+  bindPagination(elements.pageRoot, "bin", () => renderBinPage().catch(error => showToast(error.message)));
 
   elements.pageRoot.querySelectorAll("[data-restore-id]").forEach(button => {
     button.addEventListener("click", async () => {
@@ -5969,6 +7076,54 @@ async function renderBinPage() {
         showToast(error.message);
       }
     });
+  });
+}
+
+async function renderSystemPage() {
+  setTitle("System Tools");
+  setTopbarActions([
+    { id: "systemExportTopbar", label: "Export", icon: "export", variant: "primary", onClick: () => exportData().catch(error => showToast(error.message)) }
+  ]);
+
+  const stats = await refreshStats();
+  elements.pageRoot.innerHTML = `
+    <section class="system-tools-page">
+      <div class="tool-panel">
+        <div class="panel-title-row">
+          <h3>Data Export</h3>
+          <span>System backup file</span>
+        </div>
+        <p class="system-tool-copy">
+          Download a JSON export of the PAOFI Programs Database for backup or migration work.
+        </p>
+        <div class="system-tool-actions">
+          <button type="button" id="systemExportButton" class="action-button primary">
+            <span class="button-icon">${icon("export")}</span>
+            <span>Export Database</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="tool-panel">
+        <div class="panel-title-row">
+          <h3>Database Summary</h3>
+          <span>Current totals</span>
+        </div>
+        <div class="dashboard-summary-list">
+          ${dashboardSummaryRow("Livelihood records", stats.active, "Active application profiles", "database")}
+          ${dashboardSummaryRow("Record bin", stats.deleted, "Deleted records available for restore", "bin")}
+          ${dashboardSummaryRow("Nutrition profiles", stats.nutritionBeneficiaries || 0, "Supplemental feeding beneficiaries", "nutrition-profiles")}
+          ${dashboardSummaryRow("Growth reports", stats.nutritionGrowthReports || 0, "Nutrition monitoring reports", "nutrition-growth")}
+        </div>
+      </div>
+    </section>
+  `;
+
+  document.getElementById("systemExportButton").addEventListener("click", () => {
+    exportData().catch(error => showToast(error.message));
+  });
+  elements.pageRoot.querySelectorAll("[data-menu-route]").forEach(button => {
+    button.addEventListener("click", () => navigate(button.dataset.menuRoute));
   });
 }
 
@@ -6479,10 +7634,17 @@ async function initialize() {
   hydrateStaticIcons();
   elements.loginForm.addEventListener("submit", handleLogin);
   elements.logoutButton.addEventListener("click", logout);
+  document.addEventListener("click", event => {
+    const button = event.target.closest?.("[data-copy-chart]");
+    if (!button) return;
+    copyChartAsImage(button).catch(error => showToast(error.message));
+  });
 
   const restored = await restoreSession();
   if (!restored) {
-    elements.loginUsername.focus();
+    waitForDatabaseReady({ updateLogin: true }).finally(() => {
+      elements.loginUsername.focus();
+    });
     return;
   }
 
@@ -6515,8 +7677,11 @@ async function loadApplication() {
     history.replaceState(null, "", "#/menu");
   }
 
-  await refreshStats();
   await renderRoute();
+
+  if (!state.stats) {
+    refreshStats().catch(error => showToast(error.message));
+  }
 }
 
 initialize().catch(error => {

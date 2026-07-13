@@ -2,7 +2,7 @@ const http = require("node:http");
 const net = require("node:net");
 const fs = require("node:fs");
 const path = require("node:path");
-const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
+const { app, BrowserWindow, Menu, dialog, shell, ipcMain, clipboard, nativeImage } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { createDatabase } = require("./src/database-factory");
 const { createServer } = require("./server");
@@ -11,10 +11,12 @@ const APP_NAME = "PAOFI Database";
 const DATA_FOLDER_NAME = "PAOFI-Database-Data";
 const LEGACY_DATA_FOLDER_NAME = "PAOFI-LP-Database-Data";
 const PREFERRED_PORT = 3417;
+const MAX_CLIPBOARD_IMAGE_LENGTH = 24 * 1024 * 1024;
 
 let mainWindow = null;
 let backendDatabase = null;
 let backendServer = null;
+let backendConnectPromise = null;
 let appBaseUrl = "";
 
 function dataRoot() {
@@ -56,6 +58,22 @@ function migrateLegacyDataRoot() {
 
 function appRoot() {
   return app.getAppPath();
+}
+
+function setupClipboardBridge() {
+  ipcMain.handle("clipboard:write-png", (_event, dataUrl) => {
+    if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/png;base64,")) {
+      throw new Error("Only PNG chart images can be copied.");
+    }
+    if (dataUrl.length > MAX_CLIPBOARD_IMAGE_LENGTH) {
+      throw new Error("The chart image is too large to copy.");
+    }
+
+    const image = nativeImage.createFromDataURL(dataUrl);
+    if (image.isEmpty()) throw new Error("The chart image could not be prepared.");
+    clipboard.writeImage(image);
+    return true;
+  });
 }
 
 function canListen(port) {
@@ -114,6 +132,28 @@ async function waitForBackend(baseUrl) {
   throw lastError || new Error("Backend did not start.");
 }
 
+async function connectBackendDatabase() {
+  if (backendDatabase) return backendDatabase;
+  if (backendConnectPromise) return backendConnectPromise;
+
+  backendConnectPromise = createDatabase()
+    .then(async database => {
+      await database.warmup?.();
+      backendDatabase = database;
+      backendServer?.setDatabase?.(database);
+      return backendDatabase;
+    })
+    .catch(error => {
+      backendServer?.setDatabaseError?.(error);
+      throw error;
+    })
+    .finally(() => {
+      backendConnectPromise = null;
+    });
+
+  return backendConnectPromise;
+}
+
 async function startBackend() {
   const port = await availablePort(PREFERRED_PORT);
   const localDataRoot = migrateLegacyDataRoot();
@@ -123,8 +163,7 @@ async function startBackend() {
   process.env.NO_OPEN = "1";
   process.env.PORT = String(port);
 
-  backendDatabase = await createDatabase();
-  backendServer = createServer(backendDatabase);
+  backendServer = createServer(null, null, connectBackendDatabase);
 
   await new Promise((resolve, reject) => {
     backendServer.once("error", reject);
@@ -135,6 +174,9 @@ async function startBackend() {
   });
 
   await waitForBackend(appBaseUrl);
+  connectBackendDatabase().catch(error => {
+    console.error(error?.stack || error?.message || error);
+  });
 }
 
 function createWindow() {
@@ -150,6 +192,7 @@ function createWindow() {
     autoHideMenuBar: true,
     icon: path.join(appRoot(), "public", "assets", "paofi-logo.png"),
     webPreferences: {
+      preload: path.join(appRoot(), "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -258,6 +301,7 @@ const singleInstanceLock = app.requestSingleInstanceLock();
 if (!singleInstanceLock) {
   app.quit();
 } else {
+  setupClipboardBridge();
   app.on("second-instance", () => {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();

@@ -26,6 +26,44 @@ const {
 
 const DEFAULT_SUPERADMIN_USERNAME = process.env.LPDB_SUPERADMIN_USERNAME || "superadmin";
 const DEFAULT_SUPERADMIN_PASSWORD = process.env.LPDB_SUPERADMIN_PASSWORD || "ChangeMe123!";
+const TURSO_SAFE_RETRY_ATTEMPTS = 3;
+const FAMILY_FIELDS = [
+  "list_a18",
+  "list_c18",
+  "list_d18",
+  "list_f18",
+  "list_h18",
+  "list_j18",
+  "list_k18",
+  "list_m18"
+];
+
+function clampLimit(limit, fallback = 50, max = 500) {
+  return Math.min(Math.max(Number(limit) || fallback, 1), max);
+}
+
+function clampOffset(offset) {
+  return Math.max(Number(offset) || 0, 0);
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isTransientCloudError(error) {
+  const message = [
+    error?.message,
+    error?.cause?.message,
+    error?.cause?.code,
+    error?.code
+  ].filter(Boolean).join(" ");
+
+  return /fetch failed|timeout|timed out|econnreset|econnrefused|socket|network|terminated|und_err/i.test(message);
+}
+
+function isRetryableSql(sql) {
+  return /^(select|pragma|create)\b/i.test(String(sql || "").trim());
+}
 
 function plainRow(row) {
   if (!row) return null;
@@ -86,8 +124,10 @@ function formatSignedMeasurement(value) {
 
 function measurementChange(current, previous) {
   const currentNumber = parseMeasurementNumber(current);
+  if (currentNumber === null) return "";
+  if (!String(previous ?? "").trim()) return "0";
   const previousNumber = parseMeasurementNumber(previous);
-  if (currentNumber === null || previousNumber === null) return "";
+  if (previousNumber === null) return "0";
   return formatSignedMeasurement(currentNumber - previousNumber);
 }
 
@@ -135,7 +175,43 @@ class TursoBeneficiaryDatabase {
   }
 
   async execute(sql, args = []) {
-    return this.client.execute({ sql, args });
+    const canRetry = isRetryableSql(sql);
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= TURSO_SAFE_RETRY_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.client.execute({ sql, args });
+      } catch (error) {
+        lastError = error;
+        if (!canRetry || !isTransientCloudError(error) || attempt === TURSO_SAFE_RETRY_ATTEMPTS) {
+          throw error;
+        }
+        await wait(350 * attempt);
+      }
+    }
+
+    throw lastError;
+  }
+
+  async executeBatch(statements, mode = "write", canRetry = false) {
+    const batchStatements = statements.map(statement => (
+      typeof statement === "string" ? { sql: statement, args: [] } : statement
+    ));
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= TURSO_SAFE_RETRY_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.client.batch(batchStatements, mode);
+      } catch (error) {
+        lastError = error;
+        if (!canRetry || !isTransientCloudError(error) || attempt === TURSO_SAFE_RETRY_ATTEMPTS) {
+          throw error;
+        }
+        await wait(350 * attempt);
+      }
+    }
+
+    throw lastError;
   }
 
   async init() {
@@ -357,12 +433,11 @@ class TursoBeneficiaryDatabase {
           updated_at TEXT NOT NULL
         )
       `,
-      "CREATE INDEX IF NOT EXISTS idx_app_users_username ON app_users(username)"
+      "CREATE INDEX IF NOT EXISTS idx_app_users_username ON app_users(username)",
+      "CREATE INDEX IF NOT EXISTS idx_app_users_username_lower ON app_users(lower(username))"
     ];
 
-    for (const sql of statements) {
-      await this.execute(sql);
-    }
+    await this.executeBatch(statements, "write", true);
 
     await this.ensureBeneficiaryColumns();
     await this.backfillCurrentGroup();
@@ -419,21 +494,28 @@ class TursoBeneficiaryDatabase {
     }
   }
 
+  async warmup() {
+    await this.execute("SELECT id FROM app_users WHERE lower(username) = lower(?) LIMIT 1", ["__warmup__"]);
+  }
+
   async stats() {
-    const active = await this.execute("SELECT COUNT(*) AS count FROM beneficiaries");
-    const deleted = await this.execute("SELECT COUNT(*) AS count FROM deleted_records");
-    const monitoringReports = await this.execute("SELECT COUNT(*) AS count FROM monitoring_reports");
-    const nutritionCenters = await this.execute("SELECT COUNT(*) AS count FROM nutrition_centers");
-    const nutritionBeneficiaries = await this.execute("SELECT COUNT(*) AS count FROM nutrition_beneficiaries");
-    const nutritionGrowthReports = await this.execute("SELECT COUNT(*) AS count FROM nutrition_growth_reports");
+    const row = plainRow((await this.execute(`
+      SELECT
+        (SELECT COUNT(*) FROM beneficiaries) AS active,
+        (SELECT COUNT(*) FROM deleted_records) AS deleted,
+        (SELECT COUNT(*) FROM monitoring_reports) AS monitoringReports,
+        (SELECT COUNT(*) FROM nutrition_centers) AS nutritionCenters,
+        (SELECT COUNT(*) FROM nutrition_beneficiaries) AS nutritionBeneficiaries,
+        (SELECT COUNT(*) FROM nutrition_growth_reports) AS nutritionGrowthReports
+    `)).rows[0]) || {};
 
     return {
-      active: Number(active.rows[0].count || 0),
-      deleted: Number(deleted.rows[0].count || 0),
-      monitoringReports: Number(monitoringReports.rows[0].count || 0),
-      nutritionCenters: Number(nutritionCenters.rows[0].count || 0),
-      nutritionBeneficiaries: Number(nutritionBeneficiaries.rows[0].count || 0),
-      nutritionGrowthReports: Number(nutritionGrowthReports.rows[0].count || 0),
+      active: Number(row.active || 0),
+      deleted: Number(row.deleted || 0),
+      monitoringReports: Number(row.monitoringReports || 0),
+      nutritionCenters: Number(row.nutritionCenters || 0),
+      nutritionBeneficiaries: Number(row.nutritionBeneficiaries || 0),
+      nutritionGrowthReports: Number(row.nutritionGrowthReports || 0),
       databasePath: this.dbPath
     };
   }
@@ -555,17 +637,43 @@ class TursoBeneficiaryDatabase {
     return `${prefix}${String(highest + 1).padStart(3, "0")}`;
   }
 
-  async listRecords({ search = "", limit = 50, detail = "summary" } = {}) {
-    const max = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  async countRecords({ search = "" } = {}) {
+    if (!search.trim()) {
+      const row = plainRow((await this.execute("SELECT COUNT(*) AS count FROM beneficiaries")).rows[0]) || {};
+      return Number(row.count || 0);
+    }
+
+    const pattern = `%${search.trim().toLowerCase()}%`;
+    const row = plainRow((await this.execute(
+      `
+        SELECT COUNT(*) AS count
+        FROM beneficiaries
+        WHERE lower(control_no) LIKE ?
+          OR lower(last_name) LIKE ?
+          OR lower(first_name) LIKE ?
+          OR lower(middle_name) LIKE ?
+          OR lower(first_name || ' ' || middle_name || ' ' || last_name) LIKE ?
+          OR lower(last_name || ' ' || first_name || ' ' || middle_name) LIKE ?
+      `,
+      [pattern, pattern, pattern, pattern, pattern, pattern]
+    )).rows[0]) || {};
+    return Number(row.count || 0);
+  }
+
+  async listRecords({ search = "", limit = 50, offset = 0, detail = "summary" } = {}) {
+    const max = clampLimit(limit, 50, 500);
+    const skip = clampOffset(offset);
     const selectedFields = detail === "full"
       ? ["id", ...FIELD_NAMES, "created_at", "updated_at"]
-      : SUMMARY_FIELDS;
+      : detail === "table"
+        ? ["id", ...FIELD_NAMES.filter(fieldName => fieldName !== "picture_data" && !FAMILY_FIELDS.includes(fieldName)), "created_at", "updated_at"]
+        : SUMMARY_FIELDS;
     const columns = selectedFields.map(quoted).join(", ");
 
     if (!search.trim()) {
       return rows(await this.execute(
-        `SELECT ${columns} FROM beneficiaries ORDER BY updated_at DESC, id DESC LIMIT ?`,
-        [max]
+        `SELECT ${columns} FROM beneficiaries ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`,
+        [max, skip]
       ));
     }
 
@@ -581,9 +689,9 @@ class TursoBeneficiaryDatabase {
           OR lower(first_name || ' ' || middle_name || ' ' || last_name) LIKE ?
           OR lower(last_name || ' ' || first_name || ' ' || middle_name) LIKE ?
         ORDER BY updated_at DESC, id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `,
-      [pattern, pattern, pattern, pattern, pattern, pattern, max]
+      [pattern, pattern, pattern, pattern, pattern, pattern, max, skip]
     ));
   }
 
@@ -684,12 +792,21 @@ class TursoBeneficiaryDatabase {
     return record;
   }
 
-  async listDeletedRecords() {
+  async countDeletedRecords() {
+    const row = plainRow((await this.execute("SELECT COUNT(*) AS count FROM deleted_records")).rows[0]) || {};
+    return Number(row.count || 0);
+  }
+
+  async listDeletedRecords({ limit = 100, offset = 0 } = {}) {
+    const max = clampLimit(limit, 100, 500);
+    const skip = clampOffset(offset);
+
     return rows(await this.execute(`
       SELECT id, original_id, control_no, display_name, deleted_at
       FROM deleted_records
       ORDER BY deleted_at DESC, id DESC
-    `));
+      LIMIT ? OFFSET ?
+    `, [max, skip]));
   }
 
   async restoreDeletedRecord(id) {
@@ -730,8 +847,7 @@ class TursoBeneficiaryDatabase {
     return this.getRecordByControlNo(restored.control_no);
   }
 
-  async listMonitoringReports({ search = "", beneficiaryId = "", limit = 200 } = {}) {
-    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  monitoringReportFilters({ search = "", beneficiaryId = "" } = {}) {
     const conditions = [];
     const args = [];
 
@@ -752,16 +868,32 @@ class TursoBeneficiaryDatabase {
       args.push(pattern, pattern, pattern, pattern, pattern);
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    return {
+      where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+      args
+    };
+  }
+
+  async countMonitoringReports(options = {}) {
+    const { where, args } = this.monitoringReportFilters(options);
+    const row = plainRow((await this.execute(`SELECT COUNT(*) AS count FROM monitoring_reports ${where}`, args)).rows[0]) || {};
+    return Number(row.count || 0);
+  }
+
+  async listMonitoringReports({ search = "", beneficiaryId = "", limit = 200, offset = 0 } = {}) {
+    const max = clampLimit(limit, 200, 500);
+    const skip = clampOffset(offset);
+    const { where, args } = this.monitoringReportFilters({ search, beneficiaryId });
+
     return rows(await this.execute(
       `
         SELECT *
         FROM monitoring_reports
         ${where}
         ORDER BY report_month DESC, updated_at DESC, id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `,
-      [...args, max]
+      [...args, max, skip]
     ));
   }
 
@@ -1050,8 +1182,9 @@ class TursoBeneficiaryDatabase {
     `;
   }
 
-  async listNutritionCenters({ search = "", limit = 200 } = {}) {
-    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  async listNutritionCenters({ search = "", limit = 200, offset = 0 } = {}) {
+    const max = clampLimit(limit, 200, 500);
+    const skip = clampOffset(offset);
     const pattern = `%${search.trim().toLowerCase()}%`;
     const where = search.trim()
       ? `WHERE lower(c.center_name) LIKE ?
@@ -1067,9 +1200,9 @@ class TursoBeneficiaryDatabase {
         ${where}
         GROUP BY c.id
         ORDER BY c.center_name, c.id
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `,
-      [...args, max]
+      [...args, max, skip]
     ));
   }
 
@@ -1190,8 +1323,39 @@ class TursoBeneficiaryDatabase {
     `;
   }
 
-  async listNutritionBeneficiaries({ search = "", centerId = "", limit = 200 } = {}) {
-    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  nutritionBeneficiaryListSelect() {
+    return `
+      SELECT b.id,
+             b.center_id,
+             b.beneficiary_no,
+             b.feeding_center,
+             b.child_last_name,
+             b.child_first_name,
+             b.child_middle_name,
+             b.birth_date,
+             b.age,
+             b.gender,
+             b.school,
+             b.grade_level,
+             b.mother_name,
+             b.father_name,
+             b.contact_no,
+             b.profile_status,
+             b.remarks,
+             b.current_update_date,
+             b.current_age_months,
+             b.current_weight_kg,
+             b.current_height_cm,
+             b.current_nutrition_status,
+             b.updated_at,
+             c.center_name AS center_name,
+             c.location AS center_location
+      FROM nutrition_beneficiaries b
+      LEFT JOIN nutrition_centers c ON c.id = b.center_id
+    `;
+  }
+
+  nutritionBeneficiaryFilters({ search = "", centerId = "" } = {}) {
     const conditions = [];
     const args = [];
 
@@ -1224,15 +1388,39 @@ class TursoBeneficiaryDatabase {
       );
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    return {
+      where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+      args
+    };
+  }
+
+  async countNutritionBeneficiaries(options = {}) {
+    const { where, args } = this.nutritionBeneficiaryFilters(options);
+    const row = plainRow((await this.execute(
+      `
+        SELECT COUNT(*) AS count
+        FROM nutrition_beneficiaries b
+        LEFT JOIN nutrition_centers c ON c.id = b.center_id
+        ${where}
+      `,
+      args
+    )).rows[0]) || {};
+    return Number(row.count || 0);
+  }
+
+  async listNutritionBeneficiaries({ search = "", centerId = "", limit = 200, offset = 0 } = {}) {
+    const max = clampLimit(limit, 200, 500);
+    const skip = clampOffset(offset);
+    const { where, args } = this.nutritionBeneficiaryFilters({ search, centerId });
+
     return rows(await this.execute(
       `
-        ${this.nutritionBeneficiarySelect()}
+        ${this.nutritionBeneficiaryListSelect()}
         ${where}
         ORDER BY b.updated_at DESC, b.id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `,
-      [...args, max]
+      [...args, max, skip]
     ));
   }
 
@@ -1438,8 +1626,7 @@ class TursoBeneficiaryDatabase {
     `;
   }
 
-  async listNutritionGrowthReports({ search = "", centerId = "", limit = 200 } = {}) {
-    const max = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  nutritionGrowthReportFilters({ search = "", centerId = "" } = {}) {
     const conditions = [];
     const args = [];
 
@@ -1458,16 +1645,32 @@ class TursoBeneficiaryDatabase {
       args.push(pattern, pattern, pattern);
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    return {
+      where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+      args
+    };
+  }
+
+  async countNutritionGrowthReports(options = {}) {
+    const { where, args } = this.nutritionGrowthReportFilters(options);
+    const row = plainRow((await this.execute(`SELECT COUNT(*) AS count FROM nutrition_growth_reports r ${where}`, args)).rows[0]) || {};
+    return Number(row.count || 0);
+  }
+
+  async listNutritionGrowthReports({ search = "", centerId = "", limit = 200, offset = 0 } = {}) {
+    const max = clampLimit(limit, 200, 500);
+    const skip = clampOffset(offset);
+    const { where, args } = this.nutritionGrowthReportFilters({ search, centerId });
+
     return rows(await this.execute(
       `
         ${this.nutritionGrowthReportSelect()}
         ${where}
         GROUP BY r.id
         ORDER BY r.report_month DESC, r.updated_at DESC, r.id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `,
-      [...args, max]
+      [...args, max, skip]
     ));
   }
 
@@ -1549,10 +1752,10 @@ class TursoBeneficiaryDatabase {
     }
 
     return {
-      previous_record_date: beneficiary.admission_date || "",
-      previous_height_cm: beneficiary.initial_height_cm || "",
-      previous_weight_kg: beneficiary.initial_weight_kg || "",
-      previous_cgs_classification: beneficiary.initial_nutrition_status || ""
+      previous_record_date: "",
+      previous_height_cm: "",
+      previous_weight_kg: "",
+      previous_cgs_classification: ""
     };
   }
 
@@ -1795,6 +1998,56 @@ class TursoBeneficiaryDatabase {
         beneficiaries: beneficiaries.length,
         activeBeneficiaries: activeBeneficiaries.length,
         growthReports: growthReports.length
+      }
+    };
+  }
+
+  async nutritionDashboardSummary() {
+    const stats = plainRow((await this.execute(`
+      SELECT
+        (SELECT COUNT(*) FROM nutrition_centers) AS centers,
+        (SELECT COUNT(*) FROM nutrition_centers WHERE lower(COALESCE(status, '')) = 'active') AS activeCenters,
+        (SELECT COUNT(*) FROM nutrition_beneficiaries) AS beneficiaries,
+        (
+          SELECT COUNT(*)
+          FROM nutrition_beneficiaries
+          WHERE lower(COALESCE(remarks, '')) = 'active'
+             OR lower(COALESCE(profile_status, '')) = 'active'
+        ) AS activeBeneficiaries,
+        (SELECT COUNT(*) FROM nutrition_growth_reports) AS growthReports
+    `)).rows[0]) || {};
+
+    const centerCounts = rows(await this.execute(`
+      SELECT
+        COALESCE(NULLIF(trim(b.feeding_center), ''), NULLIF(trim(c.center_name), ''), 'No Center') AS label,
+        COUNT(*) AS count
+      FROM nutrition_beneficiaries b
+      LEFT JOIN nutrition_centers c ON c.id = b.center_id
+      GROUP BY label
+      ORDER BY count DESC, label
+      LIMIT 8
+    `));
+
+    const nutritionStatusCounts = rows(await this.execute(`
+      SELECT COALESCE(NULLIF(trim(current_nutrition_status), ''), 'Not Specified') AS label,
+             COUNT(*) AS count
+      FROM nutrition_beneficiaries
+      GROUP BY label
+      ORDER BY count DESC, label
+      LIMIT 8
+    `));
+
+    return {
+      stats: {
+        centers: Number(stats.centers || 0),
+        activeCenters: Number(stats.activeCenters || 0),
+        beneficiaries: Number(stats.beneficiaries || 0),
+        activeBeneficiaries: Number(stats.activeBeneficiaries || 0),
+        growthReports: Number(stats.growthReports || 0)
+      },
+      analytics: {
+        centerCounts,
+        nutritionStatusCounts
       }
     };
   }
