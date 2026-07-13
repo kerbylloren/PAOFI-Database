@@ -14,7 +14,7 @@ Download the Windows installer from the
 
 ## Current Release
 
-Latest version: `1.2.0`
+Latest version: `1.3.0`
 
 The release includes:
 
@@ -56,6 +56,10 @@ The application will use major version lines to track PAOFI program modules:
 - Nutrition profile snapshots derived from the latest growth monitoring report
 - Printable nutrition beneficiary profiles
 - Printable monthly and yearly growth monitoring summaries
+- Monthly feeding-center financial reports and disbursement entries
+- Annual feeding-center and program-wide financial summaries
+- Year-specific budget setup, proposal references, and variance analytics
+- Printable monthly and yearly financial reports
 - JSON export for backup
 
 ## Cloud Database

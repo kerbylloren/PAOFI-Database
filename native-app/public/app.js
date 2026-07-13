@@ -240,6 +240,19 @@ const NUTRITION_CENTER_FIELDS = [
   { name: "capacity", label: "Capacity", input: "number" },
   { name: "notes", label: "Notes", input: "textarea", wide: true }
 ];
+const NUTRITION_FINANCIAL_CATEGORIES = [
+  { key: "viands", label: "Viands" },
+  { key: "milk", label: "Milk" },
+  { key: "rice", label: "Rice" },
+  { key: "gas", label: "Gas" },
+  { key: "mineral_water", label: "Mineral Water" },
+  { key: "utilities", label: "Utilities" },
+  { key: "others", label: "Others / Supplies" }
+];
+const NUTRITION_FINANCIAL_SIGNATORIES = {
+  administrativeOfficer: { name: "Nikki Lou Arcilla", title: "Administrative Officer" },
+  president: { name: "Fr. John S. Castillo, FDP", title: "President/CEO" }
+};
 const NUTRITION_HOUSEHOLD_FIELDS = [
   { name: "member_name", label: "Household Member" },
   { name: "age", label: "Age" },
@@ -375,8 +388,8 @@ const COMING_SOON_PAGES = {
   },
   "nutrition-budget": {
     program: "Nutrition Program - Supplemental Feeding",
-    title: "Budget vs Actual",
-    description: "Budget planning, actual expenses, and variance monitoring."
+    title: "Financial",
+    description: "Monthly financial reports, center summaries, program-wide actuals, and budget planning."
   },
   "scholarship-scholars": {
     program: "Scholarship Program",
@@ -446,6 +459,7 @@ const state = {
   currentNutritionBeneficiary: null,
   currentNutritionCenter: null,
   currentNutritionGrowthReport: null,
+  currentNutritionFinancialReport: null,
   nutritionCgsReference: null,
   monitoringBeneficiaries: [],
   dashboardAnalyticsLoaded: false,
@@ -463,6 +477,7 @@ const state = {
     monitoring: 1,
     nutritionProfiles: 1,
     nutritionGrowth: 1,
+    nutritionFinancial: 1,
     bin: 1
   },
   authToken: localStorage.getItem("lpdbAuthToken") || "",
@@ -1021,6 +1036,7 @@ async function renderRoute() {
     else if (parsed.route === "nutrition-profiles") await renderNutritionProfilesPage(parsed.id);
     else if (parsed.route === "nutrition-centers") await renderNutritionCentersPage(parsed.id);
     else if (parsed.route === "nutrition-growth") await renderNutritionGrowthPage(parsed.id);
+    else if (parsed.route === "nutrition-budget") await renderNutritionFinancialPage(parsed.id);
     else if (parsed.route === "bin") await renderBinPage();
     else if (parsed.route === "system") await renderSystemPage();
     else if (parsed.route === "accounts") await renderAccountsPage();
@@ -5562,6 +5578,654 @@ function printNutritionGrowthReport(report) {
     </html>
   `);
   printWindow.document.close();
+}
+
+function parseNutritionFinancialRouteId(id = "") {
+  if (!id) return { mode: "list", id: "" };
+  if (id === "new") return { mode: "new", id: "" };
+  if (id === "budgets") return { mode: "budgets", id: "" };
+  if (id.startsWith("edit-")) return { mode: "edit", id: id.slice(5) };
+  return { mode: "edit", id };
+}
+
+function blankNutritionFinancialEntry() {
+  return {
+    entry_date: "",
+    rep_no: "",
+    particulars: "",
+    cv_no: "",
+    viands: 0,
+    milk: 0,
+    rice: 0,
+    gas: 0,
+    mineral_water: 0,
+    utilities: 0,
+    others: 0
+  };
+}
+
+function blankNutritionFinancialReport() {
+  return {
+    center_id: "",
+    center_name: "",
+    submitted_date: nutritionTodayDate(),
+    report_month: currentReportMonth(),
+    beginning_balance: 0,
+    cash_receipts: 0,
+    prepared_by: "",
+    prepared_title: "",
+    noted_by: "",
+    noted_title: "",
+    entries: Array.from({ length: 4 }, blankNutritionFinancialEntry)
+  };
+}
+
+function financialAmount(value) {
+  const number = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(number) ? number : 0;
+}
+
+function financialPlainAmount(value, zero = "-") {
+  const number = financialAmount(value);
+  if (!number && zero) return zero;
+  return number.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function financialCategoryLabel(key) {
+  return NUTRITION_FINANCIAL_CATEGORIES.find(category => category.key === key)?.label || key;
+}
+
+function nutritionFinancialCenter(summary, centerId) {
+  return (summary?.centers || []).find(center => Number(center.id) === Number(centerId)) || null;
+}
+
+async function loadNutritionFinancialSummary(year) {
+  return api(`/api/nutrition/financial/summary?year=${encodeURIComponent(year)}`);
+}
+
+function renderNutritionFinancialAnalytics(summary, centerId = "") {
+  const selectedCenter = centerId ? nutritionFinancialCenter(summary, centerId) : null;
+  const centers = selectedCenter ? [selectedCenter] : (summary.centers || []);
+  const reportCount = centers.reduce((sum, center) => sum + Number(center.reported_months || 0), 0);
+  const activeKids = centers.reduce((sum, center) => sum + Number(center.active_kids || 0), 0);
+  const capacity = centers.reduce((sum, center) => sum + Number(center.capacity || 0), 0);
+  const actualByCategory = NUTRITION_FINANCIAL_CATEGORIES.map(category => ({
+    label: category.label,
+    count: centers.reduce((sum, center) => sum + Number(center.category_metrics?.[category.key]?.actual_total || 0), 0)
+  }));
+  const budgetByCategory = NUTRITION_FINANCIAL_CATEGORIES.map(category => ({
+    label: category.label,
+    count: centers.reduce((sum, center) => sum + Number(center.category_metrics?.[category.key]?.budget_monthly || 0), 0)
+  }));
+  const actualTotal = actualByCategory.reduce((sum, entry) => sum + entry.count, 0);
+  const budgetMonthly = budgetByCategory.reduce((sum, entry) => sum + entry.count, 0);
+  const actualMonthly = centers.reduce((sum, center) => {
+    return sum + NUTRITION_FINANCIAL_CATEGORIES.reduce((categorySum, category) => (
+      categorySum + Number(center.category_metrics?.[category.key]?.actual_monthly_average || 0)
+    ), 0);
+  }, 0);
+  const variance = actualMonthly - budgetMonthly;
+
+  return `
+    <section class="database-analytics nutrition-analytics flow-analytics nutrition-flow-analytics financial-flow-analytics">
+      <div class="analytics-title-row">
+        <div>
+          <span class="analytics-eyebrow">Nutrition Program Financial</span>
+          <h3>${escapeHtml(selectedCenter?.center_name || "Program Financial Overview")}</h3>
+        </div>
+        <span class="analytics-note">${escapeHtml(summary.year)} | ${reportCount} monthly report${reportCount === 1 ? "" : "s"}</span>
+      </div>
+      <div class="analytics-kpi-grid analytics-signal-strip four-signals">
+        ${renderAnalyticsKpi("Actual Expenses", formatMoney(actualTotal), "Year-to-date reports", "green")}
+        ${renderAnalyticsKpi("Monthly Budget", formatMoney(budgetMonthly), "Current center plans", "blue")}
+        ${renderAnalyticsKpi("Monthly Variance", formatMoney(variance), variance > 0 ? "Above budget" : "Within budget", variance > 0 ? "amber" : "green")}
+        ${renderAnalyticsKpi("Children", `${activeKids} / ${capacity}`, "Active / center capacity", "violet")}
+      </div>
+      <div class="analytics-preview-grid flow-chart-grid">
+        ${renderAnalyticsCard("Actual Spending by Category", "Saved monthly reports", renderBarList(actualByCategory, Math.max(actualTotal, 1), 7))}
+        ${renderAnalyticsCard("Monthly Budget by Category", "Current annual setup", renderBarList(budgetByCategory, Math.max(budgetMonthly, 1), 7))}
+      </div>
+    </section>
+  `;
+}
+
+async function renderNutritionFinancialPage(id = "") {
+  const parsed = parseNutritionFinancialRouteId(id);
+  if (parsed.mode === "budgets") {
+    await renderNutritionFinancialBudgetPage();
+    return;
+  }
+  if (parsed.mode !== "list") {
+    await renderNutritionFinancialEditorPage(parsed.id, parsed.mode === "new");
+    return;
+  }
+
+  const year = new Date().getFullYear();
+  const [centers, reportsPayload, summary] = await Promise.all([
+    loadNutritionCenters(),
+    api(`/api/nutrition/financial/reports?year=${year}&limit=500`),
+    loadNutritionFinancialSummary(year)
+  ]);
+
+  setTitle("Nutrition Financial");
+  setTopbarActions([
+    { id: "nutritionFinancialNew", label: "New Monthly Report", icon: "plus", variant: "primary", onClick: () => navigate("nutrition-budget", "new") },
+    { id: "nutritionFinancialBudgets", label: "Budget Setup", icon: "finance", onClick: () => navigate("nutrition-budget", "budgets") }
+  ]);
+
+  elements.pageRoot.innerHTML = `
+    <section class="financial-command-band">
+      <div>
+        <p class="eyebrow">Summary period</p>
+        <h2>Financial reports and budget comparisons</h2>
+      </div>
+      <label>
+        <span>Year</span>
+        <input id="nutritionFinancialYear" type="number" min="2000" max="2100" value="${year}">
+      </label>
+      <label>
+        <span>Feeding Center</span>
+        <select id="nutritionFinancialCenterFilter">
+          <option value="">All Centers</option>
+          ${centers.map(center => `<option value="${center.id}">${escapeHtml(center.center_name)}</option>`).join("")}
+        </select>
+      </label>
+      <div class="financial-command-actions">
+        <button id="nutritionFinancialCenterSummary" type="button" class="action-button">${icon("print")}<span>Center Yearly</span></button>
+        <button id="nutritionFinancialProgramSummary" type="button" class="action-button">${icon("print")}<span>Program Yearly</span></button>
+      </div>
+    </section>
+    <div id="nutritionFinancialAnalyticsHost">${renderNutritionFinancialAnalytics(summary)}</div>
+    <section class="database-page nutrition-page flow-data-section financial-data-section">
+      <div class="table-toolbar">
+        <div class="search-band compact with-button">
+          <span class="search-icon">${icon("search")}</span>
+          <input id="nutritionFinancialSearch" type="search" placeholder="Search center, month, or submission date">
+          <button id="nutritionFinancialSearchButton" type="button" class="action-button">${icon("search")}<span>Search</span></button>
+        </div>
+        <div class="table-toolbar-footer">
+          <div class="filter-summary"><span>Monthly financial summaries per feeding center</span></div>
+          <span id="nutritionFinancialCount" class="table-count"></span>
+        </div>
+      </div>
+      <div id="nutritionFinancialTableHost" class="database-table-host"></div>
+    </section>
+  `;
+
+  async function refreshFinancialWorkspace() {
+    const selectedYear = Number(document.getElementById("nutritionFinancialYear").value) || year;
+    const centerId = document.getElementById("nutritionFinancialCenterFilter").value;
+    const search = document.getElementById("nutritionFinancialSearch").value.trim();
+    const query = new URLSearchParams({ year: String(selectedYear), limit: "500" });
+    if (centerId) query.set("centerId", centerId);
+    if (search) query.set("search", search);
+    const [payload, nextSummary] = await Promise.all([
+      api(`/api/nutrition/financial/reports?${query.toString()}`),
+      loadNutritionFinancialSummary(selectedYear)
+    ]);
+    document.getElementById("nutritionFinancialAnalyticsHost").innerHTML = renderNutritionFinancialAnalytics(nextSummary, centerId);
+    renderNutritionFinancialTable(payload.reports || [], payload.total || 0);
+  }
+
+  document.getElementById("nutritionFinancialSearchButton").addEventListener("click", () => refreshFinancialWorkspace().catch(error => showToast(error.message)));
+  document.getElementById("nutritionFinancialSearch").addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      refreshFinancialWorkspace().catch(error => showToast(error.message));
+    }
+  });
+  document.getElementById("nutritionFinancialYear").addEventListener("change", () => refreshFinancialWorkspace().catch(error => showToast(error.message)));
+  document.getElementById("nutritionFinancialCenterFilter").addEventListener("change", () => refreshFinancialWorkspace().catch(error => showToast(error.message)));
+  document.getElementById("nutritionFinancialCenterSummary").addEventListener("click", () => {
+    const centerId = document.getElementById("nutritionFinancialCenterFilter").value;
+    if (!centerId) {
+      showToast("Choose a feeding center for the center yearly summary.");
+      return;
+    }
+    printNutritionFinancialCenterYearly(centerId, document.getElementById("nutritionFinancialYear").value).catch(error => showToast(error.message));
+  });
+  document.getElementById("nutritionFinancialProgramSummary").addEventListener("click", () => {
+    printNutritionFinancialProgramYearly(document.getElementById("nutritionFinancialYear").value).catch(error => showToast(error.message));
+  });
+
+  renderNutritionFinancialTable(reportsPayload.reports || [], reportsPayload.total || 0);
+}
+
+function renderNutritionFinancialTable(reports = [], total = reports.length) {
+  const count = document.getElementById("nutritionFinancialCount");
+  if (count) count.textContent = `${total} report${total === 1 ? "" : "s"}`;
+  const host = document.getElementById("nutritionFinancialTableHost");
+  if (!host) return;
+  if (!reports.length) {
+    host.innerHTML = emptyState("No financial reports match this period and center.");
+    return;
+  }
+  const pageInfo = pagedItems(reports, "nutritionFinancial");
+  host.innerHTML = `
+    <div class="data-table-scroll">
+      <table class="data-table financial-report-table">
+        <thead><tr><th class="sticky-column">Actions</th><th>Month</th><th>Feeding Center</th><th>Submitted</th><th>Lines</th><th>Cash Receipts</th><th>Expenses</th><th>Balance</th></tr></thead>
+        <tbody>${pageInfo.items.map(report => `
+          <tr>
+            <td class="sticky-column"><div class="table-actions">
+              <button type="button" class="icon-button" title="Edit" data-financial-edit-id="${report.id}">${icon("edit")}</button>
+              <button type="button" class="icon-button" title="Print" data-financial-print-id="${report.id}">${icon("print")}</button>
+            </div></td>
+            <td>${escapeHtml(reportMonthLabel(report.report_month))}</td>
+            <td>${escapeHtml(report.center_name || "")}</td>
+            <td>${escapeHtml(report.submitted_date || "")}</td>
+            <td>${escapeHtml(report.line_count || 0)}</td>
+            <td>${escapeHtml(formatMoney(report.total_cash_receipts))}</td>
+            <td>${escapeHtml(formatMoney(report.total_disbursements))}</td>
+            <td class="${Number(report.balance) < 0 ? "financial-negative" : ""}">${escapeHtml(formatMoney(report.balance))}</td>
+          </tr>
+        `).join("")}</tbody>
+      </table>
+    </div>
+    ${renderPagination("nutritionFinancial", pageInfo)}
+  `;
+  bindPagination(host, "nutritionFinancial", () => renderNutritionFinancialTable(reports, total));
+  attachNutritionFinancialTableHandlers(host);
+}
+
+function attachNutritionFinancialTableHandlers(scope = document) {
+  scope.querySelectorAll("[data-financial-edit-id]").forEach(button => {
+    button.addEventListener("click", () => navigate("nutrition-budget", `edit-${button.dataset.financialEditId}`));
+  });
+  scope.querySelectorAll("[data-financial-print-id]").forEach(button => {
+    button.addEventListener("click", async () => {
+      try {
+        const payload = await api(`/api/nutrition/financial/reports/${button.dataset.financialPrintId}`);
+        printNutritionFinancialMonthly(payload.report);
+      } catch (error) {
+        showToast(error.message);
+      }
+    });
+  });
+}
+
+async function renderNutritionFinancialBudgetPage() {
+  const year = new Date().getFullYear();
+  const [centers, payload, summary] = await Promise.all([
+    loadNutritionCenters(),
+    api(`/api/nutrition/financial/budgets?year=${year}`),
+    loadNutritionFinancialSummary(year)
+  ]);
+  setTitle("Nutrition Financial Budget Setup");
+  setTopbarActions([
+    { id: "financialBudgetBack", label: "Financial", icon: "arrow", onClick: () => navigate("nutrition-budget") },
+    { id: "financialBudgetSave", label: "Save Budgets", icon: "save", variant: "primary", onClick: () => saveNutritionFinancialBudgets().catch(error => showToast(error.message)) }
+  ]);
+  elements.pageRoot.innerHTML = `
+    <section class="financial-budget-shell">
+      <header class="financial-page-heading">
+        <div><p class="eyebrow">Annual Budget Setup & Proposal</p><h2>Set the approved budget per child</h2><span>Actual spending is a reference only. The Program Officer sets the approved per-child limit for each operational year.</span></div>
+        <label><span>Budget Year</span><input id="financialBudgetYear" type="number" min="2000" max="2100" value="${year}"></label>
+      </header>
+      <div class="financial-budget-guidance">
+        <strong>How the limit works</strong>
+        <span>Approved monthly center allowance = approved budget per child x center capacity x feeding days. Category allocations help shape the proposal but do not replace the Program Officer's approved amount.</span>
+      </div>
+      <div id="financialBudgetTableHost">${renderNutritionFinancialBudgetTable(centers, payload.budgets || [], summary, year)}</div>
+    </section>
+  `;
+  document.getElementById("financialBudgetYear").addEventListener("change", async event => {
+    try {
+      const nextYear = Number(event.target.value) || year;
+      const [nextPayload, nextSummary] = await Promise.all([
+        api(`/api/nutrition/financial/budgets?year=${nextYear}`),
+        loadNutritionFinancialSummary(nextYear)
+      ]);
+      document.getElementById("financialBudgetTableHost").innerHTML = renderNutritionFinancialBudgetTable(centers, nextPayload.budgets || [], nextSummary, nextYear);
+      attachFinancialBudgetInputs();
+    } catch (error) {
+      showToast(error.message);
+    }
+  });
+  attachFinancialBudgetInputs();
+}
+
+function renderNutritionFinancialBudgetTable(centers, budgets, summary, year) {
+  const budgetMap = new Map(budgets.map(budget => [Number(budget.center_id), budget]));
+  const summaryMap = new Map((summary?.centers || []).map(center => [Number(center.id), center]));
+  return `
+    <div class="financial-budget-centers">
+      ${centers.map(center => {
+        const budget = budgetMap.get(Number(center.id)) || { feeding_days: 22, approved_budget_per_child: 0 };
+        const centerSummary = summaryMap.get(Number(center.id));
+        const actualPerChild = Number(centerSummary?.budget_metrics?.actual_per_child || 0);
+        const reportedMonths = Number(centerSummary?.reported_months || 0);
+        return `<article class="financial-budget-center" data-financial-budget-row data-center-id="${center.id}" data-center-name="${escapeHtml(center.center_name)}" data-capacity="${Number(center.capacity || 0)}" data-active-kids="${Number(center.active_beneficiary_count || 0)}" data-year="${year}">
+          <header class="financial-budget-center-heading">
+            <div><span>Feeding Center</span><h3>${escapeHtml(center.center_name)}</h3></div>
+            <span class="financial-budget-year-chip">${year} setup</span>
+          </header>
+          <div class="financial-budget-center-metrics">
+            <div><span>Active Children</span><strong>${Number(center.active_beneficiary_count || 0)}</strong></div>
+            <div><span>Center Capacity</span><strong>${Number(center.capacity || 0)}</strong></div>
+            <div class="financial-actual-reference"><span>Actual Cost / Active Child</span><strong>${reportedMonths ? formatMoney(actualPerChild) : "No reports yet"}</strong><small>${reportedMonths} month${reportedMonths === 1 ? "" : "s"} filed in ${year}</small></div>
+            <label><span>Feeding Days / Month</span><input type="number" min="1" step="1" data-budget-field="feeding_days" value="${Number(budget.feeding_days || 22)}"></label>
+            <label class="financial-approved-input"><span>Approved Budget / Child / Day</span><input type="number" min="0" step="0.01" data-budget-field="approved_budget_per_child" value="${financialAmount(budget.approved_budget_per_child) || ""}"></label>
+          </div>
+          <div class="financial-budget-proposal-grid">
+            <div class="financial-category-proposal">
+              <div class="financial-budget-subheading"><div><span>Proposal Detail</span><h4>Monthly category allocations</h4></div><small>Use actual per-child costs as a reference.</small></div>
+              <div class="data-table-scroll financial-budget-category-wrap">
+                <table class="family-table financial-budget-category-table">
+                  <thead><tr><th>Category</th><th>Actual / Active Child</th><th>Proposed Monthly Allocation</th></tr></thead>
+                  <tbody>${NUTRITION_FINANCIAL_CATEGORIES.map(category => `<tr><th>${escapeHtml(category.label)}</th><td>${reportedMonths ? formatMoney(centerSummary?.category_metrics?.[category.key]?.actual_per_child || 0) : "-"}</td><td><input type="number" min="0" step="0.01" data-budget-field="${category.key}" value="${financialAmount(budget[category.key]) || ""}"></td></tr>`).join("")}</tbody>
+                </table>
+              </div>
+            </div>
+            <aside class="financial-budget-decision">
+              <span class="financial-budget-decision-label">Approved Limit</span>
+              <div><span>Per-day center allowance</span><strong data-budget-computed="approved_daily">-</strong></div>
+              <div><span>Monthly center allowance</span><strong data-budget-computed="approved_monthly">-</strong></div>
+              <div><span>Proposed allocation total</span><strong data-budget-computed="proposed_monthly">-</strong></div>
+              <div><span>Allocation against limit</span><strong data-budget-computed="allocation_gap">-</strong></div>
+              <label><span>Program Officer Notes</span><textarea rows="4" data-budget-field="notes">${escapeHtml(budget.notes || "")}</textarea></label>
+            </aside>
+          </div>
+        </article>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function attachFinancialBudgetInputs() {
+  elements.pageRoot.querySelectorAll("[data-financial-budget-row] input, [data-financial-budget-row] textarea").forEach(input => input.addEventListener("input", updateNutritionFinancialBudgetRows));
+  updateNutritionFinancialBudgetRows();
+}
+
+function updateNutritionFinancialBudgetRows() {
+  elements.pageRoot.querySelectorAll("[data-financial-budget-row]").forEach(row => {
+    const proposedMonthly = NUTRITION_FINANCIAL_CATEGORIES.reduce((sum, category) => sum + financialAmount(row.querySelector(`[data-budget-field="${category.key}"]`)?.value), 0);
+    const days = Math.max(financialAmount(row.querySelector('[data-budget-field="feeding_days"]')?.value), 1);
+    const capacity = Math.max(Number(row.dataset.capacity || 0), 0);
+    const approvedPerChild = financialAmount(row.querySelector('[data-budget-field="approved_budget_per_child"]')?.value);
+    const approvedDaily = approvedPerChild * capacity;
+    const approvedMonthly = approvedDaily * days;
+    const gap = proposedMonthly - approvedMonthly;
+    row.querySelector('[data-budget-computed="approved_daily"]').textContent = formatMoney(approvedDaily);
+    row.querySelector('[data-budget-computed="approved_monthly"]').textContent = formatMoney(approvedMonthly);
+    row.querySelector('[data-budget-computed="proposed_monthly"]').textContent = formatMoney(proposedMonthly);
+    const gapElement = row.querySelector('[data-budget-computed="allocation_gap"]');
+    gapElement.textContent = approvedMonthly ? `${gap > 0 ? "+" : ""}${formatMoney(gap)} ${gap > 0 ? "over" : "remaining"}` : "Set approved amount";
+    gapElement.classList.toggle("financial-negative", gap > 0 && approvedMonthly > 0);
+  });
+}
+
+async function saveNutritionFinancialBudgets() {
+  const year = Number(document.getElementById("financialBudgetYear").value) || new Date().getFullYear();
+  const budgets = [...elements.pageRoot.querySelectorAll("[data-financial-budget-row]")].map(row => {
+    const budget = { center_id: row.dataset.centerId, center_name: row.dataset.centerName, budget_year: year };
+    row.querySelectorAll("[data-budget-field]").forEach(input => { budget[input.dataset.budgetField] = input.value; });
+    return budget;
+  });
+  await api("/api/nutrition/financial/budgets", { method: "POST", body: JSON.stringify({ year, budgets }) });
+  showToast("Financial budgets saved.");
+}
+
+async function renderNutritionFinancialEditorPage(id = "", isNew = false) {
+  const [centers, report] = await Promise.all([
+    loadNutritionCenters(),
+    isNew ? Promise.resolve(blankNutritionFinancialReport()) : api(`/api/nutrition/financial/reports/${id}`).then(payload => payload.report)
+  ]);
+  state.currentNutritionFinancialReport = report;
+  setTitle(isNew ? "New Monthly Financial Report" : "Monthly Financial Report");
+  setTopbarActions([
+    { id: "financialReportBack", label: "Financial", icon: "arrow", onClick: () => navigate("nutrition-budget") },
+    { id: "financialReportSave", label: "Save", icon: "save", variant: "primary", onClick: () => saveNutritionFinancialReport().catch(error => showToast(error.message)) },
+    { id: "financialReportPrint", label: "Print", icon: "print", onClick: () => printNutritionFinancialMonthly(collectNutritionFinancialReport(true)) },
+    ...(!isNew ? [{ id: "financialReportDelete", label: "Delete", icon: "bin", variant: "danger", onClick: () => deleteNutritionFinancialReport(id).catch(error => showToast(error.message)) }] : [])
+  ]);
+  elements.pageRoot.innerHTML = renderNutritionFinancialForm(report, centers);
+  attachNutritionFinancialFormHandlers();
+}
+
+function renderNutritionFinancialForm(report, centers) {
+  const selectedId = Number(report.center_id || 0);
+  return `
+    <section class="application-paper nutrition-paper financial-report-paper editable">
+      <header class="monitoring-heading"><img src="/assets/paofi-logo.png" alt=""><div><h2>Payatas Orione Foundation Inc.</h2><h3>Nutrition Program Monthly Financial Summary</h3></div></header>
+      <section class="paper-section">
+        <h3>Report Details</h3>
+        <div class="monitoring-identity-grid">
+          <div class="paper-field wide"><label>Feeding Center</label><select id="financialReportCenter" data-financial-field="center_id"><option value=""></option>${centers.map(center => `<option value="${center.id}" data-coordinator="${escapeHtml(center.coordinator || "")}" ${Number(center.id) === selectedId ? "selected" : ""}>${escapeHtml(center.center_name)}</option>`).join("")}</select></div>
+          <div class="paper-field"><label>Report Month</label><input type="month" data-financial-field="report_month" value="${escapeHtml(report.report_month || currentReportMonth())}"></div>
+          <div class="paper-field"><label>Date of Submission</label><input type="date" data-financial-field="submitted_date" value="${escapeHtml(nutritionDateInputValue(report.submitted_date || nutritionTodayDate()) || todayDate())}"></div>
+          <div class="paper-field"><label>Beginning Balance</label><input type="number" step="0.01" data-financial-field="beginning_balance" value="${financialAmount(report.beginning_balance) || ""}"></div>
+          <div class="paper-field"><label>Additional Cash Receipts</label><input type="number" step="0.01" data-financial-field="cash_receipts" value="${financialAmount(report.cash_receipts) || ""}"></div>
+        </div>
+      </section>
+      <section class="paper-section">
+        <div class="family-section-header"><h3>Summary of Disbursements</h3><button id="financialAddEntry" type="button" class="action-button">${icon("plus")}<span>Add Line</span></button></div>
+        <div class="data-table-scroll financial-entry-wrap"><table class="family-table financial-entry-table"><thead><tr><th>Date</th><th>Rep. No.</th><th>Particulars</th><th>CV #</th><th>Cash</th>${NUTRITION_FINANCIAL_CATEGORIES.map(category => `<th>${escapeHtml(category.label)}</th>`).join("")}<th aria-label="Remove"></th></tr></thead><tbody id="financialEntryRows">${(report.entries?.length ? report.entries : Array.from({ length: 4 }, blankNutritionFinancialEntry)).map(renderNutritionFinancialEntryRow).join("")}</tbody><tfoot><tr><th colspan="4">Total</th><th data-financial-total="cash">-</th>${NUTRITION_FINANCIAL_CATEGORIES.map(category => `<th data-financial-total="${category.key}">-</th>`).join("")}<th></th></tr></tfoot></table></div>
+      </section>
+      <section class="paper-section financial-closing-section">
+        <div class="financial-balance-strip"><div><span>Total Cash Receipts</span><strong id="financialTotalReceipts">PHP 0.00</strong></div><div><span>Total Expenses</span><strong id="financialTotalExpenses">PHP 0.00</strong></div><div><span>Ending Balance</span><strong id="financialEndingBalance">PHP 0.00</strong></div></div>
+        <div class="financial-signature-grid financial-form-signatures">
+          <label class="financial-form-signature editable-signature"><span>Prepared by / Center Coordinator</span><input data-financial-field="prepared_by" value="${escapeHtml(report.prepared_by || "")}" placeholder="Coordinator's full name"><small>Center Coordinator</small></label>
+          <div class="financial-form-signature"><span>Reviewed by</span><strong>${escapeHtml(NUTRITION_FINANCIAL_SIGNATORIES.administrativeOfficer.name)}</strong><small>${escapeHtml(NUTRITION_FINANCIAL_SIGNATORIES.administrativeOfficer.title)}</small></div>
+          <div class="financial-form-signature"><span>Approved by</span><strong>${escapeHtml(NUTRITION_FINANCIAL_SIGNATORIES.president.name)}</strong><small>${escapeHtml(NUTRITION_FINANCIAL_SIGNATORIES.president.title)}</small></div>
+          <input type="hidden" data-financial-field="prepared_title" value="Center Coordinator">
+          <input type="hidden" data-financial-field="noted_by" value="${escapeHtml(NUTRITION_FINANCIAL_SIGNATORIES.administrativeOfficer.name)}">
+          <input type="hidden" data-financial-field="noted_title" value="${escapeHtml(NUTRITION_FINANCIAL_SIGNATORIES.administrativeOfficer.title)}">
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function renderNutritionFinancialEntryRow(entry = {}) {
+  return `<tr data-financial-entry-row>
+    <td><input type="date" data-financial-entry-field="entry_date" value="${escapeHtml(nutritionDateInputValue(entry.entry_date) || "")}"></td>
+    <td><input data-financial-entry-field="rep_no" value="${escapeHtml(entry.rep_no || "")}"></td>
+    <td><input data-financial-entry-field="particulars" value="${escapeHtml(entry.particulars || "")}"></td>
+    <td><input data-financial-entry-field="cv_no" value="${escapeHtml(entry.cv_no || "")}"></td>
+    <td data-financial-row-cash>${financialPlainAmount(entry.cash || 0)}</td>
+    ${NUTRITION_FINANCIAL_CATEGORIES.map(category => `<td><input type="number" min="0" step="0.01" data-financial-entry-field="${category.key}" value="${financialAmount(entry[category.key]) || ""}"></td>`).join("")}
+    <td><button type="button" class="icon-button danger" title="Remove line" data-financial-remove>${icon("bin")}</button></td>
+  </tr>`;
+}
+
+function attachNutritionFinancialFormHandlers() {
+  document.getElementById("financialAddEntry")?.addEventListener("click", () => {
+    document.getElementById("financialEntryRows").insertAdjacentHTML("beforeend", renderNutritionFinancialEntryRow(blankNutritionFinancialEntry()));
+    attachNutritionFinancialEntryHandlers();
+    updateNutritionFinancialTotals();
+  });
+  elements.pageRoot.querySelectorAll('[data-financial-field="beginning_balance"], [data-financial-field="cash_receipts"]').forEach(input => input.addEventListener("input", updateNutritionFinancialTotals));
+  document.getElementById("financialReportCenter")?.addEventListener("change", event => {
+    const coordinator = event.target.selectedOptions[0]?.dataset.coordinator || "";
+    const preparedBy = elements.pageRoot.querySelector('[data-financial-field="prepared_by"]');
+    if (preparedBy && coordinator) preparedBy.value = coordinator;
+  });
+  attachNutritionFinancialEntryHandlers();
+  updateNutritionFinancialTotals();
+}
+
+function attachNutritionFinancialEntryHandlers() {
+  elements.pageRoot.querySelectorAll("[data-financial-entry-row]").forEach(row => {
+    if (row.dataset.bound === "1") return;
+    row.dataset.bound = "1";
+    row.querySelectorAll('[data-financial-entry-field="viands"], [data-financial-entry-field="milk"], [data-financial-entry-field="rice"], [data-financial-entry-field="gas"], [data-financial-entry-field="mineral_water"], [data-financial-entry-field="utilities"], [data-financial-entry-field="others"]').forEach(input => input.addEventListener("input", updateNutritionFinancialTotals));
+    row.querySelector("[data-financial-remove]")?.addEventListener("click", () => { row.remove(); updateNutritionFinancialTotals(); });
+  });
+}
+
+function updateNutritionFinancialTotals() {
+  const totals = Object.fromEntries(NUTRITION_FINANCIAL_CATEGORIES.map(category => [category.key, 0]));
+  let expenses = 0;
+  elements.pageRoot.querySelectorAll("[data-financial-entry-row]").forEach(row => {
+    const cash = NUTRITION_FINANCIAL_CATEGORIES.reduce((sum, category) => {
+      const value = financialAmount(row.querySelector(`[data-financial-entry-field="${category.key}"]`)?.value);
+      totals[category.key] += value;
+      return sum + value;
+    }, 0);
+    expenses += cash;
+    row.querySelector("[data-financial-row-cash]").textContent = financialPlainAmount(cash);
+  });
+  NUTRITION_FINANCIAL_CATEGORIES.forEach(category => {
+    const cell = elements.pageRoot.querySelector(`[data-financial-total="${category.key}"]`);
+    if (cell) cell.textContent = financialPlainAmount(totals[category.key]);
+  });
+  const cashCell = elements.pageRoot.querySelector('[data-financial-total="cash"]');
+  if (cashCell) cashCell.textContent = financialPlainAmount(expenses);
+  const beginning = financialAmount(elements.pageRoot.querySelector('[data-financial-field="beginning_balance"]')?.value);
+  const receipts = financialAmount(elements.pageRoot.querySelector('[data-financial-field="cash_receipts"]')?.value);
+  const totalReceipts = beginning + receipts;
+  document.getElementById("financialTotalReceipts").textContent = formatMoney(totalReceipts);
+  document.getElementById("financialTotalExpenses").textContent = formatMoney(expenses);
+  document.getElementById("financialEndingBalance").textContent = formatMoney(totalReceipts - expenses);
+  document.getElementById("financialEndingBalance").classList.toggle("financial-negative", totalReceipts - expenses < 0);
+}
+
+function collectNutritionFinancialReport(includeDerived = false) {
+  const report = {};
+  if (state.currentNutritionFinancialReport?.id) report.id = state.currentNutritionFinancialReport.id;
+  elements.pageRoot.querySelectorAll("[data-financial-field]").forEach(input => {
+    report[input.dataset.financialField] = input.dataset.financialField === "submitted_date" ? normalizeNutritionDateValue(input.value) : input.value;
+  });
+  report.center_name = elements.pageRoot.querySelector("#financialReportCenter option:checked")?.textContent.trim() || "";
+  report.entries = [...elements.pageRoot.querySelectorAll("[data-financial-entry-row]")].map((row, index) => {
+    const entry = { row_order: index };
+    row.querySelectorAll("[data-financial-entry-field]").forEach(input => {
+      entry[input.dataset.financialEntryField] = input.dataset.financialEntryField === "entry_date" ? normalizeNutritionDateValue(input.value) : input.value;
+    });
+    if (includeDerived) entry.cash = NUTRITION_FINANCIAL_CATEGORIES.reduce((sum, category) => sum + financialAmount(entry[category.key]), 0);
+    return entry;
+  });
+  return report;
+}
+
+async function saveNutritionFinancialReport() {
+  const payload = await api("/api/nutrition/financial/reports", { method: "POST", body: JSON.stringify(collectNutritionFinancialReport()) });
+  state.currentNutritionFinancialReport = payload.report;
+  await refreshStats();
+  showToast("Monthly financial report saved.");
+  history.replaceState(null, "", `#/nutrition-budget/edit-${payload.report.id}`);
+  await renderNutritionFinancialEditorPage(String(payload.report.id), false);
+}
+
+async function deleteNutritionFinancialReport(id) {
+  const report = state.currentNutritionFinancialReport || (await api(`/api/nutrition/financial/reports/${id}`)).report;
+  if (!window.confirm(`Delete this financial report?\n\n${reportMonthLabel(report.report_month)}\n${report.center_name}`)) return;
+  await api(`/api/nutrition/financial/reports/${id}`, { method: "DELETE" });
+  await refreshStats();
+  showToast("Financial report deleted.");
+  navigate("nutrition-budget");
+}
+
+function financialPrintDocument(title, body, pageSize = "letter landscape", extraStyles = "") {
+  const logoSrc = `${window.location.origin}/assets/paofi-logo.png`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
+    @page { size: ${pageSize}; margin: 0.35in; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #17231d; font-family: Arial, sans-serif; background: #fff; }
+    .report { width: 100%; }
+    .report-header { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 14px; text-align: center; }
+    .report-header img { width: 52px; height: 52px; object-fit: contain; }
+    h1 { margin: 0; font-size: 17px; } h2 { margin: 3px 0 0; font-size: 14px; } h3 { margin: 3px 0 0; font-size: 12px; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #48534d; padding: 4px 5px; font-size: 8px; vertical-align: middle; }
+    th { background: #e7f1eb; font-weight: 800; text-align: center; }
+    td.number { text-align: right; font-variant-numeric: tabular-nums; }
+    .section-row th { background: #0d5637; color: #fff; text-align: left; }
+    .total-row th, .total-row td { background: #fff5a8; font-weight: 800; }
+    .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 12px; }
+    .meta div { padding: 7px; border: 1px solid #cbd8d0; }
+    .meta span { display: block; color: #65716a; font-size: 7px; text-transform: uppercase; }
+    .meta strong { display: block; margin-top: 3px; font-size: 9px; }
+    .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 28px; page-break-inside: avoid; }
+    .signature { padding-top: 15px; border-top: 1px solid #27332c; font-size: 8px; text-align: center; }
+    .signature strong, .signature span, .signature small { display: block; }
+    .signature strong { font-size: 9px; }
+    .signature small { margin-top: 2px; color: #536159; font-size: 7px; }
+    .signature-role { margin-bottom: 16px; color: #647169; font-size: 7px; font-weight: 700; text-align: left; text-transform: uppercase; }
+    .actual-group { background: #dcefe5 !important; color: #164d35; }
+    .budget-group { background: #f8edc9 !important; color: #5e4a0d; border-left: 2px solid #a88422 !important; }
+    .budget-divider { border-left: 2px solid #a88422 !important; }
+    .summary-table { margin: 12px 0 16px; }
+    .summary-table caption { margin-bottom: 6px; color: #1b4f38; font-size: 11px; font-weight: 800; text-align: left; }
+    ${extraStyles}
+  </style></head><body><main class="report"><header class="report-header"><img src="${escapeHtml(logoSrc)}" alt=""><div><h1>Payatas Orione Foundation, Inc.</h1><h2>${escapeHtml(title)}</h2></div></header>${body}</main></body></html>`;
+}
+
+function financialReportSignatures(preparedName = "", preparedTitle = "Center Coordinator") {
+  return `<div class="signatures">
+    <div class="signature"><span class="signature-role">Prepared by</span><strong>${escapeHtml(preparedName || "Name and Signature")}</strong><small>${escapeHtml(preparedTitle)}</small></div>
+    <div class="signature"><span class="signature-role">Reviewed by</span><strong>${escapeHtml(NUTRITION_FINANCIAL_SIGNATORIES.administrativeOfficer.name)}</strong><small>${escapeHtml(NUTRITION_FINANCIAL_SIGNATORIES.administrativeOfficer.title)}</small></div>
+    <div class="signature"><span class="signature-role">Approved by</span><strong>${escapeHtml(NUTRITION_FINANCIAL_SIGNATORIES.president.name)}</strong><small>${escapeHtml(NUTRITION_FINANCIAL_SIGNATORIES.president.title)}</small></div>
+  </div>`;
+}
+
+function printNutritionFinancialMonthly(report) {
+  const entries = report.entries?.length ? report.entries : Array.from({ length: 4 }, blankNutritionFinancialEntry);
+  const totals = report.category_totals || Object.fromEntries(NUTRITION_FINANCIAL_CATEGORIES.map(category => [category.key, entries.reduce((sum, entry) => sum + financialAmount(entry[category.key]), 0)]));
+  const totalExpenses = report.total_disbursements ?? Object.values(totals).reduce((sum, value) => sum + value, 0);
+  const totalReceipts = financialAmount(report.beginning_balance) + financialAmount(report.cash_receipts);
+  const body = `
+    <div class="meta"><div><span>Feeding Center</span><strong>${escapeHtml(report.center_name || "")}</strong></div><div><span>Report Month</span><strong>${escapeHtml(reportMonthLabel(report.report_month))}</strong></div><div><span>Date Submitted</span><strong>${escapeHtml(report.submitted_date || "")}</strong></div><div><span>Ending Balance</span><strong>${escapeHtml(formatMoney(totalReceipts - totalExpenses))}</strong></div></div>
+    <table><thead><tr><th style="width:8%">Date</th><th style="width:7%">Rep. No.</th><th style="width:20%">Particulars</th><th style="width:7%">CV #</th><th>Cash</th>${NUTRITION_FINANCIAL_CATEGORIES.map(category => `<th>${escapeHtml(category.label)}</th>`).join("")}</tr></thead><tbody>
+      ${entries.map(entry => `<tr><td>${escapeHtml(entry.entry_date || "")}</td><td>${escapeHtml(entry.rep_no || "")}</td><td>${escapeHtml(entry.particulars || "")}</td><td>${escapeHtml(entry.cv_no || "")}</td><td class="number">${financialPlainAmount(entry.cash ?? NUTRITION_FINANCIAL_CATEGORIES.reduce((sum, category) => sum + financialAmount(entry[category.key]), 0))}</td>${NUTRITION_FINANCIAL_CATEGORIES.map(category => `<td class="number">${financialPlainAmount(entry[category.key])}</td>`).join("")}</tr>`).join("")}
+      <tr class="total-row"><th colspan="4">Total</th><td class="number">${financialPlainAmount(totalExpenses)}</td>${NUTRITION_FINANCIAL_CATEGORIES.map(category => `<td class="number">${financialPlainAmount(totals[category.key])}</td>`).join("")}</tr>
+    </tbody></table>
+    <div class="meta" style="margin-top:12px"><div><span>Beginning Balance</span><strong>${escapeHtml(formatMoney(report.beginning_balance))}</strong></div><div><span>Additional Cash Receipts</span><strong>${escapeHtml(formatMoney(report.cash_receipts))}</strong></div><div><span>Total Expenses</span><strong>${escapeHtml(formatMoney(totalExpenses))}</strong></div><div><span>Ending Balance</span><strong>${escapeHtml(formatMoney(totalReceipts - totalExpenses))}</strong></div></div>
+    ${financialReportSignatures(report.prepared_by, report.prepared_title || "Center Coordinator")}`;
+  showDocumentPrintPreview(`Monthly Financial Report - ${report.center_name || "Feeding Center"}`, financialPrintDocument(`${report.center_name || "Feeding Center"} - Summary of Disbursements`, body));
+}
+
+function financialCenterYearlyRows(center) {
+  const monthCells = valueGetter => center.months.map(month => `<td class="number">${financialPlainAmount(valueGetter(month))}</td>`).join("");
+  const totalCell = value => `<td class="number">${financialPlainAmount(value)}</td>`;
+  return `
+    <tr class="section-row"><th colspan="14">Cash Receipts</th></tr>
+    <tr><th>Beginning Balance</th>${monthCells(month => month.beginning_balance)}${totalCell(center.totals.beginning_balance)}</tr>
+    <tr><th>Additional Cash Receipts</th>${monthCells(month => month.cash_receipts)}${totalCell(center.totals.cash_receipts)}</tr>
+    <tr class="total-row"><th>Total Cash Receipts</th>${monthCells(month => month.total_cash_receipts)}${totalCell(center.totals.total_cash_receipts)}</tr>
+    <tr class="section-row"><th colspan="14">Expenses</th></tr>
+    ${NUTRITION_FINANCIAL_CATEGORIES.map(category => `<tr><th>${escapeHtml(category.label)}</th>${monthCells(month => month.category_totals[category.key])}${totalCell(center.totals.category_totals[category.key])}</tr>`).join("")}
+    <tr class="total-row"><th>Total Expenses</th>${monthCells(month => month.total_expenses)}${totalCell(center.totals.total_expenses)}</tr>
+    <tr class="total-row"><th>Cash Receipts over Expenses</th>${monthCells(month => month.balance)}${totalCell(center.totals.balance)}</tr>`;
+}
+
+async function printNutritionFinancialCenterYearly(centerId, year) {
+  const summary = await loadNutritionFinancialSummary(Number(year) || new Date().getFullYear());
+  const center = nutritionFinancialCenter(summary, centerId);
+  if (!center) throw new Error("Feeding center was not found in this financial year.");
+  const body = `<div class="meta"><div><span>Year</span><strong>${summary.year}</strong></div><div><span>Active Children</span><strong>${center.active_kids}</strong></div><div><span>Capacity</span><strong>${center.capacity}</strong></div><div><span>Reports Filed</span><strong>${center.reported_months} of 12</strong></div></div><table><thead><tr><th style="width:16%">Item</th>${center.months.map(month => `<th>${month.label}</th>`).join("")}<th>Total</th></tr></thead><tbody>${financialCenterYearlyRows(center)}</tbody></table>${financialReportSignatures(center.coordinator, "Center Coordinator")}`;
+  showDocumentPrintPreview(`${center.center_name} Financial Summary ${summary.year}`, financialPrintDocument(`${center.center_name} - Summary of Cash Receipts and Disbursements`, body, "legal landscape", "th,td{font-size:7px;padding:3px}"));
+}
+
+function programFinancialCenterBlock(center) {
+  const monthTotal = month => month.total_expenses;
+  const totalMetric = key => NUTRITION_FINANCIAL_CATEGORIES.reduce((sum, category) => sum + Number(center.category_metrics[category.key]?.[key] || 0), 0);
+  return `<section class="program-center-block"><table><thead>
+    <tr><th rowspan="2" style="width:12%">${escapeHtml(center.center_name)}</th><th colspan="16" class="actual-group">Actual Disbursements from Submitted Reports</th><th colspan="4" class="budget-group">Annual Budget Setup / Proposal</th></tr>
+    <tr><th>Total</th>${center.months.map(month => `<th>${month.label}</th>`).join("")}<th>Monthly Avg.</th><th>Daily Avg.</th><th>Actual / Active Child</th><th class="budget-divider">Proposed Monthly</th><th>Proposed Daily</th><th>Proposal / Capacity</th><th>Approved / Child</th></tr>
+    </thead><tbody>
+    <tr class="kids-row"><th># of Kids / Days</th><td>${center.active_kids}</td>${center.months.map(() => `<td>${center.active_kids}</td>`).join("")}<td>${center.active_kids}</td><td>${center.feeding_days} days</td><td>${center.active_kids}</td><td class="budget-divider">${center.capacity}</td><td>${center.feeding_days} days</td><td>${center.capacity}</td><td>${center.capacity}</td></tr>
+    ${NUTRITION_FINANCIAL_CATEGORIES.map(category => { const metric = center.category_metrics[category.key]; return `<tr><th>${escapeHtml(category.label)}</th><td class="number">${financialPlainAmount(metric.actual_total)}</td>${center.months.map(month => `<td class="number">${financialPlainAmount(month.category_totals[category.key])}</td>`).join("")}<td class="number">${financialPlainAmount(metric.actual_monthly_average)}</td><td class="number">${financialPlainAmount(metric.actual_daily_average)}</td><td class="number">${financialPlainAmount(metric.actual_per_child)}</td><td class="number budget-divider">${financialPlainAmount(metric.budget_monthly)}</td><td class="number">${financialPlainAmount(metric.budget_daily)}</td><td class="number">${financialPlainAmount(metric.budget_per_child)}</td><td class="number">-</td></tr>`; }).join("")}
+    <tr class="total-row"><th>Total Expenses</th><td class="number">${financialPlainAmount(center.totals.total_expenses)}</td>${center.months.map(month => `<td class="number">${financialPlainAmount(monthTotal(month))}</td>`).join("")}<td class="number">${financialPlainAmount(center.budget_metrics.actual_monthly_average)}</td><td class="number">${financialPlainAmount(center.budget_metrics.actual_daily_average)}</td><td class="number">${financialPlainAmount(center.budget_metrics.actual_per_child)}</td><td class="number budget-divider">${financialPlainAmount(totalMetric("budget_monthly"))}</td><td class="number">${financialPlainAmount(totalMetric("budget_daily"))}</td><td class="number">${financialPlainAmount(totalMetric("budget_per_child"))}</td><td class="number">${financialPlainAmount(center.budget_metrics.approved_per_child)}</td></tr>
+  </tbody></table></section>`;
+}
+
+function programFinancialSummaryTable(summary) {
+  return `<table class="summary-table"><caption>Program Financial Summary</caption><thead>
+    <tr><th rowspan="2">Feeding Center</th><th rowspan="2">Reports</th><th rowspan="2">Active Kids</th><th rowspan="2">Capacity</th><th colspan="3" class="actual-group">Actual</th><th colspan="4" class="budget-group">Approved Budget</th></tr>
+    <tr><th>Total Disbursements</th><th>Monthly Average</th><th>Actual / Child / Day</th><th class="budget-divider">Approved / Child / Day</th><th>Monthly Allowance</th><th>Annual Allowance</th><th>Monthly Variance</th></tr>
+    </thead><tbody>
+    ${summary.centers.map(center => `<tr><th>${escapeHtml(center.center_name)}</th><td>${center.reported_months} / 12</td><td>${center.active_kids}</td><td>${center.capacity}</td><td class="number">${financialPlainAmount(center.totals.total_expenses)}</td><td class="number">${financialPlainAmount(center.budget_metrics.actual_monthly_average)}</td><td class="number">${financialPlainAmount(center.budget_metrics.actual_per_child)}</td><td class="number budget-divider">${financialPlainAmount(center.budget_metrics.approved_per_child)}</td><td class="number">${financialPlainAmount(center.budget_metrics.approved_monthly)}</td><td class="number">${financialPlainAmount(center.budget_metrics.approved_annual)}</td><td class="number">${financialPlainAmount(center.budget_metrics.monthly_variance)}</td></tr>`).join("")}
+    <tr class="total-row"><th>Program Total / Weighted Average</th><td>${summary.program.report_count}</td><td>${summary.program.active_kids}</td><td>${summary.program.capacity}</td><td class="number">${financialPlainAmount(summary.program.total_actual)}</td><td class="number">${financialPlainAmount(summary.centers.reduce((sum, center) => sum + center.budget_metrics.actual_monthly_average, 0))}</td><td class="number">${financialPlainAmount(summary.program.actual_per_child)}</td><td class="number budget-divider">${financialPlainAmount(summary.program.approved_budget_per_child)}</td><td class="number">${financialPlainAmount(summary.program.approved_monthly)}</td><td class="number">${financialPlainAmount(summary.program.approved_annual)}</td><td class="number">${financialPlainAmount(summary.program.monthly_variance)}</td></tr>
+    </tbody></table>`;
+}
+
+async function printNutritionFinancialProgramYearly(year) {
+  const summary = await loadNutritionFinancialSummary(Number(year) || new Date().getFullYear());
+  const body = `<div class="meta"><div><span>Year</span><strong>${summary.year}</strong></div><div><span>Feeding Centers</span><strong>${summary.program.center_count}</strong></div><div><span>Active Children</span><strong>${summary.program.active_kids}</strong></div><div><span>Total Capacity</span><strong>${summary.program.capacity}</strong></div></div>${programFinancialSummaryTable(summary)}${summary.centers.map(programFinancialCenterBlock).join("")}${financialReportSignatures("", "Program Officer")}`;
+  const extraStyles = `.program-center-block{margin:0 0 10px;break-inside:avoid}.program-center-block table{table-layout:fixed}.program-center-block th,.program-center-block td{font-size:5.1px;padding:2px}.kids-row td,.kids-row th{background:#d9e9f5;font-weight:800}.summary-table th,.summary-table td{font-size:6.6px;padding:3px}`;
+  showDocumentPrintPreview(`General Feeding Actual vs Budget ${summary.year}`, financialPrintDocument(`General Feeding Actual vs. Budget ${summary.year}`, body, "legal landscape", extraStyles));
 }
 
 async function renderMonitoringPage(id = "") {

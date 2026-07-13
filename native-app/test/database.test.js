@@ -550,3 +550,109 @@ test("creates monthly nutrition growth reports per feeding center", () => {
 
   db.close();
 });
+
+test("creates nutrition financial reports and derives center and program budget summaries", () => {
+  const db = new BeneficiaryDatabase(tempDbPath());
+  const center = db.saveNutritionCenter({
+    center_name: "Lourdes Feeding Program",
+    capacity: 50
+  });
+  db.saveNutritionBeneficiary({
+    beneficiary_no: "NP-2026-101",
+    center_id: center.id,
+    child_last_name: "Active",
+    child_first_name: "Child",
+    remarks: "Active"
+  });
+  db.saveNutritionBeneficiary({
+    beneficiary_no: "NP-2026-102",
+    center_id: center.id,
+    child_last_name: "Inactive",
+    child_first_name: "Child",
+    profile_status: "Inactive",
+    remarks: "Inactive"
+  });
+
+  const budgets = db.saveNutritionFinancialBudgets({
+    year: 2026,
+    budgets: [{
+      center_id: center.id,
+      feeding_days: 20,
+      approved_budget_per_child: 15,
+      viands: 10000,
+      milk: 2000,
+      rice: 1500,
+      gas: 1000,
+      mineral_water: 500,
+      utilities: 800,
+      others: 1200
+    }]
+  });
+  assert.equal(budgets.length, 1);
+  assert.equal(budgets[0].viands, 10000);
+  assert.equal(budgets[0].approved_budget_per_child, 15);
+
+  const january = db.saveNutritionFinancialReport({
+    center_id: center.id,
+    report_month: "2026-01",
+    submitted_date: "2026-02-05",
+    beginning_balance: 1000,
+    cash_receipts: 500,
+    prepared_by: "finance officer",
+    entries: [{
+      entry_date: "2026-01-16",
+      rep_no: "R-001",
+      particulars: "REPLENISHMENT FOR JANUARY",
+      cv_no: "19416",
+      viands: 2000,
+      gas: 500,
+      others: 100
+    }]
+  });
+  assert.equal(january.submitted_date, "02/05/2026");
+  assert.equal(january.entries[0].cash, 2600);
+  assert.equal(january.total_disbursements, 2600);
+  assert.equal(january.balance, -1100);
+
+  db.saveNutritionFinancialReport({
+    center_id: center.id,
+    report_month: "2026-02",
+    submitted_date: "2026-03-05",
+    entries: [{ viands: 3000, milk: 400 }]
+  });
+
+  assert.throws(() => db.saveNutritionFinancialReport({
+    center_id: center.id,
+    report_month: "2026-01"
+  }), /already exists/i);
+
+  const summary = db.nutritionFinancialSummary({ year: 2026 });
+  const centerSummary = summary.centers.find(item => item.id === center.id);
+  assert.equal(summary.program.center_count, 1);
+  assert.equal(summary.program.active_kids, 1);
+  assert.equal(summary.program.capacity, 50);
+  assert.equal(centerSummary.reported_months, 2);
+  assert.equal(centerSummary.totals.total_expenses, 6000);
+  assert.equal(centerSummary.category_metrics.viands.actual_total, 5000);
+  assert.equal(centerSummary.category_metrics.viands.actual_monthly_average, 2500);
+  assert.equal(centerSummary.category_metrics.viands.actual_daily_average, 125);
+  assert.equal(centerSummary.category_metrics.viands.actual_per_child, 125);
+  assert.equal(centerSummary.category_metrics.viands.budget_monthly, 10000);
+  assert.equal(centerSummary.category_metrics.viands.budget_daily, 500);
+  assert.equal(centerSummary.category_metrics.viands.budget_per_child, 10);
+  assert.equal(centerSummary.budget_metrics.actual_per_child, 150);
+  assert.equal(centerSummary.budget_metrics.approved_per_child, 15);
+  assert.equal(centerSummary.budget_metrics.approved_monthly, 15000);
+  assert.equal(centerSummary.budget_metrics.monthly_variance, -12000);
+  assert.equal(summary.program.approved_budget_per_child, 15);
+  assert.equal(db.stats().nutritionFinancialReports, 2);
+  assert.equal(db.countNutritionFinancialReports({ centerId: center.id, year: 2026 }), 2);
+
+  const exported = db.exportData();
+  assert.equal(exported.nutritionFinancialReports.length, 2);
+  assert.equal(exported.nutritionFinancialBudgets.length, 1);
+
+  db.deleteNutritionFinancialReport(january.id);
+  assert.equal(db.countNutritionFinancialReports({ centerId: center.id }), 1);
+  db.close();
+});

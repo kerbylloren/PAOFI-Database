@@ -158,6 +158,49 @@ const NUTRITION_GROWTH_ENTRY_FIELDS = [
   "previous_cgs_classification",
   "row_order"
 ];
+const NUTRITION_FINANCIAL_CATEGORIES = [
+  "viands",
+  "milk",
+  "rice",
+  "gas",
+  "mineral_water",
+  "utilities",
+  "others"
+];
+const NUTRITION_FINANCIAL_REPORT_FIELDS = [
+  "center_id",
+  "center_name",
+  "submitted_date",
+  "report_month",
+  "beginning_balance",
+  "cash_receipts",
+  "prepared_by",
+  "prepared_title",
+  "noted_by",
+  "noted_title"
+];
+const NUTRITION_FINANCIAL_ENTRY_FIELDS = [
+  "report_id",
+  "entry_date",
+  "rep_no",
+  "particulars",
+  "cv_no",
+  ...NUTRITION_FINANCIAL_CATEGORIES,
+  "row_order"
+];
+const NUTRITION_FINANCIAL_BUDGET_FIELDS = [
+  "center_id",
+  "center_name",
+  "budget_year",
+  "feeding_days",
+  "approved_budget_per_child",
+  ...NUTRITION_FINANCIAL_CATEGORIES,
+  "notes"
+];
+const FINANCIAL_MONTH_LABELS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+];
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -660,6 +703,270 @@ function normalizeNutritionGrowthReport(input = {}, center = null, existing = nu
   };
 }
 
+function normalizeFinancialYear(value, fallback = new Date().getFullYear()) {
+  const year = Number(String(value ?? "").trim());
+  return Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : Number(fallback);
+}
+
+function roundFinancialValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Number(number.toFixed(2)) : 0;
+}
+
+function normalizeNutritionFinancialEntry(input = {}, rowOrder = 0) {
+  const entry = {
+    entry_date: normalizeProfileDate(input.entry_date || input.entryDate),
+    rep_no: normalizeText(input.rep_no || input.repNo).trim(),
+    particulars: sentenceCaseValue(input.particulars),
+    cv_no: normalizeText(input.cv_no || input.cvNo).trim(),
+    row_order: Number(input.row_order ?? input.rowOrder ?? rowOrder) || 0
+  };
+
+  NUTRITION_FINANCIAL_CATEGORIES.forEach(category => {
+    entry[category] = roundFinancialValue(normalizeAmount(input[category]));
+  });
+
+  entry.cash = roundFinancialValue(NUTRITION_FINANCIAL_CATEGORIES.reduce((sum, category) => sum + entry[category], 0));
+  return entry;
+}
+
+function financialEntryHasValue(entry = {}) {
+  return Boolean(
+    entry.entry_date
+      || entry.rep_no
+      || entry.particulars
+      || entry.cv_no
+      || NUTRITION_FINANCIAL_CATEGORIES.some(category => Number(entry[category] || 0) !== 0)
+  );
+}
+
+function normalizeNutritionFinancialReport(input = {}, center = null, existing = null) {
+  const entries = (Array.isArray(input.entries) ? input.entries : existing?.entries || [])
+    .map((entry, index) => normalizeNutritionFinancialEntry(entry, index))
+    .filter(financialEntryHasValue)
+    .map((entry, index) => ({ ...entry, row_order: index }));
+
+  return {
+    id: Number(input.id || existing?.id || 0) || 0,
+    center_id: Number(input.center_id || input.centerId || existing?.center_id || center?.id || 0) || 0,
+    center_name: titleCaseValue(input.center_name || input.centerName || existing?.center_name || center?.center_name),
+    submitted_date: normalizeProfileDate(input.submitted_date || input.submittedDate || existing?.submitted_date) || normalizeProfileDate(todayDate()),
+    report_month: normalizeReportMonth(input.report_month || input.reportMonth || existing?.report_month),
+    beginning_balance: roundFinancialValue(normalizeAmount(input.beginning_balance ?? input.beginningBalance ?? existing?.beginning_balance)),
+    cash_receipts: roundFinancialValue(normalizeAmount(input.cash_receipts ?? input.cashReceipts ?? existing?.cash_receipts)),
+    prepared_by: titleCaseValue(input.prepared_by || input.preparedBy || existing?.prepared_by),
+    prepared_title: titleCaseValue(input.prepared_title || input.preparedTitle || existing?.prepared_title),
+    noted_by: titleCaseValue(input.noted_by || input.notedBy || existing?.noted_by),
+    noted_title: titleCaseValue(input.noted_title || input.notedTitle || existing?.noted_title),
+    entries
+  };
+}
+
+function nutritionFinancialCategoryTotals(entries = []) {
+  return Object.fromEntries(NUTRITION_FINANCIAL_CATEGORIES.map(category => [
+    category,
+    roundFinancialValue(entries.reduce((sum, entry) => sum + Number(entry[category] || 0), 0))
+  ]));
+}
+
+function decorateNutritionFinancialReport(report = {}, entries = null) {
+  const preparedEntries = Array.isArray(entries) ? entries.map((entry, index) => normalizeNutritionFinancialEntry(entry, index)) : null;
+  const categoryTotals = preparedEntries
+    ? nutritionFinancialCategoryTotals(preparedEntries)
+    : Object.fromEntries(NUTRITION_FINANCIAL_CATEGORIES.map(category => [
+        category,
+        roundFinancialValue(report[`${category}_total`] ?? report.category_totals?.[category])
+      ]));
+  const totalDisbursements = roundFinancialValue(
+    NUTRITION_FINANCIAL_CATEGORIES.reduce((sum, category) => sum + categoryTotals[category], 0)
+  );
+
+  return {
+    ...report,
+    beginning_balance: roundFinancialValue(report.beginning_balance),
+    cash_receipts: roundFinancialValue(report.cash_receipts),
+    line_count: Number(report.line_count ?? preparedEntries?.length ?? 0),
+    category_totals: categoryTotals,
+    total_disbursements: totalDisbursements,
+    total_cash_receipts: roundFinancialValue(Number(report.beginning_balance || 0) + Number(report.cash_receipts || 0)),
+    balance: roundFinancialValue(Number(report.beginning_balance || 0) + Number(report.cash_receipts || 0) - totalDisbursements),
+    ...(preparedEntries ? { entries: preparedEntries } : {})
+  };
+}
+
+function normalizeNutritionFinancialBudget(input = {}, center = null) {
+  const budget = {
+    id: Number(input.id || 0) || 0,
+    center_id: Number(input.center_id || input.centerId || center?.id || 0) || 0,
+    center_name: titleCaseValue(input.center_name || input.centerName || center?.center_name),
+    budget_year: normalizeFinancialYear(input.budget_year || input.budgetYear),
+    feeding_days: Math.max(Number(input.feeding_days || input.feedingDays || 22) || 22, 1),
+    approved_budget_per_child: roundFinancialValue(normalizeAmount(
+      input.approved_budget_per_child ?? input.approvedBudgetPerChild
+    )),
+    notes: sentenceCaseValue(input.notes)
+  };
+
+  NUTRITION_FINANCIAL_CATEGORIES.forEach(category => {
+    budget[category] = roundFinancialValue(normalizeAmount(input[category]));
+  });
+  return budget;
+}
+
+function buildNutritionFinancialSummaryPayload({ year, centers = [], reports = [], budgets = [] } = {}) {
+  const summaryYear = normalizeFinancialYear(year);
+  const budgetByCenter = new Map(budgets.map(budget => [Number(budget.center_id), normalizeNutritionFinancialBudget(budget)]));
+  const reportsByCenter = new Map();
+
+  reports.forEach(report => {
+    const centerId = Number(report.center_id || 0);
+    if (!centerId || !String(report.report_month || "").startsWith(`${summaryYear}-`)) return;
+    if (!reportsByCenter.has(centerId)) reportsByCenter.set(centerId, new Map());
+    reportsByCenter.get(centerId).set(report.report_month, decorateNutritionFinancialReport(report));
+  });
+
+  const centerSummaries = centers.map(center => {
+    const centerId = Number(center.id || 0);
+    const centerReports = reportsByCenter.get(centerId) || new Map();
+    const budget = budgetByCenter.get(centerId) || normalizeNutritionFinancialBudget({
+      center_id: centerId,
+      center_name: center.center_name,
+      budget_year: summaryYear,
+      feeding_days: 22
+    }, center);
+    const activeKids = Number(center.active_beneficiary_count || 0);
+    const capacity = Number(center.capacity || 0);
+    const months = FINANCIAL_MONTH_LABELS.map((label, index) => {
+      const key = `${summaryYear}-${String(index + 1).padStart(2, "0")}`;
+      const report = centerReports.get(key) || decorateNutritionFinancialReport({ report_month: key });
+      return {
+        key,
+        label,
+        report_id: Number(report.id || 0) || null,
+        submitted_date: report.submitted_date || "",
+        beginning_balance: report.beginning_balance,
+        cash_receipts: report.cash_receipts,
+        total_cash_receipts: report.total_cash_receipts,
+        category_totals: report.category_totals,
+        total_expenses: report.total_disbursements,
+        balance: report.balance,
+        filed: Boolean(report.id)
+      };
+    });
+    const reportedMonths = months.filter(month => month.filed).length;
+    const divisor = reportedMonths || 1;
+    const actualCategoryTotals = Object.fromEntries(NUTRITION_FINANCIAL_CATEGORIES.map(category => [
+      category,
+      roundFinancialValue(months.reduce((sum, month) => sum + Number(month.category_totals[category] || 0), 0))
+    ]));
+    const categoryMetrics = Object.fromEntries(NUTRITION_FINANCIAL_CATEGORIES.map(category => {
+      const actualTotal = actualCategoryTotals[category];
+      const actualMonthly = roundFinancialValue(actualTotal / divisor);
+      const actualDaily = roundFinancialValue(actualMonthly / budget.feeding_days);
+      const budgetMonthly = roundFinancialValue(budget[category]);
+      const budgetDaily = roundFinancialValue(budgetMonthly / budget.feeding_days);
+      return [category, {
+        actual_total: actualTotal,
+        actual_monthly_average: actualMonthly,
+        actual_daily_average: actualDaily,
+        actual_per_child: activeKids ? roundFinancialValue(actualDaily / activeKids) : 0,
+        budget_monthly: budgetMonthly,
+        budget_daily: budgetDaily,
+        budget_per_child: capacity ? roundFinancialValue(budgetDaily / capacity) : 0,
+        variance_monthly: roundFinancialValue(actualMonthly - budgetMonthly)
+      }];
+    }));
+    const totals = {
+      beginning_balance: roundFinancialValue(months.reduce((sum, month) => sum + month.beginning_balance, 0)),
+      cash_receipts: roundFinancialValue(months.reduce((sum, month) => sum + month.cash_receipts, 0)),
+      total_cash_receipts: roundFinancialValue(months.reduce((sum, month) => sum + month.total_cash_receipts, 0)),
+      category_totals: actualCategoryTotals,
+      total_expenses: roundFinancialValue(Object.values(actualCategoryTotals).reduce((sum, value) => sum + value, 0))
+    };
+    totals.balance = roundFinancialValue(totals.total_cash_receipts - totals.total_expenses);
+    const actualMonthlyAverage = roundFinancialValue(totals.total_expenses / divisor);
+    const actualDailyAverage = roundFinancialValue(actualMonthlyAverage / budget.feeding_days);
+    const actualPerChild = activeKids ? roundFinancialValue(actualDailyAverage / activeKids) : 0;
+    const approvedPerChild = roundFinancialValue(budget.approved_budget_per_child);
+    const approvedDaily = roundFinancialValue(approvedPerChild * capacity);
+    const approvedMonthly = roundFinancialValue(approvedDaily * budget.feeding_days);
+    const proposedMonthlyAllocation = roundFinancialValue(
+      NUTRITION_FINANCIAL_CATEGORIES.reduce((sum, category) => sum + Number(budget[category] || 0), 0)
+    );
+
+    return {
+      id: centerId,
+      center_name: center.center_name || budget.center_name || "",
+      coordinator: center.coordinator || "",
+      status: center.status || "",
+      active_kids: activeKids,
+      capacity,
+      reported_months: reportedMonths,
+      feeding_days: budget.feeding_days,
+      budget,
+      budget_metrics: {
+        actual_monthly_average: actualMonthlyAverage,
+        actual_daily_average: actualDailyAverage,
+        actual_per_child: actualPerChild,
+        approved_per_child: approvedPerChild,
+        approved_daily: approvedDaily,
+        approved_monthly: approvedMonthly,
+        approved_annual: roundFinancialValue(approvedMonthly * 12),
+        proposed_monthly_allocation: proposedMonthlyAllocation,
+        allocation_variance: roundFinancialValue(proposedMonthlyAllocation - approvedMonthly),
+        monthly_variance: roundFinancialValue(actualMonthlyAverage - approvedMonthly),
+        utilization_percent: approvedMonthly ? roundFinancialValue((actualMonthlyAverage / approvedMonthly) * 100) : 0
+      },
+      months,
+      totals,
+      category_metrics: categoryMetrics
+    };
+  });
+
+  const programCategoryMetrics = Object.fromEntries(NUTRITION_FINANCIAL_CATEGORIES.map(category => [
+    category,
+    {
+      actual_total: roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.category_metrics[category].actual_total, 0)),
+      actual_monthly_average: roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.category_metrics[category].actual_monthly_average, 0)),
+      actual_daily_average: roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.category_metrics[category].actual_daily_average, 0)),
+      actual_per_child: roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.category_metrics[category].actual_per_child, 0)),
+      budget_monthly: roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.category_metrics[category].budget_monthly, 0)),
+      budget_daily: roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.category_metrics[category].budget_daily, 0)),
+      budget_per_child: roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.category_metrics[category].budget_per_child, 0)),
+      variance_monthly: roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.category_metrics[category].variance_monthly, 0))
+    }
+  ]));
+
+  const programActiveKids = centerSummaries.reduce((sum, center) => sum + center.active_kids, 0);
+  const programCapacity = centerSummaries.reduce((sum, center) => sum + center.capacity, 0);
+  const programActualDaily = roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.budget_metrics.actual_daily_average, 0));
+  const programApprovedDaily = roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.budget_metrics.approved_daily, 0));
+  const programApprovedMonthly = roundFinancialValue(centerSummaries.reduce((sum, center) => sum + center.budget_metrics.approved_monthly, 0));
+
+  return {
+    year: summaryYear,
+    centers: centerSummaries,
+    program: {
+      center_count: centerSummaries.length,
+      active_kids: programActiveKids,
+      capacity: programCapacity,
+      report_count: centerSummaries.reduce((sum, center) => sum + center.reported_months, 0),
+      category_metrics: programCategoryMetrics,
+      total_actual: roundFinancialValue(Object.values(programCategoryMetrics).reduce((sum, metric) => sum + metric.actual_total, 0)),
+      total_budget_monthly: roundFinancialValue(Object.values(programCategoryMetrics).reduce((sum, metric) => sum + metric.budget_monthly, 0)),
+      actual_daily_average: programActualDaily,
+      actual_per_child: programActiveKids ? roundFinancialValue(programActualDaily / programActiveKids) : 0,
+      approved_budget_per_child: programCapacity ? roundFinancialValue(programApprovedDaily / programCapacity) : 0,
+      approved_daily: programApprovedDaily,
+      approved_monthly: programApprovedMonthly,
+      approved_annual: roundFinancialValue(programApprovedMonthly * 12),
+      monthly_variance: roundFinancialValue(
+        centerSummaries.reduce((sum, center) => sum + center.budget_metrics.actual_monthly_average, 0) - programApprovedMonthly
+      )
+    }
+  };
+}
+
 class BeneficiaryDatabase {
   constructor(dbPath = process.env.LPDB_DB_PATH || DEFAULT_DB_PATH) {
     this.dbPath = dbPath;
@@ -900,6 +1207,73 @@ class BeneficiaryDatabase {
       CREATE INDEX IF NOT EXISTS idx_nutrition_growth_entries_beneficiary
         ON nutrition_growth_entries(beneficiary_id);
 
+      CREATE TABLE IF NOT EXISTS nutrition_financial_reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        center_id INTEGER,
+        center_name TEXT NOT NULL DEFAULT '',
+        submitted_date TEXT NOT NULL DEFAULT '',
+        report_month TEXT NOT NULL DEFAULT '',
+        beginning_balance REAL NOT NULL DEFAULT 0,
+        cash_receipts REAL NOT NULL DEFAULT 0,
+        prepared_by TEXT NOT NULL DEFAULT '',
+        prepared_title TEXT NOT NULL DEFAULT '',
+        noted_by TEXT NOT NULL DEFAULT '',
+        noted_title TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (center_id) REFERENCES nutrition_centers(id) ON DELETE SET NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_nutrition_financial_center_month
+        ON nutrition_financial_reports(center_id, report_month);
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_financial_reports_month
+        ON nutrition_financial_reports(report_month);
+
+      CREATE TABLE IF NOT EXISTS nutrition_financial_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        report_id INTEGER NOT NULL,
+        row_order INTEGER NOT NULL DEFAULT 0,
+        entry_date TEXT NOT NULL DEFAULT '',
+        rep_no TEXT NOT NULL DEFAULT '',
+        particulars TEXT NOT NULL DEFAULT '',
+        cv_no TEXT NOT NULL DEFAULT '',
+        viands REAL NOT NULL DEFAULT 0,
+        milk REAL NOT NULL DEFAULT 0,
+        rice REAL NOT NULL DEFAULT 0,
+        gas REAL NOT NULL DEFAULT 0,
+        mineral_water REAL NOT NULL DEFAULT 0,
+        utilities REAL NOT NULL DEFAULT 0,
+        others REAL NOT NULL DEFAULT 0,
+        FOREIGN KEY (report_id) REFERENCES nutrition_financial_reports(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_financial_entries_report
+        ON nutrition_financial_entries(report_id);
+
+      CREATE TABLE IF NOT EXISTS nutrition_financial_budgets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        center_id INTEGER,
+        center_name TEXT NOT NULL DEFAULT '',
+        budget_year INTEGER NOT NULL,
+        feeding_days INTEGER NOT NULL DEFAULT 22,
+        approved_budget_per_child REAL NOT NULL DEFAULT 0,
+        viands REAL NOT NULL DEFAULT 0,
+        milk REAL NOT NULL DEFAULT 0,
+        rice REAL NOT NULL DEFAULT 0,
+        gas REAL NOT NULL DEFAULT 0,
+        mineral_water REAL NOT NULL DEFAULT 0,
+        utilities REAL NOT NULL DEFAULT 0,
+        others REAL NOT NULL DEFAULT 0,
+        notes TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (center_id) REFERENCES nutrition_centers(id) ON DELETE CASCADE
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_nutrition_financial_budget_center_year
+        ON nutrition_financial_budgets(center_id, budget_year);
+
       CREATE TABLE IF NOT EXISTS app_users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
@@ -918,9 +1292,20 @@ class BeneficiaryDatabase {
         ON app_users(lower(username));
     `);
 
+    this.ensureNutritionFinancialBudgetColumns();
+
     this.ensureBeneficiaryColumns();
     this.backfillCurrentGroup();
     this.ensureSuperadmin();
+  }
+
+  ensureNutritionFinancialBudgetColumns() {
+    const existingColumns = new Set(
+      this.db.prepare("PRAGMA table_info(nutrition_financial_budgets)").all().map(column => column.name)
+    );
+    if (!existingColumns.has("approved_budget_per_child")) {
+      this.db.exec("ALTER TABLE nutrition_financial_budgets ADD COLUMN approved_budget_per_child REAL NOT NULL DEFAULT 0;");
+    }
   }
 
   ensureBeneficiaryColumns() {
@@ -981,7 +1366,8 @@ class BeneficiaryDatabase {
         (SELECT COUNT(*) FROM monitoring_reports) AS monitoringReports,
         (SELECT COUNT(*) FROM nutrition_centers) AS nutritionCenters,
         (SELECT COUNT(*) FROM nutrition_beneficiaries) AS nutritionBeneficiaries,
-        (SELECT COUNT(*) FROM nutrition_growth_reports) AS nutritionGrowthReports
+        (SELECT COUNT(*) FROM nutrition_growth_reports) AS nutritionGrowthReports,
+        (SELECT COUNT(*) FROM nutrition_financial_reports) AS nutritionFinancialReports
     `).get();
 
     return {
@@ -991,6 +1377,7 @@ class BeneficiaryDatabase {
       nutritionCenters: Number(row.nutritionCenters || 0),
       nutritionBeneficiaries: Number(row.nutritionBeneficiaries || 0),
       nutritionGrowthReports: Number(row.nutritionGrowthReports || 0),
+      nutritionFinancialReports: Number(row.nutritionFinancialReports || 0),
       databasePath: this.dbPath
     };
   }
@@ -2391,6 +2778,236 @@ class BeneficiaryDatabase {
       .map(row => this.getNutritionGrowthReport(row.id));
   }
 
+  nutritionFinancialReportSummarySelect() {
+    return `
+      SELECT r.*,
+        COUNT(e.id) AS line_count,
+        COALESCE(SUM(e.viands), 0) AS viands_total,
+        COALESCE(SUM(e.milk), 0) AS milk_total,
+        COALESCE(SUM(e.rice), 0) AS rice_total,
+        COALESCE(SUM(e.gas), 0) AS gas_total,
+        COALESCE(SUM(e.mineral_water), 0) AS mineral_water_total,
+        COALESCE(SUM(e.utilities), 0) AS utilities_total,
+        COALESCE(SUM(e.others), 0) AS others_total
+      FROM nutrition_financial_reports r
+      LEFT JOIN nutrition_financial_entries e ON e.report_id = r.id
+    `;
+  }
+
+  countNutritionFinancialReports({ search = "", centerId = "", year = "" } = {}) {
+    const conditions = [];
+    const args = [];
+    const term = String(search || "").trim().toLowerCase();
+    if (term) {
+      const pattern = `%${term}%`;
+      conditions.push("(lower(r.center_name) LIKE ? OR lower(r.report_month) LIKE ? OR lower(r.submitted_date) LIKE ?)");
+      args.push(pattern, pattern, pattern);
+    }
+    if (Number(centerId)) {
+      conditions.push("r.center_id = ?");
+      args.push(Number(centerId));
+    }
+    if (String(year || "").trim()) {
+      conditions.push("substr(r.report_month, 1, 4) = ?");
+      args.push(String(normalizeFinancialYear(year)));
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    return Number(this.db.prepare(`SELECT COUNT(*) AS count FROM nutrition_financial_reports r ${where}`).get(...args)?.count || 0);
+  }
+
+  listNutritionFinancialReports({ search = "", centerId = "", year = "", limit = 200, offset = 0 } = {}) {
+    const conditions = [];
+    const args = [];
+    const term = String(search || "").trim().toLowerCase();
+    if (term) {
+      const pattern = `%${term}%`;
+      conditions.push("(lower(r.center_name) LIKE ? OR lower(r.report_month) LIKE ? OR lower(r.submitted_date) LIKE ?)");
+      args.push(pattern, pattern, pattern);
+    }
+    if (Number(centerId)) {
+      conditions.push("r.center_id = ?");
+      args.push(Number(centerId));
+    }
+    if (String(year || "").trim()) {
+      conditions.push("substr(r.report_month, 1, 4) = ?");
+      args.push(String(normalizeFinancialYear(year)));
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const max = clampLimit(limit, 200, 500);
+    const skip = clampOffset(offset);
+
+    return this.db.prepare(`
+      ${this.nutritionFinancialReportSummarySelect()}
+      ${where}
+      GROUP BY r.id
+      ORDER BY r.report_month DESC, r.center_name, r.id DESC
+      LIMIT ? OFFSET ?
+    `).all(...args, max, skip).map(report => decorateNutritionFinancialReport(report));
+  }
+
+  getNutritionFinancialReport(id) {
+    const report = this.db.prepare("SELECT * FROM nutrition_financial_reports WHERE id = ?").get(Number(id));
+    if (!report) return null;
+    const entries = this.db
+      .prepare("SELECT * FROM nutrition_financial_entries WHERE report_id = ? ORDER BY row_order, id")
+      .all(Number(id));
+    return decorateNutritionFinancialReport(report, entries);
+  }
+
+  saveNutritionFinancialReport(input = {}) {
+    const id = Number(input.id || 0) || 0;
+    const existing = id ? this.getNutritionFinancialReport(id) : null;
+    const centerId = Number(input.center_id || input.centerId || existing?.center_id || 0) || 0;
+    const center = centerId ? this.getNutritionCenter(centerId) : null;
+    if (!center) throw new Error("Select a valid feeding center.");
+
+    const report = normalizeNutritionFinancialReport(input, center, existing);
+    if (!report.report_month) throw new Error("Report month is required.");
+    const duplicate = this.db
+      .prepare("SELECT id FROM nutrition_financial_reports WHERE center_id = ? AND report_month = ? AND id <> ?")
+      .get(report.center_id, report.report_month, id);
+    if (duplicate) throw new Error("A financial report already exists for this center and month.");
+
+    const timestamp = nowIso();
+    this.db.exec("BEGIN");
+    try {
+      let reportId = id;
+      if (existing) {
+        this.db.prepare(`
+          UPDATE nutrition_financial_reports
+          SET center_id = ?, center_name = ?, submitted_date = ?, report_month = ?,
+              beginning_balance = ?, cash_receipts = ?, prepared_by = ?, prepared_title = ?,
+              noted_by = ?, noted_title = ?, updated_at = ?
+          WHERE id = ?
+        `).run(
+          report.center_id, report.center_name, report.submitted_date, report.report_month,
+          report.beginning_balance, report.cash_receipts, report.prepared_by, report.prepared_title,
+          report.noted_by, report.noted_title, timestamp, existing.id
+        );
+      } else {
+        const result = this.db.prepare(`
+          INSERT INTO nutrition_financial_reports (
+            center_id, center_name, submitted_date, report_month, beginning_balance, cash_receipts,
+            prepared_by, prepared_title, noted_by, noted_title, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          report.center_id, report.center_name, report.submitted_date, report.report_month,
+          report.beginning_balance, report.cash_receipts, report.prepared_by, report.prepared_title,
+          report.noted_by, report.noted_title, timestamp, timestamp
+        );
+        reportId = Number(result.lastInsertRowid);
+      }
+
+      this.db.prepare("DELETE FROM nutrition_financial_entries WHERE report_id = ?").run(reportId);
+      const insertEntry = this.db.prepare(`
+        INSERT INTO nutrition_financial_entries (
+          report_id, row_order, entry_date, rep_no, particulars, cv_no,
+          viands, milk, rice, gas, mineral_water, utilities, others
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      report.entries.forEach((entry, index) => {
+        insertEntry.run(
+          reportId, index, entry.entry_date, entry.rep_no, entry.particulars, entry.cv_no,
+          entry.viands, entry.milk, entry.rice, entry.gas, entry.mineral_water, entry.utilities, entry.others
+        );
+      });
+      this.db.exec("COMMIT");
+      return this.getNutritionFinancialReport(reportId);
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  deleteNutritionFinancialReport(id) {
+    const report = this.getNutritionFinancialReport(id);
+    if (!report) throw new Error("Financial report was not found.");
+    this.db.prepare("DELETE FROM nutrition_financial_reports WHERE id = ?").run(Number(id));
+    return report;
+  }
+
+  listNutritionFinancialBudgets({ year = new Date().getFullYear(), centerId = "" } = {}) {
+    const conditions = ["b.budget_year = ?"];
+    const args = [normalizeFinancialYear(year)];
+    if (Number(centerId)) {
+      conditions.push("b.center_id = ?");
+      args.push(Number(centerId));
+    }
+    return this.db.prepare(`
+      SELECT b.*, c.capacity, c.status,
+        (
+          SELECT COUNT(*) FROM nutrition_beneficiaries n
+          WHERE n.center_id = b.center_id
+            AND (lower(COALESCE(n.remarks, '')) = 'active' OR lower(COALESCE(n.profile_status, '')) = 'active')
+        ) AS active_beneficiary_count
+      FROM nutrition_financial_budgets b
+      LEFT JOIN nutrition_centers c ON c.id = b.center_id
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY b.center_name, b.id
+    `).all(...args).map(budget => normalizeNutritionFinancialBudget(budget));
+  }
+
+  saveNutritionFinancialBudgets(input = {}) {
+    const budgetYear = normalizeFinancialYear(input.year || input.budget_year);
+    const budgets = (Array.isArray(input.budgets) ? input.budgets : [input]).map(item => ({ ...item, budget_year: budgetYear }));
+    const timestamp = nowIso();
+    this.db.exec("BEGIN");
+    try {
+      const upsert = this.db.prepare(`
+        INSERT INTO nutrition_financial_budgets (
+          center_id, center_name, budget_year, feeding_days, approved_budget_per_child,
+          viands, milk, rice, gas, mineral_water, utilities, others, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(center_id, budget_year) DO UPDATE SET
+          center_name = excluded.center_name,
+          feeding_days = excluded.feeding_days,
+          approved_budget_per_child = excluded.approved_budget_per_child,
+          viands = excluded.viands,
+          milk = excluded.milk,
+          rice = excluded.rice,
+          gas = excluded.gas,
+          mineral_water = excluded.mineral_water,
+          utilities = excluded.utilities,
+          others = excluded.others,
+          notes = excluded.notes,
+          updated_at = excluded.updated_at
+      `);
+
+      budgets.forEach(item => {
+        const center = this.getNutritionCenter(item.center_id || item.centerId);
+        if (!center) throw new Error("A budget row references an invalid feeding center.");
+        const budget = normalizeNutritionFinancialBudget(item, center);
+        upsert.run(
+          budget.center_id, budget.center_name, budget.budget_year, budget.feeding_days, budget.approved_budget_per_child,
+          budget.viands, budget.milk, budget.rice, budget.gas, budget.mineral_water,
+          budget.utilities, budget.others, budget.notes, timestamp, timestamp
+        );
+      });
+      this.db.exec("COMMIT");
+      return this.listNutritionFinancialBudgets({ year: budgetYear });
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  nutritionFinancialSummary({ year = new Date().getFullYear() } = {}) {
+    const summaryYear = normalizeFinancialYear(year);
+    return buildNutritionFinancialSummaryPayload({
+      year: summaryYear,
+      centers: this.listNutritionCenters({ limit: 500 }),
+      reports: this.listNutritionFinancialReports({ year: summaryYear, limit: 500 }),
+      budgets: this.listNutritionFinancialBudgets({ year: summaryYear })
+    });
+  }
+
+  exportNutritionFinancialReports() {
+    return this.db
+      .prepare("SELECT id FROM nutrition_financial_reports ORDER BY report_month DESC, center_name")
+      .all()
+      .map(row => this.getNutritionFinancialReport(row.id));
+  }
+
   nutritionCgsReference() {
     return cgsReferencePayload();
   }
@@ -2480,6 +3097,8 @@ class BeneficiaryDatabase {
       nutritionCenters: nutrition.centers,
       nutritionBeneficiaries: this.exportNutritionBeneficiaries(),
       nutritionGrowthReports: this.exportNutritionGrowthReports(),
+      nutritionFinancialReports: this.exportNutritionFinancialReports(),
+      nutritionFinancialBudgets: this.db.prepare("SELECT * FROM nutrition_financial_budgets ORDER BY budget_year DESC, center_name").all(),
       deletedRecords: this.db
         .prepare("SELECT * FROM deleted_records ORDER BY deleted_at DESC, id DESC")
         .all()
@@ -2495,6 +3114,12 @@ module.exports = {
   NUTRITION_GROWTH_ENTRY_FIELDS,
   NUTRITION_GROWTH_REPORT_FIELDS,
   NUTRITION_HOUSEHOLD_FIELDS,
+  NUTRITION_FINANCIAL_BUDGET_FIELDS,
+  NUTRITION_FINANCIAL_CATEGORIES,
+  NUTRITION_FINANCIAL_ENTRY_FIELDS,
+  NUTRITION_FINANCIAL_REPORT_FIELDS,
+  buildNutritionFinancialSummaryPayload,
+  decorateNutritionFinancialReport,
   hashPassword,
   normalizeContactNumber,
   normalizeAmount,
@@ -2503,6 +3128,9 @@ module.exports = {
   normalizeMonitoringReport,
   normalizeNutritionBeneficiary,
   normalizeNutritionCenter,
+  normalizeNutritionFinancialBudget,
+  normalizeNutritionFinancialEntry,
+  normalizeNutritionFinancialReport,
   normalizeNutritionHouseholdMembers,
   normalizeRecord,
   nutritionBeneficiaryName,

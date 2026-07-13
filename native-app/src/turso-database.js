@@ -2,13 +2,18 @@ const { FIELD_NAMES, SUMMARY_FIELDS } = require("./metadata");
 const { cloudLocationLabel } = require("./cloud-config");
 const {
   NUTRITION_BENEFICIARY_FIELDS,
+  NUTRITION_FINANCIAL_CATEGORIES,
   NUTRITION_GROWTH_ENTRY_FIELDS,
+  buildNutritionFinancialSummaryPayload,
+  decorateNutritionFinancialReport,
   mergeNutritionHouseholdMembers,
   normalizeAmount,
   normalizeContactNumber,
   normalizeMonitoringReport,
   normalizeNutritionBeneficiary,
   normalizeNutritionCenter,
+  normalizeNutritionFinancialBudget,
+  normalizeNutritionFinancialReport,
   normalizeRecord,
   nowIso,
   quoted,
@@ -422,6 +427,68 @@ class TursoBeneficiaryDatabase {
       "CREATE INDEX IF NOT EXISTS idx_nutrition_growth_entries_report ON nutrition_growth_entries(report_id)",
       "CREATE INDEX IF NOT EXISTS idx_nutrition_growth_entries_beneficiary ON nutrition_growth_entries(beneficiary_id)",
       `
+        CREATE TABLE IF NOT EXISTS nutrition_financial_reports (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          center_id INTEGER,
+          center_name TEXT NOT NULL DEFAULT '',
+          submitted_date TEXT NOT NULL DEFAULT '',
+          report_month TEXT NOT NULL DEFAULT '',
+          beginning_balance REAL NOT NULL DEFAULT 0,
+          cash_receipts REAL NOT NULL DEFAULT 0,
+          prepared_by TEXT NOT NULL DEFAULT '',
+          prepared_title TEXT NOT NULL DEFAULT '',
+          noted_by TEXT NOT NULL DEFAULT '',
+          noted_title TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (center_id) REFERENCES nutrition_centers(id) ON DELETE SET NULL
+        )
+      `,
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_nutrition_financial_center_month ON nutrition_financial_reports(center_id, report_month)",
+      "CREATE INDEX IF NOT EXISTS idx_nutrition_financial_reports_month ON nutrition_financial_reports(report_month)",
+      `
+        CREATE TABLE IF NOT EXISTS nutrition_financial_entries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          report_id INTEGER NOT NULL,
+          row_order INTEGER NOT NULL DEFAULT 0,
+          entry_date TEXT NOT NULL DEFAULT '',
+          rep_no TEXT NOT NULL DEFAULT '',
+          particulars TEXT NOT NULL DEFAULT '',
+          cv_no TEXT NOT NULL DEFAULT '',
+          viands REAL NOT NULL DEFAULT 0,
+          milk REAL NOT NULL DEFAULT 0,
+          rice REAL NOT NULL DEFAULT 0,
+          gas REAL NOT NULL DEFAULT 0,
+          mineral_water REAL NOT NULL DEFAULT 0,
+          utilities REAL NOT NULL DEFAULT 0,
+          others REAL NOT NULL DEFAULT 0,
+          FOREIGN KEY (report_id) REFERENCES nutrition_financial_reports(id) ON DELETE CASCADE
+        )
+      `,
+      "CREATE INDEX IF NOT EXISTS idx_nutrition_financial_entries_report ON nutrition_financial_entries(report_id)",
+      `
+        CREATE TABLE IF NOT EXISTS nutrition_financial_budgets (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          center_id INTEGER,
+          center_name TEXT NOT NULL DEFAULT '',
+          budget_year INTEGER NOT NULL,
+          feeding_days INTEGER NOT NULL DEFAULT 22,
+          approved_budget_per_child REAL NOT NULL DEFAULT 0,
+          viands REAL NOT NULL DEFAULT 0,
+          milk REAL NOT NULL DEFAULT 0,
+          rice REAL NOT NULL DEFAULT 0,
+          gas REAL NOT NULL DEFAULT 0,
+          mineral_water REAL NOT NULL DEFAULT 0,
+          utilities REAL NOT NULL DEFAULT 0,
+          others REAL NOT NULL DEFAULT 0,
+          notes TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (center_id) REFERENCES nutrition_centers(id) ON DELETE CASCADE
+        )
+      `,
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_nutrition_financial_budget_center_year ON nutrition_financial_budgets(center_id, budget_year)",
+      `
         CREATE TABLE IF NOT EXISTS app_users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           username TEXT NOT NULL UNIQUE,
@@ -440,6 +507,7 @@ class TursoBeneficiaryDatabase {
     await this.executeBatch(statements, "write", true);
 
     await this.ensureBeneficiaryColumns();
+    await this.ensureNutritionFinancialBudgetColumns();
     await this.backfillCurrentGroup();
     await this.ensureSuperadmin();
   }
@@ -453,6 +521,15 @@ class TursoBeneficiaryDatabase {
       if (!existingColumns.has(fieldName)) {
         await this.execute(`ALTER TABLE beneficiaries ADD COLUMN ${quoted(fieldName)} TEXT NOT NULL DEFAULT ''`);
       }
+    }
+  }
+
+  async ensureNutritionFinancialBudgetColumns() {
+    const existingColumns = new Set(
+      rows(await this.execute("PRAGMA table_info(nutrition_financial_budgets)")).map(column => column.name)
+    );
+    if (!existingColumns.has("approved_budget_per_child")) {
+      await this.execute("ALTER TABLE nutrition_financial_budgets ADD COLUMN approved_budget_per_child REAL NOT NULL DEFAULT 0");
     }
   }
 
@@ -506,7 +583,8 @@ class TursoBeneficiaryDatabase {
         (SELECT COUNT(*) FROM monitoring_reports) AS monitoringReports,
         (SELECT COUNT(*) FROM nutrition_centers) AS nutritionCenters,
         (SELECT COUNT(*) FROM nutrition_beneficiaries) AS nutritionBeneficiaries,
-        (SELECT COUNT(*) FROM nutrition_growth_reports) AS nutritionGrowthReports
+        (SELECT COUNT(*) FROM nutrition_growth_reports) AS nutritionGrowthReports,
+        (SELECT COUNT(*) FROM nutrition_financial_reports) AS nutritionFinancialReports
     `)).rows[0]) || {};
 
     return {
@@ -516,6 +594,7 @@ class TursoBeneficiaryDatabase {
       nutritionCenters: Number(row.nutritionCenters || 0),
       nutritionBeneficiaries: Number(row.nutritionBeneficiaries || 0),
       nutritionGrowthReports: Number(row.nutritionGrowthReports || 0),
+      nutritionFinancialReports: Number(row.nutritionFinancialReports || 0),
       databasePath: this.dbPath
     };
   }
@@ -1974,6 +2053,213 @@ class TursoBeneficiaryDatabase {
     return detailed;
   }
 
+  nutritionFinancialReportSummarySelect() {
+    return `
+      SELECT r.*,
+        COUNT(e.id) AS line_count,
+        COALESCE(SUM(e.viands), 0) AS viands_total,
+        COALESCE(SUM(e.milk), 0) AS milk_total,
+        COALESCE(SUM(e.rice), 0) AS rice_total,
+        COALESCE(SUM(e.gas), 0) AS gas_total,
+        COALESCE(SUM(e.mineral_water), 0) AS mineral_water_total,
+        COALESCE(SUM(e.utilities), 0) AS utilities_total,
+        COALESCE(SUM(e.others), 0) AS others_total
+      FROM nutrition_financial_reports r
+      LEFT JOIN nutrition_financial_entries e ON e.report_id = r.id
+    `;
+  }
+
+  nutritionFinancialFilters({ search = "", centerId = "", year = "" } = {}) {
+    const conditions = [];
+    const args = [];
+    const term = String(search || "").trim().toLowerCase();
+    if (term) {
+      const pattern = `%${term}%`;
+      conditions.push("(lower(r.center_name) LIKE ? OR lower(r.report_month) LIKE ? OR lower(r.submitted_date) LIKE ?)");
+      args.push(pattern, pattern, pattern);
+    }
+    if (Number(centerId)) {
+      conditions.push("r.center_id = ?");
+      args.push(Number(centerId));
+    }
+    if (String(year || "").trim()) {
+      conditions.push("substr(r.report_month, 1, 4) = ?");
+      args.push(String(Number(year)));
+    }
+    return { where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "", args };
+  }
+
+  async countNutritionFinancialReports(filters = {}) {
+    const { where, args } = this.nutritionFinancialFilters(filters);
+    const row = plainRow((await this.execute(`SELECT COUNT(*) AS count FROM nutrition_financial_reports r ${where}`, args)).rows[0]) || {};
+    return Number(row.count || 0);
+  }
+
+  async listNutritionFinancialReports({ search = "", centerId = "", year = "", limit = 200, offset = 0 } = {}) {
+    const { where, args } = this.nutritionFinancialFilters({ search, centerId, year });
+    const result = await this.execute(`
+      ${this.nutritionFinancialReportSummarySelect()}
+      ${where}
+      GROUP BY r.id
+      ORDER BY r.report_month DESC, r.center_name, r.id DESC
+      LIMIT ? OFFSET ?
+    `, [...args, clampLimit(limit, 200, 500), clampOffset(offset)]);
+    return rows(result).map(report => decorateNutritionFinancialReport(report));
+  }
+
+  async getNutritionFinancialReport(id) {
+    const report = plainRow((await this.execute("SELECT * FROM nutrition_financial_reports WHERE id = ?", [Number(id)])).rows[0]);
+    if (!report) return null;
+    const entries = rows(await this.execute(
+      "SELECT * FROM nutrition_financial_entries WHERE report_id = ? ORDER BY row_order, id",
+      [Number(id)]
+    ));
+    return decorateNutritionFinancialReport(report, entries);
+  }
+
+  async saveNutritionFinancialReport(input = {}) {
+    const id = Number(input.id || 0) || 0;
+    const existing = id ? await this.getNutritionFinancialReport(id) : null;
+    const centerId = Number(input.center_id || input.centerId || existing?.center_id || 0) || 0;
+    const center = centerId ? await this.getNutritionCenter(centerId) : null;
+    if (!center) throw new Error("Select a valid feeding center.");
+    const report = normalizeNutritionFinancialReport(input, center, existing);
+    if (!report.report_month) throw new Error("Report month is required.");
+
+    const duplicate = plainRow((await this.execute(
+      "SELECT id FROM nutrition_financial_reports WHERE center_id = ? AND report_month = ? AND id <> ?",
+      [report.center_id, report.report_month, id]
+    )).rows[0]);
+    if (duplicate) throw new Error("A financial report already exists for this center and month.");
+
+    const timestamp = nowIso();
+    let reportId = id;
+    const reportValues = [
+      report.center_id, report.center_name, report.submitted_date, report.report_month,
+      report.beginning_balance, report.cash_receipts, report.prepared_by, report.prepared_title,
+      report.noted_by, report.noted_title
+    ];
+
+    if (existing) {
+      await this.execute(`
+        UPDATE nutrition_financial_reports
+        SET center_id = ?, center_name = ?, submitted_date = ?, report_month = ?,
+            beginning_balance = ?, cash_receipts = ?, prepared_by = ?, prepared_title = ?,
+            noted_by = ?, noted_title = ?, updated_at = ?
+        WHERE id = ?
+      `, [...reportValues, timestamp, reportId]);
+    } else {
+      const result = await this.execute(`
+        INSERT INTO nutrition_financial_reports (
+          center_id, center_name, submitted_date, report_month, beginning_balance, cash_receipts,
+          prepared_by, prepared_title, noted_by, noted_title, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [...reportValues, timestamp, timestamp]);
+      reportId = result.lastInsertRowid ? Number(result.lastInsertRowid) : 0;
+    }
+
+    await this.executeBatch([
+      { sql: "DELETE FROM nutrition_financial_entries WHERE report_id = ?", args: [reportId] },
+      ...report.entries.map((entry, index) => ({
+        sql: `
+          INSERT INTO nutrition_financial_entries (
+            report_id, row_order, entry_date, rep_no, particulars, cv_no,
+            viands, milk, rice, gas, mineral_water, utilities, others
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        args: [
+          reportId, index, entry.entry_date, entry.rep_no, entry.particulars, entry.cv_no,
+          entry.viands, entry.milk, entry.rice, entry.gas, entry.mineral_water, entry.utilities, entry.others
+        ]
+      }))
+    ], "write");
+
+    return this.getNutritionFinancialReport(reportId);
+  }
+
+  async deleteNutritionFinancialReport(id) {
+    const report = await this.getNutritionFinancialReport(id);
+    if (!report) throw new Error("Financial report was not found.");
+    await this.execute("DELETE FROM nutrition_financial_reports WHERE id = ?", [Number(id)]);
+    return report;
+  }
+
+  async listNutritionFinancialBudgets({ year = new Date().getFullYear(), centerId = "" } = {}) {
+    const conditions = ["b.budget_year = ?"];
+    const args = [Number(year) || new Date().getFullYear()];
+    if (Number(centerId)) {
+      conditions.push("b.center_id = ?");
+      args.push(Number(centerId));
+    }
+    const result = await this.execute(`
+      SELECT b.* FROM nutrition_financial_budgets b
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY b.center_name, b.id
+    `, args);
+    return rows(result).map(budget => normalizeNutritionFinancialBudget(budget));
+  }
+
+  async saveNutritionFinancialBudgets(input = {}) {
+    const budgetYear = Number(input.year || input.budget_year) || new Date().getFullYear();
+    const rawBudgets = Array.isArray(input.budgets) ? input.budgets : [input];
+    const statements = [];
+    const timestamp = nowIso();
+
+    for (const item of rawBudgets) {
+      const center = await this.getNutritionCenter(item.center_id || item.centerId);
+      if (!center) throw new Error("A budget row references an invalid feeding center.");
+      const budget = normalizeNutritionFinancialBudget({ ...item, budget_year: budgetYear }, center);
+      statements.push({
+        sql: `
+          INSERT INTO nutrition_financial_budgets (
+            center_id, center_name, budget_year, feeding_days, approved_budget_per_child,
+            viands, milk, rice, gas, mineral_water, utilities, others, notes, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(center_id, budget_year) DO UPDATE SET
+            center_name = excluded.center_name,
+            feeding_days = excluded.feeding_days,
+            approved_budget_per_child = excluded.approved_budget_per_child,
+            viands = excluded.viands,
+            milk = excluded.milk,
+            rice = excluded.rice,
+            gas = excluded.gas,
+            mineral_water = excluded.mineral_water,
+            utilities = excluded.utilities,
+            others = excluded.others,
+            notes = excluded.notes,
+            updated_at = excluded.updated_at
+        `,
+        args: [
+          budget.center_id, budget.center_name, budget.budget_year, budget.feeding_days, budget.approved_budget_per_child,
+          budget.viands, budget.milk, budget.rice, budget.gas, budget.mineral_water,
+          budget.utilities, budget.others, budget.notes, timestamp, timestamp
+        ]
+      });
+    }
+
+    if (statements.length) await this.executeBatch(statements, "write");
+    return this.listNutritionFinancialBudgets({ year: budgetYear });
+  }
+
+  async nutritionFinancialSummary({ year = new Date().getFullYear() } = {}) {
+    const summaryYear = Number(year) || new Date().getFullYear();
+    const [centers, reports, budgets] = await Promise.all([
+      this.listNutritionCenters({ limit: 500 }),
+      this.listNutritionFinancialReports({ year: summaryYear, limit: 500 }),
+      this.listNutritionFinancialBudgets({ year: summaryYear })
+    ]);
+    return buildNutritionFinancialSummaryPayload({ year: summaryYear, centers, reports, budgets });
+  }
+
+  async exportNutritionFinancialReports() {
+    const reportIds = rows(await this.execute(
+      "SELECT id FROM nutrition_financial_reports ORDER BY report_month DESC, center_name"
+    ));
+    const detailed = [];
+    for (const report of reportIds) detailed.push(await this.getNutritionFinancialReport(report.id));
+    return detailed;
+  }
+
   nutritionCgsReference() {
     return cgsReferencePayload();
   }
@@ -2063,6 +2349,8 @@ class TursoBeneficiaryDatabase {
       nutritionCenters: nutrition.centers,
       nutritionBeneficiaries: await this.exportNutritionBeneficiaries(),
       nutritionGrowthReports: await this.exportNutritionGrowthReports(),
+      nutritionFinancialReports: await this.exportNutritionFinancialReports(),
+      nutritionFinancialBudgets: rows(await this.execute("SELECT * FROM nutrition_financial_budgets ORDER BY budget_year DESC, center_name")),
       deletedRecords: rows(await this.execute("SELECT * FROM deleted_records ORDER BY deleted_at DESC, id DESC"))
     };
   }

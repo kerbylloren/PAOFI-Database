@@ -527,6 +527,79 @@ function createServer(database, startupError = null, reconnectDatabase = null) {
         return;
       }
 
+      if (pathname === "/api/nutrition/financial/reports" && req.method === "GET") {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
+          reports: await database.listNutritionFinancialReports({
+            search: url.searchParams.get("search") || "",
+            centerId: url.searchParams.get("centerId") || "",
+            year: url.searchParams.get("year") || "",
+            limit: url.searchParams.get("limit") || 200,
+            offset: url.searchParams.get("offset") || 0
+          }),
+          total: typeof database.countNutritionFinancialReports === "function"
+            ? await database.countNutritionFinancialReports({
+                search: url.searchParams.get("search") || "",
+                centerId: url.searchParams.get("centerId") || "",
+                year: url.searchParams.get("year") || ""
+              })
+            : 0
+        }));
+        return;
+      }
+
+      if (pathname === "/api/nutrition/financial/reports" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        clearResponseCache();
+        sendJson(res, 200, { report: await database.saveNutritionFinancialReport(payload) });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/financial/summary" && req.method === "GET") {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, () => database.nutritionFinancialSummary({
+          year: url.searchParams.get("year") || new Date().getFullYear()
+        }));
+        return;
+      }
+
+      if (pathname === "/api/nutrition/financial/budgets" && req.method === "GET") {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
+          budgets: await database.listNutritionFinancialBudgets({
+            year: url.searchParams.get("year") || new Date().getFullYear(),
+            centerId: url.searchParams.get("centerId") || ""
+          })
+        }));
+        return;
+      }
+
+      if (pathname === "/api/nutrition/financial/budgets" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        clearResponseCache();
+        sendJson(res, 200, { budgets: await database.saveNutritionFinancialBudgets(payload) });
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/financial/reports/") && req.method === "GET") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/financial/reports/");
+        const report = id ? await sendRecordFromCache(req, res, url, () => database.getNutritionFinancialReport(id), "report") : null;
+        if (!report) {
+          sendError(res, 404, "Financial report was not found.");
+          return;
+        }
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/financial/reports/") && req.method === "DELETE") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/financial/reports/");
+        const report = id ? await database.deleteNutritionFinancialReport(id) : null;
+        if (!report) {
+          sendError(res, 404, "Financial report was not found.");
+          return;
+        }
+        clearResponseCache();
+        sendJson(res, 200, { report });
+        return;
+      }
+
       if (pathname === "/api/nutrition/centers" && req.method === "GET") {
         await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
           centers: await database.listNutritionCenters({
