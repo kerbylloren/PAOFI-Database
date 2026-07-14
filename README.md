@@ -5,16 +5,17 @@ Inc. programs. The app is built with Electron and opens in its own application
 window, not as an Edge or Chrome app-mode window.
 
 The current production modules cover the Livelihood Program and the Nutrition
-Program / Supplemental Feeding core records and growth monitoring workflows.
-Future major release lines will expand the same system to Scholarship and
-Health Program operations.
+Program / Supplemental Feeding profiles, growth monitoring, financial
+reporting, menu planning, and weekly center costing workflows. Future major
+release lines will expand the same system to Scholarship and Health Program
+operations.
 
 Download the Windows installer from the
 [latest GitHub Release](https://github.com/kerbylloren/PAOFI-Database/releases/latest).
 
 ## Current Release
 
-Latest version: `1.3.0`
+Latest version: `1.4.0`
 
 The release includes:
 
@@ -60,6 +61,12 @@ The application will use major version lines to track PAOFI program modules:
 - Annual feeding-center and program-wide financial summaries
 - Year-specific budget setup, proposal references, and variance analytics
 - Printable monthly and yearly financial reports
+- Nutrition recipe book with practical wet-market purchase references
+- Monthly feeding calendar with Philippine national holidays
+- Automatic weekly costing generation by feeding center
+- Weekly budget-released and actual-cost entry with printable costing sheets
+- Paginated monthly-menu and weekly-costing records
+- Readable print layouts with a minimum 10px text size
 - JSON export for backup
 
 ## Cloud Database

@@ -10,6 +10,16 @@ const {
   normalizeReportMonth,
   parseMeasurementNumber
 } = require("./nutrition-cgs");
+const {
+  decorateCosting,
+  decorateRecipe,
+  groupMenuEntriesByWeek,
+  normalizeCosting,
+  normalizeMenu,
+  normalizeRecipe,
+  recipeKey,
+  scalePurchaseBudget
+} = require("./nutrition-menu");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
 const DEFAULT_DB_PATH = path.join(DATA_DIR, "lp_database.sqlite");
@@ -1274,6 +1284,116 @@ class BeneficiaryDatabase {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_nutrition_financial_budget_center_year
         ON nutrition_financial_budgets(center_id, budget_year);
 
+      CREATE TABLE IF NOT EXISTS nutrition_recipes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipe_name TEXT NOT NULL,
+        recipe_key TEXT NOT NULL UNIQUE,
+        description TEXT NOT NULL DEFAULT '',
+        base_servings INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'Active',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_recipes_name
+        ON nutrition_recipes(recipe_name);
+
+      CREATE TABLE IF NOT EXISTS nutrition_recipe_ingredients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipe_id INTEGER NOT NULL,
+        row_order INTEGER NOT NULL DEFAULT 0,
+        ingredient_name TEXT NOT NULL DEFAULT '',
+        default_quantity TEXT NOT NULL DEFAULT '',
+        default_cost REAL NOT NULL DEFAULT 0,
+        FOREIGN KEY (recipe_id) REFERENCES nutrition_recipes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_recipe_ingredients_recipe
+        ON nutrition_recipe_ingredients(recipe_id);
+
+      CREATE TABLE IF NOT EXISTS nutrition_monthly_menus (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        menu_month TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL DEFAULT 'Draft',
+        notes TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS nutrition_monthly_menu_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        menu_id INTEGER NOT NULL,
+        row_order INTEGER NOT NULL DEFAULT 0,
+        meal_date TEXT NOT NULL,
+        recipe_id INTEGER,
+        meal_name TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY (menu_id) REFERENCES nutrition_monthly_menus(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipe_id) REFERENCES nutrition_recipes(id) ON DELETE SET NULL,
+        UNIQUE(menu_id, meal_date)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_menu_entries_date
+        ON nutrition_monthly_menu_entries(meal_date);
+
+      CREATE TABLE IF NOT EXISTS nutrition_menu_costings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        center_id INTEGER NOT NULL,
+        center_name TEXT NOT NULL DEFAULT '',
+        menu_id INTEGER,
+        report_month TEXT NOT NULL DEFAULT '',
+        week_start TEXT NOT NULL,
+        week_end TEXT NOT NULL,
+        no_children INTEGER NOT NULL DEFAULT 0,
+        inventory_rice REAL NOT NULL DEFAULT 0,
+        inventory_manna REAL NOT NULL DEFAULT 0,
+        inventory_vitameals REAL NOT NULL DEFAULT 0,
+        budget_released REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'Draft',
+        notes TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (center_id) REFERENCES nutrition_centers(id) ON DELETE CASCADE,
+        FOREIGN KEY (menu_id) REFERENCES nutrition_monthly_menus(id) ON DELETE SET NULL,
+        UNIQUE(center_id, week_start)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_costings_month
+        ON nutrition_menu_costings(report_month, center_id);
+
+      CREATE TABLE IF NOT EXISTS nutrition_menu_costing_days (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        costing_id INTEGER NOT NULL,
+        row_order INTEGER NOT NULL DEFAULT 0,
+        meal_date TEXT NOT NULL,
+        recipe_id INTEGER,
+        meal_name TEXT NOT NULL DEFAULT '',
+        kids_present INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (costing_id) REFERENCES nutrition_menu_costings(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipe_id) REFERENCES nutrition_recipes(id) ON DELETE SET NULL,
+        UNIQUE(costing_id, meal_date)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_costing_days_costing
+        ON nutrition_menu_costing_days(costing_id);
+
+      CREATE TABLE IF NOT EXISTS nutrition_menu_costing_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        costing_day_id INTEGER NOT NULL,
+        recipe_ingredient_id INTEGER,
+        row_order INTEGER NOT NULL DEFAULT 0,
+        ingredient_name TEXT NOT NULL DEFAULT '',
+        budget_quantity TEXT NOT NULL DEFAULT '',
+        budget_cost REAL NOT NULL DEFAULT 0,
+        actual_quantity TEXT NOT NULL DEFAULT '',
+        actual_cost REAL NOT NULL DEFAULT 0,
+        FOREIGN KEY (costing_day_id) REFERENCES nutrition_menu_costing_days(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipe_ingredient_id) REFERENCES nutrition_recipe_ingredients(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nutrition_costing_items_day
+        ON nutrition_menu_costing_items(costing_day_id);
+
       CREATE TABLE IF NOT EXISTS app_users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
@@ -1367,7 +1487,10 @@ class BeneficiaryDatabase {
         (SELECT COUNT(*) FROM nutrition_centers) AS nutritionCenters,
         (SELECT COUNT(*) FROM nutrition_beneficiaries) AS nutritionBeneficiaries,
         (SELECT COUNT(*) FROM nutrition_growth_reports) AS nutritionGrowthReports,
-        (SELECT COUNT(*) FROM nutrition_financial_reports) AS nutritionFinancialReports
+        (SELECT COUNT(*) FROM nutrition_financial_reports) AS nutritionFinancialReports,
+        (SELECT COUNT(*) FROM nutrition_recipes) AS nutritionRecipes,
+        (SELECT COUNT(*) FROM nutrition_monthly_menus) AS nutritionMonthlyMenus,
+        (SELECT COUNT(*) FROM nutrition_menu_costings) AS nutritionMenuCostings
     `).get();
 
     return {
@@ -1378,6 +1501,9 @@ class BeneficiaryDatabase {
       nutritionBeneficiaries: Number(row.nutritionBeneficiaries || 0),
       nutritionGrowthReports: Number(row.nutritionGrowthReports || 0),
       nutritionFinancialReports: Number(row.nutritionFinancialReports || 0),
+      nutritionRecipes: Number(row.nutritionRecipes || 0),
+      nutritionMonthlyMenus: Number(row.nutritionMonthlyMenus || 0),
+      nutritionMenuCostings: Number(row.nutritionMenuCostings || 0),
       databasePath: this.dbPath
     };
   }
@@ -3008,6 +3134,403 @@ class BeneficiaryDatabase {
       .map(row => this.getNutritionFinancialReport(row.id));
   }
 
+  countNutritionRecipes({ search = "" } = {}) {
+    const term = String(search || "").trim().toLowerCase();
+    if (!term) return Number(this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_recipes").get()?.count || 0);
+    return Number(this.db.prepare(`
+      SELECT COUNT(*) AS count FROM nutrition_recipes
+      WHERE lower(recipe_name) LIKE ? OR lower(description) LIKE ?
+    `).get(`%${term}%`, `%${term}%`)?.count || 0);
+  }
+
+  listNutritionRecipes({ search = "", limit = 100, offset = 0 } = {}) {
+    const term = String(search || "").trim().toLowerCase();
+    const where = term ? "WHERE lower(r.recipe_name) LIKE ? OR lower(r.description) LIKE ?" : "";
+    const args = term ? [`%${term}%`, `%${term}%`] : [];
+    return this.db.prepare(`
+      SELECT r.*, COUNT(i.id) AS ingredient_count, COALESCE(SUM(i.default_cost), 0) AS budget_cost
+      FROM nutrition_recipes r
+      LEFT JOIN nutrition_recipe_ingredients i ON i.recipe_id = r.id
+      ${where}
+      GROUP BY r.id
+      ORDER BY r.recipe_name, r.id
+      LIMIT ? OFFSET ?
+    `).all(...args, clampLimit(limit, 100, 500), clampOffset(offset)).map(recipe => decorateRecipe(recipe));
+  }
+
+  getNutritionRecipe(id) {
+    const recipe = this.db.prepare("SELECT * FROM nutrition_recipes WHERE id = ?").get(Number(id));
+    if (!recipe) return null;
+    const ingredients = this.db.prepare(`
+      SELECT * FROM nutrition_recipe_ingredients WHERE recipe_id = ? ORDER BY row_order, id
+    `).all(Number(id));
+    return decorateRecipe(recipe, ingredients);
+  }
+
+  findNutritionRecipeByName(name) {
+    const row = this.db.prepare("SELECT id FROM nutrition_recipes WHERE recipe_key = ?").get(recipeKey(name));
+    return row ? this.getNutritionRecipe(row.id) : null;
+  }
+
+  saveNutritionRecipe(input = {}) {
+    const id = Number(input.id || 0) || 0;
+    const existing = id ? this.getNutritionRecipe(id) : null;
+    const recipe = normalizeRecipe(input, existing);
+    if (!recipe.recipe_name) throw new Error("Recipe name is required.");
+    if (!recipe.ingredients.length) throw new Error("Add at least one ingredient.");
+    const duplicate = this.db.prepare("SELECT id FROM nutrition_recipes WHERE recipe_key = ? AND id <> ?")
+      .get(recipe.recipe_key, id);
+    if (duplicate) throw new Error("A recipe with this name already exists.");
+
+    const timestamp = nowIso();
+    this.db.exec("BEGIN");
+    try {
+      let recipeId = id;
+      if (existing) {
+        this.db.prepare(`
+          UPDATE nutrition_recipes SET recipe_name = ?, recipe_key = ?, description = ?,
+            base_servings = ?, status = ?, updated_at = ? WHERE id = ?
+        `).run(recipe.recipe_name, recipe.recipe_key, recipe.description, recipe.base_servings, recipe.status, timestamp, id);
+      } else {
+        const result = this.db.prepare(`
+          INSERT INTO nutrition_recipes (
+            recipe_name, recipe_key, description, base_servings, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(recipe.recipe_name, recipe.recipe_key, recipe.description, recipe.base_servings, recipe.status, timestamp, timestamp);
+        recipeId = Number(result.lastInsertRowid);
+      }
+      this.db.prepare("DELETE FROM nutrition_recipe_ingredients WHERE recipe_id = ?").run(recipeId);
+      const insert = this.db.prepare(`
+        INSERT INTO nutrition_recipe_ingredients (
+          recipe_id, row_order, ingredient_name, default_quantity, default_cost
+        ) VALUES (?, ?, ?, ?, ?)
+      `);
+      recipe.ingredients.forEach((item, index) => {
+        insert.run(recipeId, index, item.ingredient_name, item.default_quantity, item.default_cost);
+      });
+      this.db.exec("COMMIT");
+      return this.getNutritionRecipe(recipeId);
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  deleteNutritionRecipe(id) {
+    const recipe = this.getNutritionRecipe(id);
+    if (!recipe) throw new Error("Recipe was not found.");
+    this.db.prepare("DELETE FROM nutrition_recipes WHERE id = ?").run(Number(id));
+    return recipe;
+  }
+
+  countNutritionMenus({ year = "" } = {}) {
+    if (!String(year || "").trim()) return Number(this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_monthly_menus").get()?.count || 0);
+    return Number(this.db.prepare("SELECT COUNT(*) AS count FROM nutrition_monthly_menus WHERE substr(menu_month, 1, 4) = ?")
+      .get(String(Number(year)))?.count || 0);
+  }
+
+  listNutritionMenus({ year = "", limit = 60, offset = 0 } = {}) {
+    const hasYear = Boolean(String(year || "").trim());
+    return this.db.prepare(`
+      SELECT m.*, COUNT(e.id) AS meal_count
+      FROM nutrition_monthly_menus m
+      LEFT JOIN nutrition_monthly_menu_entries e ON e.menu_id = m.id
+      ${hasYear ? "WHERE substr(m.menu_month, 1, 4) = ?" : ""}
+      GROUP BY m.id
+      ORDER BY m.menu_month DESC
+      LIMIT ? OFFSET ?
+    `).all(...(hasYear ? [String(Number(year))] : []), clampLimit(limit, 60, 240), clampOffset(offset));
+  }
+
+  getNutritionMenu(id) {
+    const menu = this.db.prepare("SELECT * FROM nutrition_monthly_menus WHERE id = ?").get(Number(id));
+    if (!menu) return null;
+    const entries = this.db.prepare(`
+      SELECT e.*, r.recipe_name FROM nutrition_monthly_menu_entries e
+      LEFT JOIN nutrition_recipes r ON r.id = e.recipe_id
+      WHERE e.menu_id = ? ORDER BY e.meal_date, e.row_order, e.id
+    `).all(Number(id));
+    return { ...menu, entries };
+  }
+
+  getNutritionMenuByMonth(menuMonth) {
+    const row = this.db.prepare("SELECT id FROM nutrition_monthly_menus WHERE menu_month = ?").get(String(menuMonth || ""));
+    return row ? this.getNutritionMenu(row.id) : null;
+  }
+
+  saveNutritionMenu(input = {}) {
+    const id = Number(input.id || 0) || 0;
+    const existing = id ? this.getNutritionMenu(id) : null;
+    const menu = normalizeMenu(input, existing);
+    if (!menu.menu_month) throw new Error("Menu month is required.");
+    const duplicate = this.db.prepare("SELECT id FROM nutrition_monthly_menus WHERE menu_month = ? AND id <> ?")
+      .get(menu.menu_month, id);
+    if (duplicate) throw new Error("A monthly menu already exists for this month.");
+
+    const timestamp = nowIso();
+    this.db.exec("BEGIN");
+    try {
+      let menuId = id;
+      if (existing) {
+        this.db.prepare("UPDATE nutrition_monthly_menus SET menu_month = ?, status = ?, notes = ?, updated_at = ? WHERE id = ?")
+          .run(menu.menu_month, menu.status, menu.notes, timestamp, id);
+      } else {
+        const result = this.db.prepare(`
+          INSERT INTO nutrition_monthly_menus (menu_month, status, notes, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(menu.menu_month, menu.status, menu.notes, timestamp, timestamp);
+        menuId = Number(result.lastInsertRowid);
+      }
+      this.db.prepare("DELETE FROM nutrition_monthly_menu_entries WHERE menu_id = ?").run(menuId);
+      const insert = this.db.prepare(`
+        INSERT INTO nutrition_monthly_menu_entries (
+          menu_id, row_order, meal_date, recipe_id, meal_name, notes
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      menu.entries.forEach((entry, index) => insert.run(
+        menuId, index, entry.meal_date, entry.recipe_id, entry.meal_name, entry.notes
+      ));
+      this.db.exec("COMMIT");
+      this.generateNutritionCostingsForMenu(menuId);
+      return this.getNutritionMenu(menuId);
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  deleteNutritionMenu(id) {
+    const menu = this.getNutritionMenu(id);
+    if (!menu) throw new Error("Monthly menu was not found.");
+    this.db.prepare("DELETE FROM nutrition_monthly_menus WHERE id = ?").run(Number(id));
+    return menu;
+  }
+
+  countNutritionCostings({ search = "", centerId = "", month = "" } = {}) {
+    const filters = this.nutritionCostingFilters({ search, centerId, month });
+    return Number(this.db.prepare(`SELECT COUNT(*) AS count FROM nutrition_menu_costings c ${filters.where}`)
+      .get(...filters.args)?.count || 0);
+  }
+
+  nutritionCostingFilters({ search = "", centerId = "", month = "" } = {}) {
+    const conditions = [];
+    const args = [];
+    const term = String(search || "").trim().toLowerCase();
+    if (term) {
+      conditions.push("(lower(c.center_name) LIKE ? OR lower(c.report_month) LIKE ? OR lower(c.status) LIKE ?)");
+      args.push(`%${term}%`, `%${term}%`, `%${term}%`);
+    }
+    if (Number(centerId)) {
+      conditions.push("c.center_id = ?");
+      args.push(Number(centerId));
+    }
+    if (String(month || "").trim()) {
+      conditions.push("c.report_month = ?");
+      args.push(String(month));
+    }
+    return { where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "", args };
+  }
+
+  listNutritionCostings({ search = "", centerId = "", month = "", limit = 100, offset = 0 } = {}) {
+    const { where, args } = this.nutritionCostingFilters({ search, centerId, month });
+    return this.db.prepare(`
+      SELECT c.*, COUNT(DISTINCT d.id) AS day_count,
+        COALESCE(SUM(i.budget_cost), 0) AS budget_food_total,
+        COALESCE(SUM(i.actual_cost), 0) AS actual_food_total
+      FROM nutrition_menu_costings c
+      LEFT JOIN nutrition_menu_costing_days d ON d.costing_id = c.id
+      LEFT JOIN nutrition_menu_costing_items i ON i.costing_day_id = d.id
+      ${where}
+      GROUP BY c.id
+      ORDER BY c.week_start DESC, c.center_name, c.id DESC
+      LIMIT ? OFFSET ?
+    `).all(...args, clampLimit(limit, 100, 1000), clampOffset(offset)).map(costing => decorateCosting(costing));
+  }
+
+  getNutritionCosting(id) {
+    const costing = this.db.prepare("SELECT * FROM nutrition_menu_costings WHERE id = ?").get(Number(id));
+    if (!costing) return null;
+    const days = this.db.prepare(`
+      SELECT * FROM nutrition_menu_costing_days WHERE costing_id = ? ORDER BY meal_date, row_order, id
+    `).all(Number(id)).map(day => ({
+      ...day,
+      items: this.db.prepare(`
+        SELECT * FROM nutrition_menu_costing_items WHERE costing_day_id = ? ORDER BY row_order, id
+      `).all(day.id)
+    }));
+    return decorateCosting(costing, days);
+  }
+
+  saveNutritionCosting(input = {}) {
+    const id = Number(input.id || 0) || 0;
+    const existing = id ? this.getNutritionCosting(id) : null;
+    const centerId = Number(input.center_id || input.centerId || existing?.center_id || 0) || 0;
+    const center = this.getNutritionCenter(centerId);
+    if (!center) throw new Error("Select a valid feeding center.");
+    const costing = normalizeCosting({ ...input, center_id: center.id, center_name: center.center_name }, existing);
+    if (!costing.week_start) throw new Error("Week start is required.");
+    const duplicate = this.db.prepare("SELECT id FROM nutrition_menu_costings WHERE center_id = ? AND week_start = ? AND id <> ?")
+      .get(costing.center_id, costing.week_start, id);
+    if (duplicate) throw new Error("A costing sheet already exists for this center and week.");
+
+    const timestamp = nowIso();
+    this.db.exec("BEGIN");
+    try {
+      let costingId = id;
+      if (existing) {
+        this.db.prepare(`
+          UPDATE nutrition_menu_costings SET center_id = ?, center_name = ?, menu_id = ?, report_month = ?,
+            week_start = ?, week_end = ?, no_children = ?, inventory_rice = ?, inventory_manna = ?,
+            inventory_vitameals = ?, budget_released = ?, status = ?, notes = ?, updated_at = ? WHERE id = ?
+        `).run(
+          costing.center_id, costing.center_name, costing.menu_id, costing.report_month,
+          costing.week_start, costing.week_end, costing.no_children, costing.inventory_rice, costing.inventory_manna,
+          costing.inventory_vitameals, costing.budget_released, costing.status, costing.notes, timestamp, id
+        );
+      } else {
+        const result = this.db.prepare(`
+          INSERT INTO nutrition_menu_costings (
+            center_id, center_name, menu_id, report_month, week_start, week_end, no_children,
+            inventory_rice, inventory_manna, inventory_vitameals, budget_released, status, notes,
+            created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          costing.center_id, costing.center_name, costing.menu_id, costing.report_month,
+          costing.week_start, costing.week_end, costing.no_children, costing.inventory_rice, costing.inventory_manna,
+          costing.inventory_vitameals, costing.budget_released, costing.status, costing.notes, timestamp, timestamp
+        );
+        costingId = Number(result.lastInsertRowid);
+      }
+
+      this.db.prepare("DELETE FROM nutrition_menu_costing_days WHERE costing_id = ?").run(costingId);
+      const insertDay = this.db.prepare(`
+        INSERT INTO nutrition_menu_costing_days (
+          costing_id, row_order, meal_date, recipe_id, meal_name, kids_present
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      const insertItem = this.db.prepare(`
+        INSERT INTO nutrition_menu_costing_items (
+          costing_day_id, recipe_ingredient_id, row_order, ingredient_name, budget_quantity,
+          budget_cost, actual_quantity, actual_cost
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      costing.days.forEach((day, dayIndex) => {
+        const dayResult = insertDay.run(costingId, dayIndex, day.meal_date, day.recipe_id, day.meal_name, day.kids_present);
+        const dayId = Number(dayResult.lastInsertRowid);
+        day.items.forEach((item, itemIndex) => insertItem.run(
+          dayId, item.recipe_ingredient_id, itemIndex, item.ingredient_name, item.budget_quantity,
+          item.budget_cost, item.actual_quantity, item.actual_cost
+        ));
+      });
+      this.db.exec("COMMIT");
+      return this.getNutritionCosting(costingId);
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  deleteNutritionCosting(id) {
+    const costing = this.getNutritionCosting(id);
+    if (!costing) throw new Error("Menu costing sheet was not found.");
+    this.db.prepare("DELETE FROM nutrition_menu_costings WHERE id = ?").run(Number(id));
+    return costing;
+  }
+
+  generateNutritionCostingsForMenu(menuId) {
+    const menu = this.getNutritionMenu(menuId);
+    if (!menu) throw new Error("Monthly menu was not found.");
+    const centers = this.listNutritionCenters({ limit: 500 });
+    const weeks = groupMenuEntriesByWeek(menu.entries);
+    let generated = 0;
+
+    centers.forEach(center => {
+      weeks.forEach(week => {
+        const existingRow = this.db.prepare(`
+          SELECT id FROM nutrition_menu_costings WHERE center_id = ? AND week_start = ?
+        `).get(center.id, week.week_start);
+        const existing = existingRow ? this.getNutritionCosting(existingRow.id) : null;
+        if (existing && String(existing.status).toLowerCase() === "submitted") return;
+        const actualByKey = new Map();
+        (existing?.days || []).forEach(day => day.items.forEach(item => {
+          actualByKey.set(`${day.meal_date}|${String(item.ingredient_name).trim().toLowerCase()}`, item);
+        }));
+        const days = week.entries.map((entry, dayIndex) => {
+          const recipe = entry.recipe_id ? this.getNutritionRecipe(entry.recipe_id) : this.findNutritionRecipeByName(entry.meal_name);
+          return {
+            meal_date: entry.meal_date,
+            recipe_id: recipe?.id || entry.recipe_id || null,
+            meal_name: entry.meal_name || recipe?.recipe_name || "",
+            kids_present: existing?.days?.find(day => day.meal_date === entry.meal_date)?.kids_present || 0,
+            row_order: dayIndex,
+            items: (recipe?.ingredients || []).map((ingredient, itemIndex) => {
+              const actual = actualByKey.get(`${entry.meal_date}|${ingredient.ingredient_name.trim().toLowerCase()}`);
+              return {
+                recipe_ingredient_id: ingredient.id,
+                ingredient_name: ingredient.ingredient_name,
+                budget_quantity: ingredient.default_quantity,
+                budget_cost: ingredient.default_cost,
+                actual_quantity: actual?.actual_quantity || "",
+                actual_cost: actual?.actual_cost || 0,
+                row_order: itemIndex
+              };
+            })
+          };
+        });
+        const budget = this.db.prepare(`
+          SELECT approved_budget_per_child FROM nutrition_financial_budgets
+          WHERE center_id = ? AND budget_year = ?
+        `).get(center.id, Number(menu.menu_month.slice(0, 4)));
+        const children = Number(existing?.no_children || center.capacity || 0);
+        days.forEach(day => {
+          const recipe = day.recipe_id ? this.getNutritionRecipe(day.recipe_id) : null;
+          const scale = recipe?.base_servings && children ? children / recipe.base_servings : 1;
+          day.items = day.items.map(item => {
+            const budget = scalePurchaseBudget({
+              ingredientName: item.ingredient_name,
+              quantity: item.budget_quantity,
+              cost: item.budget_cost,
+              factor: scale
+            });
+            return {
+              ...item,
+              budget_quantity: budget.quantity,
+              budget_cost: budget.cost
+            };
+          });
+        });
+        const released = Number(budget?.approved_budget_per_child || 0) * children * days.length;
+        this.saveNutritionCosting({
+          ...existing,
+          center_id: center.id,
+          center_name: center.center_name,
+          menu_id: menu.id,
+          report_month: menu.menu_month,
+          week_start: week.week_start,
+          week_end: week.week_end,
+          no_children: children,
+          budget_released: released || existing?.budget_released || days.reduce(
+            (sum, day) => sum + day.items.reduce((daySum, item) => daySum + item.budget_cost, 0), 0
+          ),
+          status: existing?.status || "Draft",
+          days
+        });
+        generated += 1;
+      });
+    });
+    return { menu: this.getNutritionMenu(menu.id), generated };
+  }
+
+  exportNutritionMenus() {
+    return this.db.prepare("SELECT id FROM nutrition_monthly_menus ORDER BY menu_month").all()
+      .map(row => this.getNutritionMenu(row.id));
+  }
+
+  exportNutritionCostings() {
+    return this.db.prepare("SELECT id FROM nutrition_menu_costings ORDER BY week_start, center_name").all()
+      .map(row => this.getNutritionCosting(row.id));
+  }
+
   nutritionCgsReference() {
     return cgsReferencePayload();
   }
@@ -3099,6 +3622,9 @@ class BeneficiaryDatabase {
       nutritionGrowthReports: this.exportNutritionGrowthReports(),
       nutritionFinancialReports: this.exportNutritionFinancialReports(),
       nutritionFinancialBudgets: this.db.prepare("SELECT * FROM nutrition_financial_budgets ORDER BY budget_year DESC, center_name").all(),
+      nutritionRecipes: this.listNutritionRecipes({ limit: 500 }),
+      nutritionMonthlyMenus: this.exportNutritionMenus(),
+      nutritionMenuCostings: this.exportNutritionCostings(),
       deletedRecords: this.db
         .prepare("SELECT * FROM deleted_records ORDER BY deleted_at DESC, id DESC")
         .all()

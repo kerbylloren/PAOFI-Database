@@ -30,6 +30,766 @@
   --ring: 0 0 0 3px rgba(22, 120, 79, 0.18);
 }
 
+/* Nutrition menu planning and weekly costing */
+.nutrition-workspace-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 0 18px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f3f7f4;
+}
+
+.nutrition-workspace-tabs button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nutrition-workspace-tabs button:hover,
+.nutrition-workspace-tabs button.active {
+  background: #fff;
+  color: var(--green-dark);
+  box-shadow: 0 5px 16px rgba(27, 70, 49, 0.1);
+}
+
+.nutrition-reference-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 28px;
+  margin-bottom: 18px;
+  padding: 28px 32px;
+  overflow: hidden;
+  border: 1px solid #d6e6dc;
+  border-radius: 8px 56px 8px 8px;
+  background: linear-gradient(115deg, #eef8f1 0%, #f8fbfa 60%, #edf3f8 100%);
+}
+
+.nutrition-reference-hero h2 {
+  margin: 4px 0 8px;
+  font-size: 28px;
+  line-height: 1.12;
+}
+
+.nutrition-reference-hero > div > span {
+  color: var(--muted);
+}
+
+.nutrition-reference-stat {
+  min-width: 150px;
+  padding: 0 10px 4px 22px;
+  border-left: 1px solid #bcd2c4;
+  text-align: right;
+}
+
+.nutrition-reference-stat strong,
+.nutrition-reference-stat span {
+  display: block;
+}
+
+.nutrition-reference-stat strong {
+  color: var(--green-dark);
+  font-size: 34px;
+}
+
+.nutrition-reference-stat span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.menu-generation-path {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--green-dark);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.menu-generation-path svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.menu-data-section {
+  padding: 24px 26px 28px;
+}
+
+.recipe-catalog {
+  border-top: 1px solid var(--line);
+}
+
+.recipe-catalog-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) minmax(130px, auto) 24px;
+  align-items: center;
+  gap: 15px;
+  width: 100%;
+  min-height: 76px;
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recipe-catalog-row:hover {
+  background: #f3f8f5;
+}
+
+.recipe-index {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dff0e5;
+  color: var(--green-dark);
+  font-weight: 900;
+}
+
+.recipe-catalog-copy strong,
+.recipe-catalog-copy small,
+.recipe-cost-reference strong,
+.recipe-cost-reference small {
+  display: block;
+}
+
+.recipe-catalog-copy small,
+.recipe-cost-reference small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.recipe-cost-reference {
+  text-align: right;
+}
+
+.recipe-catalog-arrow svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.menu-editor-shell {
+  padding: 0;
+  overflow: hidden;
+  background: #f3f7f5;
+}
+
+.menu-editor-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 30px 24px;
+  border-bottom: 1px solid #cddfd3;
+  background: linear-gradient(115deg, #ecf7f0, #f8fbfa 64%, #eef4f8);
+}
+
+.menu-editor-heading h2 {
+  margin: 4px 0 7px;
+  font-size: 28px;
+}
+
+.menu-editor-heading > div > span {
+  color: var(--muted);
+}
+
+.menu-editor-meta,
+.costing-editor-meta {
+  margin: 22px 30px 0;
+  padding: 20px;
+  border: 1px solid #cbd9d1;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(28, 62, 44, 0.06);
+}
+
+.menu-ingredient-editor {
+  padding: 26px 30px 32px;
+}
+
+.monthly-menu-calendar-section,
+.weekly-costing-days {
+  margin: 18px 30px 30px;
+  padding: 22px;
+  border: 1px solid #cbd9d1;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(28, 62, 44, 0.07);
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.section-heading-row span,
+.section-heading-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.section-heading-row h3 {
+  margin: 4px 0 0;
+  font-size: 20px;
+}
+
+.recipe-ingredient-table input {
+  min-width: 130px;
+}
+
+.recipe-ingredient-table th:first-child,
+.recipe-ingredient-table td:first-child,
+.recipe-ingredient-table th:last-child,
+.recipe-ingredient-table td:last-child {
+  width: 44px;
+  text-align: center;
+}
+
+.row-order-badge {
+  display: inline-grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 50%;
+  background: #edf5f0;
+  color: var(--green-dark);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.monthly-menu-ledger {
+  border-top: 1px solid var(--line);
+}
+
+.monthly-menu-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) minmax(110px, 0.6fr) minmax(120px, 0.7fr) 24px;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  min-height: 78px;
+  padding: 12px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.monthly-menu-row:hover {
+  background: #f3f8f5;
+}
+
+.monthly-menu-row strong,
+.monthly-menu-row small {
+  display: block;
+}
+
+.monthly-menu-row small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.monthly-menu-row > span:last-child svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.calendar-section-heading {
+  align-items: flex-start;
+}
+
+.calendar-heading-tools {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.calendar-summary,
+.holiday-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.calendar-summary span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.holiday-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.holiday-legend i,
+.menu-calendar-holiday i {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #b85a4d;
+}
+
+.holiday-legend .special-non-working i,
+.menu-calendar-holiday.special-non-working i {
+  background: #b47713;
+}
+
+.holiday-legend .special-working i,
+.menu-calendar-holiday.special-working i {
+  background: #386ca5;
+}
+
+.monthly-menu-calendar-frame {
+  overflow-x: auto;
+  border: 1px solid #c8d6ce;
+  border-radius: 8px;
+  background: #f8faf9;
+  transition: opacity 160ms ease;
+}
+
+.monthly-menu-calendar-frame.is-refreshing {
+  opacity: 0.5;
+}
+
+.monthly-menu-calendar {
+  display: grid;
+  grid-template-columns: minmax(82px, 0.55fr) repeat(5, minmax(142px, 1fr)) minmax(82px, 0.55fr);
+  grid-template-rows: 38px;
+  grid-auto-rows: minmax(158px, auto);
+  min-width: 950px;
+  background: #ffffff;
+}
+
+.menu-calendar-weekday {
+  display: grid;
+  place-items: center;
+  padding: 0 8px;
+  border-right: 1px solid #d6e0da;
+  border-bottom: 1px solid #c8d6ce;
+  background: #e9f3ed;
+  color: #25563f;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.menu-calendar-weekday.is-weekend {
+  background: #f0f2f1;
+  color: #738078;
+}
+
+.menu-calendar-cell {
+  position: relative;
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  padding: 10px;
+  border-right: 1px solid #dbe3de;
+  border-bottom: 1px solid #dbe3de;
+  background: #ffffff;
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.menu-calendar-weekday:nth-child(7n),
+.menu-calendar-cell:nth-child(7n) {
+  border-right: 0;
+}
+
+.menu-calendar-cell.is-feeding-day:hover,
+.menu-calendar-cell.is-feeding-day:focus-within {
+  z-index: 1;
+  background: #f5faf7;
+  box-shadow: inset 0 0 0 2px #88b69a;
+}
+
+.menu-calendar-cell.has-event {
+  background: #f1f8f4;
+}
+
+.menu-calendar-cell.is-weekend {
+  background: #f4f5f4;
+}
+
+.menu-calendar-cell.is-outside {
+  background: repeating-linear-gradient(135deg, #f6f7f6, #f6f7f6 6px, #f1f3f2 6px, #f1f3f2 12px);
+}
+
+.menu-calendar-date {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.menu-calendar-date time {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border-radius: 50%;
+  background: #edf4ef;
+  color: var(--green-dark);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.menu-calendar-date span {
+  color: var(--subtle);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.menu-calendar-cell.is-weekend .menu-calendar-date {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.menu-calendar-cell.is-weekend .menu-calendar-date time {
+  background: #e5e9e6;
+  color: #657169;
+}
+
+.menu-calendar-holidays {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 7px;
+}
+
+.menu-calendar-holiday {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: #fff2ef;
+  color: #8d3f35;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.menu-calendar-holiday.special-non-working {
+  background: #fff5df;
+  color: #805710;
+}
+
+.menu-calendar-holiday.special-working {
+  background: #edf4fb;
+  color: #315f90;
+}
+
+.menu-calendar-holiday i {
+  margin-top: 2px;
+}
+
+.menu-calendar-event {
+  display: grid;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.menu-calendar-event select,
+.menu-calendar-event input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+.menu-calendar-event input {
+  background: #fbfcfb;
+}
+
+.menu-calendar-cell.has-event .menu-calendar-event select {
+  border-color: #7cae91;
+  background: #ffffff;
+  color: #174c34;
+  font-weight: 700;
+}
+
+.menu-calendar-weekend-label {
+  align-self: end;
+  margin-top: auto;
+  color: #9aa39d;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.menu-costing-filters {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 170px minmax(190px, 0.7fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.menu-costing-filters label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.menu-costing-filters input,
+.menu-costing-filters select {
+  width: 100%;
+}
+
+.status-chip {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #edf2ef;
+  color: #536159;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.status-chip.submitted {
+  background: #dff1e6;
+  color: #17633f;
+}
+
+.costing-budget-display {
+  min-width: 210px;
+  padding-left: 22px;
+  border-left: 1px solid #bcd2c4;
+  text-align: right;
+}
+
+.costing-budget-display span,
+.costing-budget-display strong {
+  display: block;
+}
+
+.costing-budget-display span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.costing-budget-display strong {
+  margin-top: 5px;
+  color: var(--green-dark);
+  font-size: 24px;
+}
+
+.costing-editor-meta {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.weekly-costing-live-summary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.weekly-costing-live-summary span {
+  padding-left: 12px;
+  border-left: 1px solid #ccd9d0;
+}
+
+.weekly-costing-live-summary strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--green-dark);
+  font-size: 13px;
+}
+
+.costing-day-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.costing-day-card {
+  overflow: hidden;
+  border: 1px solid #cfdcd3;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.costing-day-card > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 15px 17px;
+  border-bottom: 1px solid #d8e4dc;
+  background: #edf7f0;
+}
+
+.costing-day-card > header span,
+.costing-day-card > header small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.costing-day-card > header h3 {
+  margin: 3px 0;
+  font-size: 16px;
+}
+
+.costing-day-card > header label {
+  width: 110px;
+}
+
+.costing-day-card > header label span {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.costing-day-card > header input {
+  width: 100%;
+}
+
+.costing-entry-table {
+  min-width: 720px;
+}
+
+.costing-entry-table input {
+  min-width: 90px;
+}
+
+.costing-entry-table input[readonly] {
+  border-color: transparent;
+  background: transparent;
+  color: #425047;
+}
+
+.costing-entry-table thead tr:first-child th:nth-child(2) {
+  background: #e7f2ea;
+  color: #255b42;
+}
+
+.costing-entry-table thead tr:first-child th:nth-child(3) {
+  background: #f8eed3;
+  color: #6d571c;
+}
+
+@media (max-width: 1180px) {
+  .menu-costing-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1600px) {
+  .costing-day-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .costing-entry-table {
+    min-width: 590px;
+  }
+}
+
+@media (max-width: 760px) {
+  .nutrition-reference-hero,
+  .menu-editor-heading {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .nutrition-reference-hero {
+    padding: 22px;
+    border-radius: 8px 36px 8px 8px;
+  }
+
+  .nutrition-reference-stat,
+  .costing-budget-display {
+    padding: 12px 0 0;
+    border-top: 1px solid #bcd2c4;
+    border-left: 0;
+    text-align: left;
+  }
+
+  .costing-day-grid,
+  .costing-editor-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-editor-meta,
+  .costing-editor-meta,
+  .monthly-menu-calendar-section,
+  .weekly-costing-days {
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+
+  .monthly-menu-calendar-section,
+  .weekly-costing-days {
+    padding: 16px;
+  }
+
+  .calendar-section-heading,
+  .calendar-heading-tools {
+    align-items: flex-start;
+    justify-items: start;
+  }
+
+  .calendar-summary,
+  .holiday-legend {
+    justify-content: flex-start;
+  }
+
+  .menu-costing-filters,
+  .recipe-catalog-row,
+  .monthly-menu-row {
+    grid-template-columns: 1fr;
+  }
+
+  .recipe-index,
+  .recipe-catalog-arrow,
+  .monthly-menu-row > span:last-child {
+    display: none;
+  }
+
+  .recipe-cost-reference {
+    text-align: left;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

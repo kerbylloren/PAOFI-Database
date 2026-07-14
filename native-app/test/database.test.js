@@ -4,11 +4,63 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { BeneficiaryDatabase } = require("../src/database");
+const { scalePurchaseBudget } = require("../src/nutrition-menu");
 
 function tempDbPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lpdb-test-"));
   return path.join(dir, "test.sqlite");
 }
+
+test("rounds recipe budgets to practical wet-market purchase units", () => {
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Soy Sauce", quantity: "1 pack", cost: 20, factor: 0.66 }),
+    { quantity: "1 pack", cost: 20 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Soy Sauce", quantity: "2 packs", cost: 40, factor: 0.66 }),
+    { quantity: "2 packs", cost: 40 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Chicken", quantity: "3 kg", cost: 900, factor: 0.8 }),
+    { quantity: "2.5 kg", cost: 750 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Pechay", quantity: "3 tali", cost: 60, factor: 0.66 }),
+    { quantity: "2 tali", cost: 40 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Egg", quantity: "5", cost: 50, factor: 0.66 }),
+    { quantity: "4", cost: 40 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Mantika", quantity: "2 bts", cost: 180, factor: 0.66 }),
+    { quantity: "2 bts", cost: 180 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Carrots", quantity: ".75", cost: 60, factor: 0.66 }),
+    { quantity: "0.5", cost: 40 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Lumpia Wrapper", quantity: "3 tanda", cost: 90, factor: 0.66 }),
+    { quantity: "2 tanda", cost: 60 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Bawang", quantity: "1", cost: 10, factor: 0.66 }),
+    { quantity: "1", cost: 10 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Sibuyas", quantity: "2", cost: 10, factor: 1.3 }),
+    { quantity: "3", cost: 15 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Mantika", quantity: "1 ltr", cost: 70, factor: 0.66 }),
+    { quantity: "1 ltr", cost: 70 }
+  );
+  assert.deepEqual(
+    scalePurchaseBudget({ ingredientName: "Seasonings (asin/paminta/laurel)", quantity: "", cost: 16, factor: 0.66 }),
+    { quantity: "", cost: 15 }
+  );
+});
 
 test("creates, searches, updates, deletes, and restores a record", () => {
   const db = new BeneficiaryDatabase(tempDbPath());
@@ -43,6 +95,82 @@ test("creates, searches, updates, deletes, and restores a record", () => {
   assert.equal(db.stats().active, 1);
   assert.equal(db.stats().deleted, 0);
 
+  db.close();
+});
+
+test("generates weekly center costings from monthly menus and preserves actual entries", () => {
+  const db = new BeneficiaryDatabase(tempDbPath());
+  const ascension = db.saveNutritionCenter({ center_name: "Ascension", capacity: 20 });
+  const lourdes = db.saveNutritionCenter({ center_name: "Lourdes", capacity: 15 });
+  db.saveNutritionFinancialBudgets({
+    year: 2026,
+    budgets: [
+      { center_id: ascension.id, approved_budget_per_child: 10 },
+      { center_id: lourdes.id, approved_budget_per_child: 8 }
+    ]
+  });
+  const recipe = db.saveNutritionRecipe({
+    recipe_name: "Chicken Adobo",
+    base_servings: 20,
+    ingredients: [
+      { ingredient_name: "Chicken", default_quantity: "2 kg", default_cost: 300 },
+      { ingredient_name: "Soy Sauce", default_quantity: "1 bottle", default_cost: 50 }
+    ]
+  });
+
+  const menu = db.saveNutritionMenu({
+    menu_month: "2026-07",
+    status: "Final",
+    entries: [
+      { meal_date: "2026-07-06", recipe_id: recipe.id, meal_name: recipe.recipe_name },
+      { meal_date: "2026-07-07", recipe_id: recipe.id, meal_name: recipe.recipe_name }
+    ]
+  });
+
+  assert.equal(menu.entries.length, 2);
+  assert.equal(db.countNutritionCostings({ month: "2026-07" }), 2);
+  assert.equal(db.listNutritionMenus({ limit: 1, offset: 0 }).length, 1);
+  assert.equal(db.listNutritionMenus({ limit: 1, offset: 1 }).length, 0);
+  const firstCostingPage = db.listNutritionCostings({ month: "2026-07", limit: 1, offset: 0 });
+  const secondCostingPage = db.listNutritionCostings({ month: "2026-07", limit: 1, offset: 1 });
+  assert.equal(firstCostingPage.length, 1);
+  assert.equal(secondCostingPage.length, 1);
+  assert.notEqual(firstCostingPage[0].id, secondCostingPage[0].id);
+  const ascensionCosting = db.listNutritionCostings({ centerId: ascension.id })[0];
+  assert.equal(ascensionCosting.budget_released, 400);
+  assert.equal(ascensionCosting.budget_food_total, 700);
+  const lourdesCosting = db.getNutritionCosting(db.listNutritionCostings({ centerId: lourdes.id })[0].id);
+  assert.equal(lourdesCosting.days[0].items[0].budget_quantity, "1.5 kg");
+  assert.equal(lourdesCosting.days[0].items[0].budget_cost, 225);
+  assert.equal(lourdesCosting.days[0].items[1].budget_quantity, "1 bottle");
+  assert.equal(lourdesCosting.days[0].items[1].budget_cost, 50);
+
+  const detailed = db.getNutritionCosting(ascensionCosting.id);
+  detailed.days[0].items[0].actual_quantity = "2.25 kg";
+  detailed.days[0].items[0].actual_cost = 325;
+  const saved = db.saveNutritionCosting(detailed);
+  assert.equal(saved.actual_food_total, 325);
+
+  db.saveNutritionRecipe({
+    ...recipe,
+    ingredients: [
+      { ingredient_name: "Chicken", default_quantity: "2.5 kg", default_cost: 340 },
+      { ingredient_name: "Soy Sauce", default_quantity: "1 bottle", default_cost: 55 }
+    ]
+  });
+  db.saveNutritionMenu(menu);
+  const regenerated = db.getNutritionCosting(ascensionCosting.id);
+  assert.equal(regenerated.days[0].items[0].budget_cost, 340);
+  assert.equal(regenerated.days[0].items[0].actual_quantity, "2.25 kg");
+  assert.equal(regenerated.days[0].items[0].actual_cost, 325);
+  assert.equal(db.stats().nutritionRecipes, 1);
+  assert.equal(db.stats().nutritionMonthlyMenus, 1);
+  assert.equal(db.stats().nutritionMenuCostings, 2);
+
+  const exported = db.exportData();
+  assert.equal(exported.nutritionRecipes.length, 1);
+  assert.equal(exported.nutritionMonthlyMenus.length, 1);
+  assert.equal(exported.nutritionMenuCostings.length, 2);
   db.close();
 });
 

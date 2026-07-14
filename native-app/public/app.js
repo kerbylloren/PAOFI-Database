@@ -376,16 +376,6 @@ const ICONS = {
 };
 
 const COMING_SOON_PAGES = {
-  "nutrition-menu": {
-    program: "Nutrition Program - Supplemental Feeding",
-    title: "Monthly Menu & Weekly Costing",
-    description: "Monthly menus connected to weekly menu costing and center schedules."
-  },
-  "nutrition-recipes": {
-    program: "Nutrition Program - Supplemental Feeding",
-    title: "Recipe Book",
-    description: "Recipes, ingredients, serving sizes, and costing references."
-  },
   "nutrition-budget": {
     program: "Nutrition Program - Supplemental Feeding",
     title: "Financial",
@@ -1036,6 +1026,8 @@ async function renderRoute() {
     else if (parsed.route === "nutrition-profiles") await renderNutritionProfilesPage(parsed.id);
     else if (parsed.route === "nutrition-centers") await renderNutritionCentersPage(parsed.id);
     else if (parsed.route === "nutrition-growth") await renderNutritionGrowthPage(parsed.id);
+    else if (parsed.route === "nutrition-menu") await renderNutritionMenuPage(parsed.id);
+    else if (parsed.route === "nutrition-recipes") await renderNutritionRecipePage(parsed.id);
     else if (parsed.route === "nutrition-budget") await renderNutritionFinancialPage(parsed.id);
     else if (parsed.route === "bin") await renderBinPage();
     else if (parsed.route === "system") await renderSystemPage();
@@ -1118,6 +1110,19 @@ function requestYearInput(scopeLabel, defaultYear = String(new Date().getFullYea
   });
 }
 
+function enforceMinimumPrintFontSize(printDocument, minimumSize = 10) {
+  const view = printDocument?.defaultView;
+  const body = printDocument?.body;
+  if (!view || !body) return;
+
+  [body, ...body.querySelectorAll("*")].forEach(element => {
+    const computedSize = Number.parseFloat(view.getComputedStyle(element).fontSize);
+    if (Number.isFinite(computedSize) && computedSize < minimumSize) {
+      element.style.fontSize = `${minimumSize}px`;
+    }
+  });
+}
+
 function showDocumentPrintPreview(title, documentHtml) {
   const parsed = new DOMParser().parseFromString(documentHtml, "text/html");
   parsed.body.querySelectorAll("button").forEach(button => button.remove());
@@ -1152,6 +1157,7 @@ function showDocumentPrintPreview(title, documentHtml) {
   `;
 
   const frame = document.getElementById("printPreviewFrame");
+  frame.addEventListener("load", () => enforceMinimumPrintFontSize(frame.contentDocument), { once: true });
   frame.srcdoc = previewHtml;
   document.getElementById("printPreviewBackInline").addEventListener("click", () => {
     renderRoute().catch(error => showToast(error.message));
@@ -1259,6 +1265,8 @@ function analyticsPlural(count, singular, plural = `${singular}s`) {
 }
 
 const TABLE_PAGE_SIZE = 25;
+const MONTHLY_MENU_PAGE_SIZE = 12;
+const WEEKLY_COSTING_PAGE_SIZE = 25;
 
 function pagedItems(items = [], key, pageSize = TABLE_PAGE_SIZE) {
   const total = items.length;
@@ -1279,7 +1287,7 @@ function pagedItems(items = [], key, pageSize = TABLE_PAGE_SIZE) {
 }
 
 function renderPagination(key, pageInfo) {
-  if (pageInfo.total <= TABLE_PAGE_SIZE) return "";
+  if (pageInfo.totalPages <= 1) return "";
 
   return `
     <div class="pagination-bar" data-pagination-key="${escapeHtml(key)}">
@@ -1288,6 +1296,16 @@ function renderPagination(key, pageInfo) {
       <button type="button" class="text-button" data-page-step="1" ${pageInfo.page >= pageInfo.totalPages ? "disabled" : ""}>Next</button>
     </div>
   `;
+}
+
+function remotePageInfo(total, key, pageSize = TABLE_PAGE_SIZE) {
+  const safeTotal = Math.max(Number(total) || 0, 0);
+  const totalPages = Math.max(Math.ceil(safeTotal / pageSize), 1);
+  const page = Math.min(Math.max(Number(state.tablePages[key]) || 1, 1), totalPages);
+  const start = safeTotal ? (page - 1) * pageSize : 0;
+  const end = Math.min(start + pageSize, safeTotal);
+  state.tablePages[key] = page;
+  return { page, totalPages, start, end, total: safeTotal };
 }
 
 function bindPagination(scope, key, renderCallback) {
@@ -3851,7 +3869,7 @@ function printNutritionBeneficiary(record) {
             background: #edf3ef;
             color: #1d2520;
             font-family: "Segoe UI", Arial, sans-serif;
-            font-size: 9.2px;
+            font-size: 10px;
             line-height: 1.2;
           }
           button {
@@ -3955,7 +3973,7 @@ function printNutritionBeneficiary(record) {
           .print-group h4 {
             margin-bottom: 3px;
             color: #155b3c;
-            font-size: 8.4px;
+            font-size: 10px;
             text-transform: uppercase;
           }
           .field-grid {
@@ -3988,14 +4006,14 @@ function printNutritionBeneficiary(record) {
             display: block;
             margin-bottom: 2px;
             color: #5b6861;
-            font-size: 6.8px;
+            font-size: 10px;
             font-weight: 800;
             text-transform: uppercase;
           }
           .print-field strong {
             display: block;
             color: #1d2520;
-            font-size: 8.4px;
+            font-size: 10px;
             font-weight: 650;
           }
           table {
@@ -4013,11 +4031,11 @@ function printNutritionBeneficiary(record) {
           th {
             background: #f2f7f4;
             color: #243029;
-            font-size: 7px;
+            font-size: 10px;
             font-weight: 800;
           }
           td {
-            font-size: 7.4px;
+            font-size: 10px;
           }
           th:nth-child(2),
           td:nth-child(2) {
@@ -4086,6 +4104,7 @@ function printNutritionBeneficiary(record) {
     </html>
   `);
   printWindow.document.close();
+  enforceMinimumPrintFontSize(printWindow.document);
 }
 
 async function renderNutritionCentersPage(id = "") {
@@ -5403,7 +5422,7 @@ async function printNutritionGrowthYearlySummary({ centerId = "", centerName = "
         <style>
           @page { size: 13in 8.5in; margin: 7mm; }
           * { box-sizing: border-box; }
-          body { margin: 0; color: #1d2520; font-family: "Segoe UI", Arial, sans-serif; font-size: 7.8px; }
+          body { margin: 0; color: #1d2520; font-family: "Segoe UI", Arial, sans-serif; font-size: 10px; }
           button { margin: 10px; border: 1px solid #bdd3c6; border-radius: 7px; background: #ffffff; padding: 8px 12px; color: #155b3c; font-weight: 700; }
           .sheet { width: 13in; min-height: 0; margin: 0 auto; padding: 0.16in; background: #ffffff; }
           .header { display: grid; grid-template-columns: 48px minmax(0, 1fr) 2.1in; gap: 10px; align-items: center; border-bottom: 2px solid #1f7a4f; padding-bottom: 7px; }
@@ -5414,11 +5433,11 @@ async function printNutritionGrowthYearlySummary({ centerId = "", centerName = "
           .meta { text-align: right; color: #4f5e55; }
           .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
           .kpi { border: 1px solid #cddbd2; border-radius: 6px; padding: 6px; background: #f6faf8; }
-          .kpi span { display: block; color: #5b6861; font-size: 6.8px; text-transform: uppercase; font-weight: 800; }
+          .kpi span { display: block; color: #5b6861; font-size: 10px; text-transform: uppercase; font-weight: 800; }
           .kpi strong { color: #155b3c; font-size: 13px; }
           .charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 7px; }
           .chart-card { border: 1px solid #cddbd2; border-radius: 7px; padding: 7px; break-inside: avoid; }
-          .chart-card h3 { color: #143d33; font-size: 8px; margin-bottom: 6px; text-transform: uppercase; }
+          .chart-card h3 { color: #143d33; font-size: 10px; margin-bottom: 6px; text-transform: uppercase; }
           .chart-row { display: grid; grid-template-columns: 1fr 1.8fr 24px; gap: 5px; align-items: center; margin-bottom: 4px; }
           .chart-row span { overflow-wrap: anywhere; }
           .chart-row div { height: 9px; border-radius: 999px; background: #eaf0ed; overflow: hidden; }
@@ -5426,11 +5445,11 @@ async function printNutritionGrowthYearlySummary({ centerId = "", centerName = "
           .chart-row strong { text-align: right; font-variant-numeric: tabular-nums; }
           table { width: 100%; border-collapse: collapse; table-layout: fixed; }
           th, td { border: 1px solid #cbd8d0; padding: 2.5px 3px; vertical-align: top; overflow-wrap: anywhere; }
-          th { background: #eaf6ef; color: #143d33; font-size: 6.4px; text-transform: uppercase; }
-          td { font-size: 6.6px; }
-          .yearly-pivot th, .yearly-pivot td { padding: 1.8px 2px; font-size: 5.5px; line-height: 1.18; text-align: center; }
-          .yearly-pivot .month-group { background: #dcefe5; color: #0f5f3e; font-size: 6px; }
-          .yearly-pivot .month-stat { background: #eef8f3; font-size: 4.8px; }
+          th { background: #eaf6ef; color: #143d33; font-size: 10px; text-transform: uppercase; }
+          td { font-size: 10px; }
+          .yearly-pivot th, .yearly-pivot td { padding: 1.8px 2px; font-size: 10px; line-height: 1.18; text-align: center; }
+          .yearly-pivot .month-group { background: #dcefe5; color: #0f5f3e; font-size: 10px; }
+          .yearly-pivot .month-stat { background: #eef8f3; font-size: 10px; }
           .yearly-pivot .child-center { width: 0.78in; text-align: left; }
           .yearly-pivot .child-info { width: 0.68in; }
           .yearly-pivot .child-name { width: 1.05in; text-align: left; }
@@ -5493,7 +5512,7 @@ function printNutritionGrowthReport(report) {
         <style>
           @page { size: letter landscape; margin: 8mm; }
           * { box-sizing: border-box; }
-          body { margin: 0; color: #1d2520; font-family: "Segoe UI", Arial, sans-serif; font-size: 9px; }
+          body { margin: 0; color: #1d2520; font-family: "Segoe UI", Arial, sans-serif; font-size: 10px; }
           button { margin: 10px; border: 1px solid #bdd3c6; border-radius: 7px; background: #ffffff; padding: 8px 12px; color: #155b3c; font-weight: 700; }
           .sheet { width: 11in; min-height: 8.5in; margin: 0 auto; padding: 0.22in; background: #ffffff; }
           .header { display: grid; grid-template-columns: 48px minmax(0, 1fr) 2.2in; gap: 10px; align-items: center; border-bottom: 2px solid #1f7a4f; padding-bottom: 7px; }
@@ -5504,12 +5523,12 @@ function printNutritionGrowthReport(report) {
           .meta { display: grid; gap: 3px; color: #4f5e55; text-align: right; }
           .summary { margin: 8px 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
           .summary div { border: 1px solid #cddbd2; border-radius: 6px; padding: 5px; background: #f6faf8; }
-          .summary span { display: block; color: #5b6861; font-size: 7px; text-transform: uppercase; font-weight: 800; }
+          .summary span { display: block; color: #5b6861; font-size: 10px; text-transform: uppercase; font-weight: 800; }
           .summary strong { font-size: 12px; color: #155b3c; }
           table { width: 100%; border-collapse: collapse; table-layout: fixed; }
           th, td { border: 1px solid #cbd8d0; padding: 3px 4px; vertical-align: top; overflow-wrap: anywhere; }
-          th { background: #eaf6ef; color: #143d33; font-size: 7.2px; text-transform: uppercase; }
-          td { font-size: 7.4px; }
+          th { background: #eaf6ef; color: #143d33; font-size: 10px; text-transform: uppercase; }
+          td { font-size: 10px; }
           .latest { width: 21%; }
           .name { width: 16%; }
           @media print { button { display: none; } .sheet { width: auto; min-height: auto; margin: 0; padding: 0; } }
@@ -5578,6 +5597,7 @@ function printNutritionGrowthReport(report) {
     </html>
   `);
   printWindow.document.close();
+  enforceMinimumPrintFontSize(printWindow.document);
 }
 
 function parseNutritionFinancialRouteId(id = "") {
@@ -5618,6 +5638,576 @@ function blankNutritionFinancialReport() {
     noted_title: "",
     entries: Array.from({ length: 4 }, blankNutritionFinancialEntry)
   };
+}
+
+function menuDateLabel(value, options = {}) {
+  const date = new Date(`${String(value || "")}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value || "";
+  return date.toLocaleDateString("en-US", {
+    month: options.short ? "short" : "long",
+    day: "numeric",
+    year: options.noYear ? undefined : "numeric"
+  });
+}
+
+const MENU_CALENDAR_WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function monthCalendarCells(monthValue) {
+  const [year, month] = String(monthValue || "").split("-").map(Number);
+  if (!year || !month) return [];
+  const firstWeekday = new Date(year, month - 1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cellCount = Math.max(35, Math.ceil((firstWeekday + daysInMonth) / 7) * 7);
+  return Array.from({ length: cellCount }, (_, index) => {
+    const day = index - firstWeekday + 1;
+    const weekday = index % 7;
+    const outside = day < 1 || day > daysInMonth;
+    return {
+      date: outside ? "" : `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      day: outside ? null : day,
+      weekday,
+      weekend: weekday === 0 || weekday === 6,
+      outside
+    };
+  });
+}
+
+function holidayTypeLabel(type) {
+  if (type === "regular") return "Regular Holiday";
+  if (type === "special-working") return "Special Working Day";
+  return "Special Non-Working Day";
+}
+
+function monthlyMenuCalendarMarkup(monthValue, recipes, entries = [], holidays = []) {
+  const entryMap = new Map(entries.map(entry => [entry.meal_date, entry]));
+  const holidayMap = new Map();
+  holidays.forEach(item => {
+    if (!holidayMap.has(item.date)) holidayMap.set(item.date, []);
+    holidayMap.get(item.date).push(item);
+  });
+  const headings = MENU_CALENDAR_WEEKDAYS.map((weekday, index) => `<div class="menu-calendar-weekday${index === 0 || index === 6 ? " is-weekend" : ""}">${weekday}</div>`).join("");
+  const cells = monthCalendarCells(monthValue).map(cell => {
+    if (cell.outside) return `<div class="menu-calendar-cell is-outside${cell.weekend ? " is-weekend" : ""}" aria-hidden="true"></div>`;
+    const dayHolidays = holidayMap.get(cell.date) || [];
+    const holidayMarkup = dayHolidays.map(item => `<span class="menu-calendar-holiday ${escapeHtml(item.type)}" title="${escapeHtml(`${holidayTypeLabel(item.type)} | ${item.source || "Philippine national holiday"}`)}"><i></i>${escapeHtml(item.name)}</span>`).join("");
+    const dateHeading = `<header class="menu-calendar-date"><time datetime="${cell.date}">${cell.day}</time><span>${MENU_CALENDAR_WEEKDAYS[cell.weekday].slice(0, 3)}</span></header>`;
+    if (cell.weekend) {
+      return `<article class="menu-calendar-cell is-weekend${dayHolidays.length ? " has-holiday" : ""}">${dateHeading}<div class="menu-calendar-holidays">${holidayMarkup}</div><span class="menu-calendar-weekend-label">Weekend</span></article>`;
+    }
+    const entry = entryMap.get(cell.date) || {};
+    return `<article class="menu-calendar-cell is-feeding-day${entry.recipe_id ? " has-event" : ""}${dayHolidays.length ? " has-holiday" : ""}" data-menu-day="${cell.date}">
+      ${dateHeading}
+      <div class="menu-calendar-holidays">${holidayMarkup}</div>
+      <div class="menu-calendar-event"><select data-menu-recipe aria-label="Recipe for ${escapeHtml(menuDateLabel(cell.date))}">${menuRecipeOptions(recipes, entry.recipe_id)}</select><input data-menu-note value="${escapeHtml(entry.notes || "")}" placeholder="Event note" aria-label="Event note for ${escapeHtml(menuDateLabel(cell.date))}"></div>
+    </article>`;
+  }).join("");
+  return `<div class="monthly-menu-calendar" data-menu-calendar data-calendar-month="${escapeHtml(monthValue)}">${headings}${cells}</div>`;
+}
+
+function collectRenderedMenuEntries(scope = document) {
+  return [...scope.querySelectorAll("[data-menu-day]")].map(day => {
+    const select = day.querySelector("[data-menu-recipe]");
+    return {
+      meal_date: day.dataset.menuDay,
+      recipe_id: select.value,
+      meal_name: select.selectedOptions[0]?.dataset.recipeName || "",
+      notes: day.querySelector("[data-menu-note]").value
+    };
+  }).filter(entry => entry.recipe_id && entry.meal_name);
+}
+
+function renderNutritionWorkspaceTabs(active = "menus") {
+  return `<nav class="nutrition-workspace-tabs" aria-label="Menu planning views">
+    <button type="button" class="${active === "menus" ? "active" : ""}" data-menu-workspace="menus">Monthly Menus</button>
+    <button type="button" class="${active === "costings" ? "active" : ""}" data-menu-workspace="costings">Weekly Costings</button>
+  </nav>`;
+}
+
+function bindNutritionWorkspaceTabs(scope = document) {
+  scope.querySelectorAll("[data-menu-workspace]").forEach(button => {
+    button.addEventListener("click", () => navigate("nutrition-menu", button.dataset.menuWorkspace === "costings" ? "costings" : ""));
+  });
+}
+
+async function renderNutritionRecipePage(id = "") {
+  if (id === "new" || id.startsWith("edit-")) {
+    await renderNutritionRecipeEditor(id === "new" ? 0 : Number(id.slice(5)));
+    return;
+  }
+
+  setTitle("Nutrition Recipe Book");
+  setTopbarActions([
+    { id: "nutritionRecipeNew", label: "Add Recipe", icon: "plus", variant: "primary", onClick: () => navigate("nutrition-recipes", "new") }
+  ]);
+  const payload = await api("/api/nutrition/recipes?limit=500");
+  elements.pageRoot.innerHTML = `
+    <section class="nutrition-reference-hero">
+      <div><p class="eyebrow">Nutrition Program</p><h2>Recipe Book</h2><span>Ingredient references used to prepare weekly menu costing sheets.</span></div>
+      <div class="nutrition-reference-stat"><strong>${Number(payload.total || 0)}</strong><span>active recipes</span></div>
+    </section>
+    <section class="database-page nutrition-page flow-data-section menu-data-section">
+      <div class="table-toolbar">
+        <div class="search-band compact with-button">
+          <span class="search-icon">${icon("search")}</span>
+          <input id="nutritionRecipeSearch" type="search" placeholder="Search recipes or descriptions">
+          <button id="nutritionRecipeSearchButton" type="button" class="action-button">${icon("search")}<span>Search</span></button>
+        </div>
+        <div class="table-toolbar-footer"><span>Recipes remain editable while generated costings keep their own historical ingredient snapshot.</span><span id="nutritionRecipeCount" class="table-count"></span></div>
+      </div>
+      <div id="nutritionRecipeList"></div>
+    </section>`;
+
+  function renderList(recipes, total) {
+    document.getElementById("nutritionRecipeCount").textContent = `${total} recipe${total === 1 ? "" : "s"}`;
+    const host = document.getElementById("nutritionRecipeList");
+    host.innerHTML = recipes.length ? `<div class="recipe-catalog">
+      ${recipes.map(recipe => `<button type="button" class="recipe-catalog-row" data-recipe-edit="${recipe.id}">
+        <span class="recipe-index">${String(recipe.recipe_name || "R").slice(0, 1).toUpperCase()}</span>
+        <span class="recipe-catalog-copy"><strong>${escapeHtml(recipe.recipe_name)}</strong><small>${escapeHtml(recipe.description || `${recipe.ingredient_count} ingredient${Number(recipe.ingredient_count) === 1 ? "" : "s"}`)}</small></span>
+        <span class="recipe-cost-reference"><small>Reference cost</small><strong>${escapeHtml(formatMoney(recipe.budget_cost))}</strong></span>
+        <span class="recipe-catalog-arrow">${icon("arrow")}</span>
+      </button>`).join("")}
+    </div>` : emptyState("No recipes match this search.");
+    host.querySelectorAll("[data-recipe-edit]").forEach(button => button.addEventListener("click", () => navigate("nutrition-recipes", `edit-${button.dataset.recipeEdit}`)));
+  }
+
+  async function searchRecipes() {
+    const search = document.getElementById("nutritionRecipeSearch").value.trim();
+    const next = await api(`/api/nutrition/recipes?limit=500&search=${encodeURIComponent(search)}`);
+    renderList(next.recipes || [], Number(next.total || 0));
+  }
+  document.getElementById("nutritionRecipeSearchButton").addEventListener("click", () => searchRecipes().catch(error => showToast(error.message)));
+  document.getElementById("nutritionRecipeSearch").addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      searchRecipes().catch(error => showToast(error.message));
+    }
+  });
+  renderList(payload.recipes || [], Number(payload.total || 0));
+}
+
+function recipeIngredientEditorRow(item = {}, index = 0) {
+  return `<tr data-recipe-ingredient-row>
+    <td><span class="row-order-badge">${index + 1}</span></td>
+    <td><input data-recipe-item="ingredient_name" value="${escapeHtml(item.ingredient_name || "")}" placeholder="Ingredient"></td>
+    <td><input data-recipe-item="default_quantity" value="${escapeHtml(item.default_quantity || "")}" placeholder="e.g. 2 kg"></td>
+    <td><input data-recipe-item="default_cost" type="number" min="0" step="0.01" value="${Number(item.default_cost || 0) || ""}" placeholder="0.00"></td>
+    <td><button type="button" class="icon-button danger" title="Remove ingredient" data-remove-recipe-item>${icon("bin")}</button></td>
+  </tr>`;
+}
+
+function bindRecipeIngredientRows() {
+  const body = document.querySelector("[data-recipe-ingredients]");
+  body?.querySelectorAll("[data-remove-recipe-item]").forEach(button => button.addEventListener("click", () => {
+    button.closest("tr")?.remove();
+    [...body.querySelectorAll("tr")].forEach((row, index) => { row.querySelector(".row-order-badge").textContent = index + 1; });
+  }));
+}
+
+async function renderNutritionRecipeEditor(id = 0) {
+  const recipe = id ? (await api(`/api/nutrition/recipes/${id}`)).recipe : {
+    recipe_name: "", description: "", base_servings: "", status: "Active", ingredients: [{}]
+  };
+  setTitle(id ? "Edit Nutrition Recipe" : "Add Nutrition Recipe");
+  setTopbarActions([
+    { id: "nutritionRecipeBack", label: "Recipe Book", icon: "arrow", onClick: () => navigate("nutrition-recipes") },
+    { id: "nutritionRecipeSave", label: "Save Recipe", icon: "save", variant: "primary", onClick: () => saveNutritionRecipe().catch(error => showToast(error.message)) },
+    ...(id ? [{ id: "nutritionRecipeDelete", label: "Delete", icon: "bin", variant: "danger", onClick: () => deleteNutritionRecipe(id).catch(error => showToast(error.message)) }] : [])
+  ]);
+  elements.pageRoot.innerHTML = `
+    <section class="paper-form menu-editor-shell" data-recipe-id="${Number(recipe.id || 0)}">
+      <header class="menu-editor-heading"><div><p class="eyebrow">Recipe Reference</p><h2>${escapeHtml(recipe.recipe_name || "New Recipe")}</h2><span>Set the standard ingredients and budget quantities copied into future costing sheets.</span></div></header>
+      <div class="paper-grid menu-editor-meta">
+        <label class="paper-field wide"><span>Viand / Recipe Name</span><input id="nutritionRecipeName" value="${escapeHtml(recipe.recipe_name || "")}" required></label>
+        <label class="paper-field"><span>Base Servings</span><input id="nutritionRecipeServings" type="number" min="0" step="1" value="${Number(recipe.base_servings || 0) || ""}"></label>
+        <label class="paper-field"><span>Status</span><select id="nutritionRecipeStatus"><option${recipe.status === "Active" ? " selected" : ""}>Active</option><option${recipe.status === "Inactive" ? " selected" : ""}>Inactive</option></select></label>
+        <label class="paper-field wide"><span>Description / Notes</span><textarea id="nutritionRecipeDescription" rows="2">${escapeHtml(recipe.description || "")}</textarea></label>
+      </div>
+      <section class="menu-ingredient-editor">
+        <div class="section-heading-row"><div><span>Standard Recipe</span><h3>Ingredients and budget references</h3></div><button id="addRecipeIngredient" type="button" class="action-button">${icon("plus")}<span>Add Ingredient</span></button></div>
+        <div class="data-table-scroll"><table class="family-table recipe-ingredient-table"><thead><tr><th>#</th><th>Ingredient</th><th>Budget Quantity</th><th>Budget Cost</th><th></th></tr></thead><tbody data-recipe-ingredients>${(recipe.ingredients?.length ? recipe.ingredients : [{}]).map(recipeIngredientEditorRow).join("")}</tbody></table></div>
+      </section>
+    </section>`;
+  document.getElementById("addRecipeIngredient").addEventListener("click", () => {
+    const body = document.querySelector("[data-recipe-ingredients]");
+    body.insertAdjacentHTML("beforeend", recipeIngredientEditorRow({}, body.children.length));
+    bindRecipeIngredientRows();
+    body.lastElementChild?.querySelector("input")?.focus();
+  });
+  bindRecipeIngredientRows();
+}
+
+function collectNutritionRecipe() {
+  return {
+    id: Number(document.querySelector("[data-recipe-id]")?.dataset.recipeId || 0),
+    recipe_name: document.getElementById("nutritionRecipeName").value,
+    description: document.getElementById("nutritionRecipeDescription").value,
+    base_servings: document.getElementById("nutritionRecipeServings").value,
+    status: document.getElementById("nutritionRecipeStatus").value,
+    ingredients: [...document.querySelectorAll("[data-recipe-ingredient-row]")].map(row => ({
+      ingredient_name: row.querySelector('[data-recipe-item="ingredient_name"]').value,
+      default_quantity: row.querySelector('[data-recipe-item="default_quantity"]').value,
+      default_cost: row.querySelector('[data-recipe-item="default_cost"]').value
+    }))
+  };
+}
+
+async function saveNutritionRecipe() {
+  const payload = await api("/api/nutrition/recipes", { method: "POST", body: JSON.stringify(collectNutritionRecipe()), loadingMessage: "Saving recipe" });
+  showToast("Recipe saved.");
+  navigate("nutrition-recipes", `edit-${payload.recipe.id}`);
+}
+
+async function deleteNutritionRecipe(id) {
+  if (!window.confirm("Delete this recipe? Existing costing sheets will keep their saved ingredient snapshot.")) return;
+  await api(`/api/nutrition/recipes/${id}`, { method: "DELETE", loadingMessage: "Deleting recipe" });
+  showToast("Recipe deleted.");
+  navigate("nutrition-recipes");
+}
+
+async function renderNutritionMenuPage(id = "") {
+  if (id === "menu-new" || id.startsWith("menu-")) {
+    await renderNutritionMonthlyMenuEditor(id === "menu-new" ? 0 : Number(id.slice(5)));
+    return;
+  }
+  if (id.startsWith("costing-")) {
+    await renderNutritionCostingEditor(Number(id.slice(8)));
+    return;
+  }
+  if (id === "costings") {
+    await renderNutritionCostingList();
+    return;
+  }
+  await renderNutritionMonthlyMenuList();
+}
+
+async function renderNutritionMonthlyMenuList() {
+  const paginationKey = "nutrition-monthly-menus";
+  state.tablePages[paginationKey] = 1;
+  const payload = await api(`/api/nutrition/menus?limit=${MONTHLY_MENU_PAGE_SIZE}&offset=0`);
+  const initialPageInfo = remotePageInfo(payload.total, paginationKey, MONTHLY_MENU_PAGE_SIZE);
+  setTitle("Nutrition Menu Planning");
+  setTopbarActions([
+    { id: "nutritionMenuNew", label: "New Monthly Menu", icon: "plus", variant: "primary", onClick: () => navigate("nutrition-menu", "menu-new") }
+  ]);
+  elements.pageRoot.innerHTML = `
+    ${renderNutritionWorkspaceTabs("menus")}
+    <section class="nutrition-reference-hero menu-planning-hero">
+      <div><p class="eyebrow">Program-wide Planning</p><h2>Monthly menus create the weekly work</h2><span>Choose recipes for feeding days, then the app prepares center costing sheets with ingredients and released budgets.</span></div>
+      <div class="menu-generation-path" aria-label="Generation sequence"><span>Menu</span>${icon("arrow")}<span>Recipe</span>${icon("arrow")}<span>9 Center Costings</span></div>
+    </section>
+    <section class="database-page nutrition-page flow-data-section menu-data-section">
+      <div class="table-toolbar"><div class="table-toolbar-footer"><span>Saved monthly menus</span><span id="nutritionMonthlyMenuCount" class="table-count"></span></div></div>
+      <div id="nutritionMonthlyMenuLedger" class="monthly-menu-ledger"></div>
+      <div id="nutritionMonthlyMenuPagination"></div>
+    </section>`;
+  bindNutritionWorkspaceTabs();
+
+  function renderMenus(menus, pageInfo) {
+    document.getElementById("nutritionMonthlyMenuCount").textContent = pageCountText(pageInfo, `month${pageInfo.total === 1 ? "" : "s"}`);
+    const ledger = document.getElementById("nutritionMonthlyMenuLedger");
+    ledger.innerHTML = menus.length ? menus.map(menu => `<button type="button" class="monthly-menu-row" data-menu-edit="${menu.id}">
+      <span class="monthly-menu-month"><strong>${escapeHtml(reportMonthLabel(menu.menu_month))}</strong><small>${escapeHtml(menu.status || "Draft")}</small></span>
+      <span class="monthly-menu-meals"><strong>${Number(menu.meal_count || 0)}</strong><small>feeding days</small></span>
+      <span class="monthly-menu-updated"><small>Last updated</small><strong>${escapeHtml(String(menu.updated_at || "").slice(0, 10))}</strong></span>
+      <span>${icon("arrow")}</span>
+    </button>`).join("") : emptyState("No monthly menus yet. Add one to generate weekly costing sheets.");
+    document.getElementById("nutritionMonthlyMenuPagination").innerHTML = renderPagination(paginationKey, pageInfo);
+    ledger.querySelectorAll("[data-menu-edit]").forEach(button => button.addEventListener("click", () => navigate("nutrition-menu", `menu-${button.dataset.menuEdit}`)));
+    bindPagination(document, paginationKey, () => loadMenus().catch(error => showToast(error.message)));
+  }
+
+  async function loadMenus() {
+    const requestedPage = Math.max(Number(state.tablePages[paginationKey]) || 1, 1);
+    const query = new URLSearchParams({
+      limit: String(MONTHLY_MENU_PAGE_SIZE),
+      offset: String((requestedPage - 1) * MONTHLY_MENU_PAGE_SIZE)
+    });
+    let next = await api(`/api/nutrition/menus?${query}`);
+    const pageInfo = remotePageInfo(next.total, paginationKey, MONTHLY_MENU_PAGE_SIZE);
+    if (pageInfo.page !== requestedPage) {
+      query.set("offset", String(pageInfo.start));
+      next = await api(`/api/nutrition/menus?${query}`);
+    }
+    renderMenus(next.menus || [], pageInfo);
+  }
+
+  renderMenus(payload.menus || [], initialPageInfo);
+}
+
+function menuRecipeOptions(recipes, selectedId = "") {
+  return `<option value="">No meal scheduled</option>${recipes.map(recipe => `<option value="${recipe.id}" data-recipe-name="${escapeHtml(recipe.recipe_name)}"${Number(recipe.id) === Number(selectedId) ? " selected" : ""}>${escapeHtml(recipe.recipe_name)}</option>`).join("")}`;
+}
+
+async function renderNutritionMonthlyMenuEditor(id = 0) {
+  const [recipesPayload, menuPayload] = await Promise.all([
+    api("/api/nutrition/recipes?limit=500"),
+    id ? api(`/api/nutrition/menus/${id}`) : Promise.resolve({ menu: null })
+  ]);
+  const recipes = recipesPayload.recipes || [];
+  const menu = menuPayload.menu || { menu_month: currentReportMonth(), status: "Draft", notes: "", entries: [] };
+  const initialYear = Number(String(menu.menu_month).slice(0, 4));
+  const initialHolidayPayload = await api(`/api/calendar/philippine-holidays?year=${initialYear}`);
+  const holidayCache = new Map([[initialYear, initialHolidayPayload.holidays || []]]);
+  const entryDrafts = new Map([[menu.menu_month, menu.entries || []]]);
+  const initialMonthHolidays = (initialHolidayPayload.holidays || []).filter(item => item.date.startsWith(`${menu.menu_month}-`));
+  setTitle(id ? "Edit Monthly Menu" : "New Monthly Menu");
+  setTopbarActions([
+    { id: "nutritionMenuBack", label: "Monthly Menus", icon: "arrow", onClick: () => navigate("nutrition-menu") },
+    { id: "nutritionMenuSave", label: "Save & Generate", icon: "save", variant: "primary", onClick: () => saveNutritionMonthlyMenu().catch(error => showToast(error.message)) },
+    ...(id ? [{ id: "nutritionMenuRegenerate", label: "Regenerate Costings", icon: "refresh", onClick: () => regenerateNutritionCostings(id).catch(error => showToast(error.message)) }] : [])
+  ]);
+  elements.pageRoot.innerHTML = `
+    <section class="paper-form menu-editor-shell" data-menu-id="${Number(menu.id || 0)}">
+      <header class="menu-editor-heading"><div><p class="eyebrow">Monthly Feeding Calendar</p><h2>${escapeHtml(reportMonthLabel(menu.menu_month))}</h2><span>Assign a saved recipe to each feeding day. Saving prepares draft costing sheets for every feeding center.</span></div></header>
+      <div class="paper-grid menu-editor-meta">
+        <label class="paper-field"><span>Menu Month</span><input id="nutritionMenuMonth" type="month" value="${escapeHtml(menu.menu_month)}" required></label>
+        <label class="paper-field"><span>Status</span><select id="nutritionMenuStatus"><option${menu.status === "Draft" ? " selected" : ""}>Draft</option><option${menu.status === "Final" ? " selected" : ""}>Final</option></select></label>
+        <label class="paper-field wide"><span>Notes</span><textarea id="nutritionMenuNotes" rows="2">${escapeHtml(menu.notes || "")}</textarea></label>
+      </div>
+      <section class="monthly-menu-calendar-section">
+        <div class="section-heading-row calendar-section-heading"><div><span>Sunday to Saturday</span><h3>Feeding Calendar</h3></div><div class="calendar-heading-tools"><div class="calendar-summary"><span>${recipes.length} recipes</span><span data-calendar-holiday-count>${initialMonthHolidays.length} national holiday${initialMonthHolidays.length === 1 ? "" : "s"}</span></div><div class="holiday-legend"><span class="regular"><i></i>Regular</span><span class="special-non-working"><i></i>Special non-working</span><span class="special-working"><i></i>Special working</span></div></div></div>
+        <div class="monthly-menu-calendar-frame">${monthlyMenuCalendarMarkup(menu.menu_month, recipes, menu.entries || [], initialHolidayPayload.holidays || [])}</div>
+      </section>
+    </section>`;
+
+  function bindCalendarEvents() {
+    document.querySelectorAll("[data-menu-recipe]").forEach(select => select.addEventListener("change", () => {
+      select.closest(".menu-calendar-cell")?.classList.toggle("has-event", Boolean(select.value));
+    }));
+  }
+
+  async function holidaysForMonth(monthValue) {
+    const year = Number(String(monthValue).slice(0, 4));
+    if (!holidayCache.has(year)) {
+      const payload = await api(`/api/calendar/philippine-holidays?year=${year}`);
+      holidayCache.set(year, payload.holidays || []);
+    }
+    return holidayCache.get(year) || [];
+  }
+
+  document.getElementById("nutritionMenuMonth").addEventListener("change", async event => {
+    const currentCalendar = document.querySelector("[data-menu-calendar]");
+    if (currentCalendar?.dataset.calendarMonth) {
+      entryDrafts.set(currentCalendar.dataset.calendarMonth, collectRenderedMenuEntries(currentCalendar));
+    }
+    const nextMonth = event.target.value;
+    if (!nextMonth) return;
+    const frame = document.querySelector(".monthly-menu-calendar-frame");
+    frame.classList.add("is-refreshing");
+    try {
+      const holidays = await holidaysForMonth(nextMonth);
+      const monthHolidays = holidays.filter(item => item.date.startsWith(`${nextMonth}-`));
+      frame.innerHTML = monthlyMenuCalendarMarkup(nextMonth, recipes, entryDrafts.get(nextMonth) || [], holidays);
+      document.querySelector("[data-calendar-holiday-count]").textContent = `${monthHolidays.length} national holiday${monthHolidays.length === 1 ? "" : "s"}`;
+      document.querySelector(".menu-editor-heading h2").textContent = reportMonthLabel(nextMonth);
+      bindCalendarEvents();
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      frame.classList.remove("is-refreshing");
+    }
+  });
+  bindCalendarEvents();
+}
+
+function collectNutritionMonthlyMenu() {
+  return {
+    id: Number(document.querySelector("[data-menu-id]")?.dataset.menuId || 0),
+    menu_month: document.getElementById("nutritionMenuMonth").value,
+    status: document.getElementById("nutritionMenuStatus").value,
+    notes: document.getElementById("nutritionMenuNotes").value,
+    entries: collectRenderedMenuEntries()
+  };
+}
+
+async function saveNutritionMonthlyMenu() {
+  const month = document.getElementById("nutritionMenuMonth").value;
+  const renderedMonth = document.querySelector("[data-menu-day]")?.dataset.menuDay?.slice(0, 7) || month;
+  if (month !== renderedMonth) {
+    const current = collectNutritionMonthlyMenu();
+    current.entries = [];
+    const payload = await api("/api/nutrition/menus", { method: "POST", body: JSON.stringify(current), loadingMessage: "Creating monthly calendar" });
+    navigate("nutrition-menu", `menu-${payload.menu.id}`);
+    return;
+  }
+  const payload = await api("/api/nutrition/menus", { method: "POST", body: JSON.stringify(collectNutritionMonthlyMenu()), loadingMessage: "Saving menu and generating center costings" });
+  showToast("Monthly menu saved and weekly costing drafts generated.");
+  navigate("nutrition-menu", `menu-${payload.menu.id}`);
+}
+
+async function regenerateNutritionCostings(id) {
+  const payload = await api(`/api/nutrition/menus/${id}/generate`, { method: "POST", loadingMessage: "Refreshing weekly costing drafts" });
+  showToast(`${Number(payload.generated || 0)} draft costing sheet${Number(payload.generated) === 1 ? "" : "s"} refreshed.`);
+}
+
+async function renderNutritionCostingList() {
+  const paginationKey = "nutrition-weekly-costings";
+  state.tablePages[paginationKey] = 1;
+  const [centers, payload] = await Promise.all([loadNutritionCenters(), api(`/api/nutrition/costings?limit=${WEEKLY_COSTING_PAGE_SIZE}&offset=0`)]);
+  const initialPageInfo = remotePageInfo(payload.total, paginationKey, WEEKLY_COSTING_PAGE_SIZE);
+  setTitle("Weekly Menu Costing");
+  setTopbarActions([{ id: "nutritionCostingMenus", label: "Monthly Menus", icon: "table", onClick: () => navigate("nutrition-menu") }]);
+  elements.pageRoot.innerHTML = `
+    ${renderNutritionWorkspaceTabs("costings")}
+    <section class="nutrition-reference-hero costing-hero"><div><p class="eyebrow">Center Coordinator Workspace</p><h2>Budget released, actual cost recorded</h2><span>Each draft is generated from the monthly menu and its linked recipes.</span></div><div class="nutrition-reference-stat"><strong>${Number(payload.total || 0)}</strong><span>weekly sheets</span></div></section>
+    <section class="database-page nutrition-page flow-data-section menu-data-section">
+      <div class="table-toolbar">
+        <div class="menu-costing-filters">
+          <div class="search-band compact"><span class="search-icon">${icon("search")}</span><input id="nutritionCostingSearch" type="search" placeholder="Search center or status"></div>
+          <label><span>Month</span><input id="nutritionCostingMonth" type="month"></label>
+          <label><span>Feeding Center</span><select id="nutritionCostingCenter"><option value="">All Centers</option>${centers.map(center => `<option value="${center.id}">${escapeHtml(center.center_name)}</option>`).join("")}</select></label>
+          <button id="nutritionCostingFilter" type="button" class="action-button">${icon("search")}<span>Apply</span></button>
+        </div>
+        <div class="table-toolbar-footer"><span>Generated weekly center costing sheets</span><span id="nutritionCostingCount" class="table-count"></span></div>
+      </div>
+      <div id="nutritionCostingTable"></div>
+      <div id="nutritionCostingPagination"></div>
+    </section>`;
+  bindNutritionWorkspaceTabs();
+
+  function renderTable(costings, pageInfo) {
+    document.getElementById("nutritionCostingCount").textContent = pageCountText(pageInfo, `sheet${pageInfo.total === 1 ? "" : "s"}`);
+    const host = document.getElementById("nutritionCostingTable");
+    host.innerHTML = costings.length ? `<div class="data-table-scroll"><table class="data-table menu-costing-table"><thead><tr><th>Actions</th><th>Week</th><th>Center</th><th>Days</th><th>Budget Released</th><th>Actual Cost</th><th>Actual Balance</th><th>Status</th></tr></thead><tbody>${costings.map(costing => `<tr><td><div class="table-actions"><button type="button" class="icon-button" title="Edit costing" data-costing-edit="${costing.id}">${icon("edit")}</button><button type="button" class="icon-button" title="Print costing" data-costing-print="${costing.id}">${icon("print")}</button></div></td><td>${escapeHtml(menuDateLabel(costing.week_start, { short: true }))}<br><small>to ${escapeHtml(menuDateLabel(costing.week_end, { short: true }))}</small></td><td>${escapeHtml(costing.center_name)}</td><td>${Number(costing.day_count || 0)}</td><td>${escapeHtml(formatMoney(costing.budget_released))}</td><td>${escapeHtml(formatMoney(costing.actual_food_total))}</td><td>${escapeHtml(formatMoney(costing.actual_balance))}</td><td><span class="status-chip ${String(costing.status).toLowerCase()}">${escapeHtml(costing.status)}</span></td></tr>`).join("")}</tbody></table></div>` : emptyState("No weekly costing sheets match these filters.");
+    document.getElementById("nutritionCostingPagination").innerHTML = renderPagination(paginationKey, pageInfo);
+    host.querySelectorAll("[data-costing-edit]").forEach(button => button.addEventListener("click", () => navigate("nutrition-menu", `costing-${button.dataset.costingEdit}`)));
+    host.querySelectorAll("[data-costing-print]").forEach(button => button.addEventListener("click", async () => {
+      try {
+        const result = await api(`/api/nutrition/costings/${button.dataset.costingPrint}`);
+        printNutritionMenuCosting(result.costing);
+      } catch (error) { showToast(error.message); }
+    }));
+    bindPagination(document, paginationKey, () => loadCostings().catch(error => showToast(error.message)));
+  }
+  async function loadCostings(resetPage = false) {
+    if (resetPage) state.tablePages[paginationKey] = 1;
+    const requestedPage = Math.max(Number(state.tablePages[paginationKey]) || 1, 1);
+    const query = new URLSearchParams({
+      limit: String(WEEKLY_COSTING_PAGE_SIZE),
+      offset: String((requestedPage - 1) * WEEKLY_COSTING_PAGE_SIZE)
+    });
+    const search = document.getElementById("nutritionCostingSearch").value.trim();
+    const month = document.getElementById("nutritionCostingMonth").value;
+    const centerId = document.getElementById("nutritionCostingCenter").value;
+    if (search) query.set("search", search);
+    if (month) query.set("month", month);
+    if (centerId) query.set("centerId", centerId);
+    let next = await api(`/api/nutrition/costings?${query}`);
+    const pageInfo = remotePageInfo(next.total, paginationKey, WEEKLY_COSTING_PAGE_SIZE);
+    if (pageInfo.page !== requestedPage) {
+      query.set("offset", String(pageInfo.start));
+      next = await api(`/api/nutrition/costings?${query}`);
+    }
+    renderTable(next.costings || [], pageInfo);
+  }
+  document.getElementById("nutritionCostingFilter").addEventListener("click", () => loadCostings(true).catch(error => showToast(error.message)));
+  document.getElementById("nutritionCostingSearch").addEventListener("keydown", event => {
+    if (event.key === "Enter") { event.preventDefault(); loadCostings(true).catch(error => showToast(error.message)); }
+  });
+  renderTable(payload.costings || [], initialPageInfo);
+}
+
+function costingDayEditor(day, dayIndex) {
+  return `<article class="costing-day-card" data-costing-day data-meal-date="${escapeHtml(day.meal_date)}" data-recipe-id="${Number(day.recipe_id || 0)}">
+    <header><div><span>${escapeHtml(new Date(`${day.meal_date}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" }))}</span><h3>${escapeHtml(day.meal_name)}</h3><small>${escapeHtml(menuDateLabel(day.meal_date))}</small></div><label><span>Kids Present</span><input data-costing-day-field="kids_present" type="number" min="0" step="1" value="${Number(day.kids_present || 0) || ""}"></label></header>
+    <div class="data-table-scroll"><table class="family-table costing-entry-table"><thead><tr><th rowspan="2">Ingredient</th><th colspan="2">Budget Released</th><th colspan="2">Actual</th></tr><tr><th>Quantity</th><th>Cost</th><th>Quantity</th><th>Cost</th></tr></thead><tbody>${(day.items || []).map((item, itemIndex) => `<tr data-costing-item data-recipe-ingredient-id="${Number(item.recipe_ingredient_id || 0)}"><th><input data-costing-item-field="ingredient_name" value="${escapeHtml(item.ingredient_name || "")}" readonly></th><td><input data-costing-item-field="budget_quantity" value="${escapeHtml(item.budget_quantity || "")}" readonly></td><td><input data-costing-item-field="budget_cost" type="number" value="${Number(item.budget_cost || 0) || ""}" readonly></td><td><input data-costing-item-field="actual_quantity" value="${escapeHtml(item.actual_quantity || "")}" placeholder="Enter actual"></td><td><input data-costing-item-field="actual_cost" type="number" min="0" step="0.01" value="${Number(item.actual_cost || 0) || ""}" placeholder="0.00"></td></tr>`).join("") || `<tr><td colspan="5">No recipe ingredients are linked to this menu item.</td></tr>`}</tbody><tfoot><tr><th>Total</th><td></td><td data-day-budget-total></td><td></td><td data-day-actual-total></td></tr></tfoot></table></div>
+  </article>`;
+}
+
+async function renderNutritionCostingEditor(id) {
+  const costing = (await api(`/api/nutrition/costings/${id}`)).costing;
+  setTitle("Weekly Menu Costing Editor");
+  setTopbarActions([
+    { id: "nutritionCostingBack", label: "Weekly Costings", icon: "arrow", onClick: () => navigate("nutrition-menu", "costings") },
+    { id: "nutritionCostingPrint", label: "Print", icon: "print", onClick: () => printNutritionMenuCosting(collectNutritionCosting()) },
+    { id: "nutritionCostingSave", label: "Save Costing", icon: "save", variant: "primary", onClick: () => saveNutritionCosting().catch(error => showToast(error.message)) }
+  ]);
+  elements.pageRoot.innerHTML = `
+    <section class="paper-form menu-editor-shell costing-editor-shell" data-costing-id="${costing.id}" data-center-id="${costing.center_id}" data-menu-id="${costing.menu_id || ""}" data-report-month="${escapeHtml(costing.report_month)}" data-week-start="${escapeHtml(costing.week_start)}" data-week-end="${escapeHtml(costing.week_end)}">
+      <header class="menu-editor-heading costing-editor-heading"><div><p class="eyebrow">${escapeHtml(costing.center_name)}</p><h2>Menu Costing for ${escapeHtml(reportMonthLabel(costing.report_month))}</h2><span>${escapeHtml(menuDateLabel(costing.week_start))} to ${escapeHtml(menuDateLabel(costing.week_end))}</span></div><div class="costing-budget-display"><span>Budget Released</span><strong>${escapeHtml(formatMoney(costing.budget_released))}</strong></div></header>
+      <div class="paper-grid costing-editor-meta">
+        <label class="paper-field"><span>No. of Children</span><input id="costingChildren" type="number" min="0" step="1" value="${Number(costing.no_children || 0)}"></label>
+        <label class="paper-field"><span>Status</span><select id="costingStatus"><option${costing.status === "Draft" ? " selected" : ""}>Draft</option><option${costing.status === "Submitted" ? " selected" : ""}>Submitted</option></select></label>
+        <label class="paper-field"><span>Rice Inventory</span><input id="costingRice" type="number" min="0" step="0.01" value="${Number(costing.inventory_rice || 0) || ""}"></label>
+        <label class="paper-field"><span>Manna Pack Inventory</span><input id="costingManna" type="number" min="0" step="0.01" value="${Number(costing.inventory_manna || 0) || ""}"></label>
+        <label class="paper-field"><span>Vitameals Inventory</span><input id="costingVitameals" type="number" min="0" step="0.01" value="${Number(costing.inventory_vitameals || 0) || ""}"></label>
+        <label class="paper-field"><span>Budget Released</span><input id="costingBudgetReleased" type="number" min="0" step="0.01" value="${Number(costing.budget_released || 0)}" readonly></label>
+        <label class="paper-field wide"><span>Notes</span><textarea id="costingNotes" rows="2">${escapeHtml(costing.notes || "")}</textarea></label>
+      </div>
+      <section class="weekly-costing-days"><div class="section-heading-row"><div><span>Weekly Actual Entry</span><h3>Viands and ingredients</h3></div><div class="weekly-costing-live-summary"><span>Budget ingredients <strong id="costingBudgetFoodTotal"></strong></span><span>Actual ingredients <strong id="costingActualFoodTotal"></strong></span><span>Balance <strong id="costingActualBalance"></strong></span></div></div><div class="costing-day-grid">${(costing.days || []).map(costingDayEditor).join("")}</div></section>
+    </section>`;
+  document.querySelectorAll('[data-costing-item-field="actual_cost"], #costingBudgetReleased').forEach(input => input.addEventListener("input", updateCostingEditorTotals));
+  updateCostingEditorTotals();
+}
+
+function collectNutritionCosting() {
+  const shell = document.querySelector("[data-costing-id]");
+  return {
+    id: Number(shell.dataset.costingId), center_id: Number(shell.dataset.centerId), menu_id: Number(shell.dataset.menuId || 0) || null,
+    report_month: shell.dataset.reportMonth, week_start: shell.dataset.weekStart, week_end: shell.dataset.weekEnd,
+    no_children: document.getElementById("costingChildren").value,
+    inventory_rice: document.getElementById("costingRice").value,
+    inventory_manna: document.getElementById("costingManna").value,
+    inventory_vitameals: document.getElementById("costingVitameals").value,
+    budget_released: document.getElementById("costingBudgetReleased").value,
+    status: document.getElementById("costingStatus").value,
+    notes: document.getElementById("costingNotes").value,
+    center_name: document.querySelector(".costing-editor-heading .eyebrow")?.textContent || "",
+    days: [...document.querySelectorAll("[data-costing-day]")].map(day => ({
+      meal_date: day.dataset.mealDate,
+      recipe_id: Number(day.dataset.recipeId || 0) || null,
+      meal_name: day.querySelector("h3")?.textContent || "",
+      kids_present: day.querySelector('[data-costing-day-field="kids_present"]').value,
+      items: [...day.querySelectorAll("[data-costing-item]")].map(item => ({
+        recipe_ingredient_id: Number(item.dataset.recipeIngredientId || 0) || null,
+        ingredient_name: item.querySelector('[data-costing-item-field="ingredient_name"]').value,
+        budget_quantity: item.querySelector('[data-costing-item-field="budget_quantity"]').value,
+        budget_cost: item.querySelector('[data-costing-item-field="budget_cost"]').value,
+        actual_quantity: item.querySelector('[data-costing-item-field="actual_quantity"]').value,
+        actual_cost: item.querySelector('[data-costing-item-field="actual_cost"]').value
+      }))
+    }))
+  };
+}
+
+function updateCostingEditorTotals() {
+  let budget = 0;
+  let actual = 0;
+  document.querySelectorAll("[data-costing-day]").forEach(day => {
+    const dayBudget = [...day.querySelectorAll('[data-costing-item-field="budget_cost"]')].reduce((sum, input) => sum + financialAmount(input.value), 0);
+    const dayActual = [...day.querySelectorAll('[data-costing-item-field="actual_cost"]')].reduce((sum, input) => sum + financialAmount(input.value), 0);
+    day.querySelector("[data-day-budget-total]").textContent = formatMoney(dayBudget);
+    day.querySelector("[data-day-actual-total]").textContent = formatMoney(dayActual);
+    budget += dayBudget;
+    actual += dayActual;
+  });
+  const released = financialAmount(document.getElementById("costingBudgetReleased")?.value);
+  document.getElementById("costingBudgetFoodTotal").textContent = formatMoney(budget);
+  document.getElementById("costingActualFoodTotal").textContent = formatMoney(actual);
+  document.getElementById("costingActualBalance").textContent = formatMoney(released - actual);
+}
+
+async function saveNutritionCosting() {
+  const result = await api("/api/nutrition/costings", { method: "POST", body: JSON.stringify(collectNutritionCosting()), loadingMessage: "Saving weekly costing" });
+  showToast("Weekly costing saved.");
+  navigate("nutrition-menu", `costing-${result.costing.id}`);
+}
+
+function nutritionCostingPrintDocument(costing) {
+  const budgetFoodTotal = (costing.days || []).reduce((sum, day) => sum + (day.items || []).reduce((daySum, item) => daySum + financialAmount(item.budget_cost), 0), 0);
+  const actualFoodTotal = (costing.days || []).reduce((sum, day) => sum + (day.items || []).reduce((daySum, item) => daySum + financialAmount(item.actual_cost), 0), 0);
+  const released = financialAmount(costing.budget_released);
+  const body = `<div class="meta"><div><span>Feeding Center</span><strong>${escapeHtml(costing.center_name || "")}</strong></div><div><span>Week</span><strong>${escapeHtml(menuDateLabel(costing.week_start, { short: true }))} - ${escapeHtml(menuDateLabel(costing.week_end, { short: true }))}</strong></div><div><span>No. of Children</span><strong>${Number(costing.no_children || 0)}</strong></div><div><span>Budget Released</span><strong>${escapeHtml(formatMoney(released))}</strong></div></div>
+    <div class="print-inventory"><span>Rice Inventory <strong>${Number(costing.inventory_rice || 0)}</strong></span><span>Manna Pack <strong>${Number(costing.inventory_manna || 0)}</strong></span><span>Vitameals <strong>${Number(costing.inventory_vitameals || 0)}</strong></span></div>
+    <div class="print-costing-grid">${(costing.days || []).map(day => `<section class="print-costing-day"><header><strong>${escapeHtml(day.meal_name)}</strong><span>${escapeHtml(menuDateLabel(day.meal_date, { short: true }))} | ${Number(day.kids_present || 0)} kids</span></header><table><thead><tr><th rowspan="2">Ingredient</th><th colspan="2">Budget Released</th><th colspan="2">Actual</th></tr><tr><th>Qty.</th><th>Cost</th><th>Qty.</th><th>Cost</th></tr></thead><tbody>${(day.items || []).map(item => `<tr><td>${escapeHtml(item.ingredient_name || "")}</td><td>${escapeHtml(item.budget_quantity || "")}</td><td class="number">${financialPlainAmount(item.budget_cost)}</td><td>${escapeHtml(item.actual_quantity || "")}</td><td class="number">${financialPlainAmount(item.actual_cost)}</td></tr>`).join("")}</tbody><tfoot><tr><th colspan="2">Total</th><td class="number">${financialPlainAmount((day.items || []).reduce((sum, item) => sum + financialAmount(item.budget_cost), 0))}</td><td></td><td class="number">${financialPlainAmount((day.items || []).reduce((sum, item) => sum + financialAmount(item.actual_cost), 0))}</td></tr></tfoot></table></section>`).join("")}</div>
+    <table class="print-costing-summary"><tbody><tr><th>Weekly Budget Released</th><td>${financialPlainAmount(released)}</td><th>Budget Ingredient Total</th><td>${financialPlainAmount(budgetFoodTotal)}</td><th>Actual Ingredient Total</th><td>${financialPlainAmount(actualFoodTotal)}</td><th>Actual Balance</th><td>${financialPlainAmount(released - actualFoodTotal)}</td></tr></tbody></table>`;
+  const styles = `.print-inventory{display:flex;gap:18px;margin:0 0 8px;padding:6px 8px;background:#edf6f0;border:1px solid #b9cfc1;font-size:10px}.print-inventory span{flex:1}.print-costing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.print-costing-day{break-inside:avoid;border:1px solid #6f7d74}.print-costing-day header{display:flex;justify-content:space-between;gap:6px;padding:5px 7px;background:#dfeee5;color:#184c36;font-size:10px}.print-costing-day table{margin:0;border:0}.print-costing-day th,.print-costing-day td{font-size:10px;padding:2px 3px}.print-costing-day:nth-child(4){grid-column:1/2}.print-costing-day:nth-child(5){grid-column:2/3}.print-costing-summary{margin-top:8px}.print-costing-summary th,.print-costing-summary td{font-size:10px;padding:4px}`;
+  return financialPrintDocument(`${costing.center_name || "Feeding Center"} - Weekly Menu Costing`, body, "letter landscape", styles);
+}
+
+function printNutritionMenuCosting(costing) {
+  showDocumentPrintPreview(`Weekly Menu Costing - ${costing.center_name || "Feeding Center"}`, nutritionCostingPrintDocument(costing));
 }
 
 function financialAmount(value) {
@@ -6128,21 +6718,21 @@ function financialPrintDocument(title, body, pageSize = "letter landscape", extr
     .report-header img { width: 52px; height: 52px; object-fit: contain; }
     h1 { margin: 0; font-size: 17px; } h2 { margin: 3px 0 0; font-size: 14px; } h3 { margin: 3px 0 0; font-size: 12px; font-weight: 600; }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    th, td { border: 1px solid #48534d; padding: 4px 5px; font-size: 8px; vertical-align: middle; }
+    th, td { border: 1px solid #48534d; padding: 4px 5px; font-size: 10px; vertical-align: middle; }
     th { background: #e7f1eb; font-weight: 800; text-align: center; }
     td.number { text-align: right; font-variant-numeric: tabular-nums; }
     .section-row th { background: #0d5637; color: #fff; text-align: left; }
     .total-row th, .total-row td { background: #fff5a8; font-weight: 800; }
     .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 12px; }
     .meta div { padding: 7px; border: 1px solid #cbd8d0; }
-    .meta span { display: block; color: #65716a; font-size: 7px; text-transform: uppercase; }
-    .meta strong { display: block; margin-top: 3px; font-size: 9px; }
+    .meta span { display: block; color: #65716a; font-size: 10px; text-transform: uppercase; }
+    .meta strong { display: block; margin-top: 3px; font-size: 10px; }
     .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 28px; page-break-inside: avoid; }
-    .signature { padding-top: 15px; border-top: 1px solid #27332c; font-size: 8px; text-align: center; }
+    .signature { padding-top: 15px; border-top: 1px solid #27332c; font-size: 10px; text-align: center; }
     .signature strong, .signature span, .signature small { display: block; }
-    .signature strong { font-size: 9px; }
-    .signature small { margin-top: 2px; color: #536159; font-size: 7px; }
-    .signature-role { margin-bottom: 16px; color: #647169; font-size: 7px; font-weight: 700; text-align: left; text-transform: uppercase; }
+    .signature strong { font-size: 10px; }
+    .signature small { margin-top: 2px; color: #536159; font-size: 10px; }
+    .signature-role { margin-bottom: 16px; color: #647169; font-size: 10px; font-weight: 700; text-align: left; text-transform: uppercase; }
     .actual-group { background: #dcefe5 !important; color: #164d35; }
     .budget-group { background: #f8edc9 !important; color: #5e4a0d; border-left: 2px solid #a88422 !important; }
     .budget-divider { border-left: 2px solid #a88422 !important; }
@@ -6195,7 +6785,7 @@ async function printNutritionFinancialCenterYearly(centerId, year) {
   const center = nutritionFinancialCenter(summary, centerId);
   if (!center) throw new Error("Feeding center was not found in this financial year.");
   const body = `<div class="meta"><div><span>Year</span><strong>${summary.year}</strong></div><div><span>Active Children</span><strong>${center.active_kids}</strong></div><div><span>Capacity</span><strong>${center.capacity}</strong></div><div><span>Reports Filed</span><strong>${center.reported_months} of 12</strong></div></div><table><thead><tr><th style="width:16%">Item</th>${center.months.map(month => `<th>${month.label}</th>`).join("")}<th>Total</th></tr></thead><tbody>${financialCenterYearlyRows(center)}</tbody></table>${financialReportSignatures(center.coordinator, "Center Coordinator")}`;
-  showDocumentPrintPreview(`${center.center_name} Financial Summary ${summary.year}`, financialPrintDocument(`${center.center_name} - Summary of Cash Receipts and Disbursements`, body, "legal landscape", "th,td{font-size:7px;padding:3px}"));
+  showDocumentPrintPreview(`${center.center_name} Financial Summary ${summary.year}`, financialPrintDocument(`${center.center_name} - Summary of Cash Receipts and Disbursements`, body, "legal landscape", "th,td{font-size:10px;padding:3px}"));
 }
 
 function programFinancialCenterBlock(center) {
@@ -6224,7 +6814,7 @@ function programFinancialSummaryTable(summary) {
 async function printNutritionFinancialProgramYearly(year) {
   const summary = await loadNutritionFinancialSummary(Number(year) || new Date().getFullYear());
   const body = `<div class="meta"><div><span>Year</span><strong>${summary.year}</strong></div><div><span>Feeding Centers</span><strong>${summary.program.center_count}</strong></div><div><span>Active Children</span><strong>${summary.program.active_kids}</strong></div><div><span>Total Capacity</span><strong>${summary.program.capacity}</strong></div></div>${programFinancialSummaryTable(summary)}${summary.centers.map(programFinancialCenterBlock).join("")}${financialReportSignatures("", "Program Officer")}`;
-  const extraStyles = `.program-center-block{margin:0 0 10px;break-inside:avoid}.program-center-block table{table-layout:fixed}.program-center-block th,.program-center-block td{font-size:5.1px;padding:2px}.kids-row td,.kids-row th{background:#d9e9f5;font-weight:800}.summary-table th,.summary-table td{font-size:6.6px;padding:3px}`;
+  const extraStyles = `.program-center-block{margin:0 0 10px;break-inside:avoid}.program-center-block table{table-layout:fixed}.program-center-block th,.program-center-block td{font-size:10px;padding:2px}.kids-row td,.kids-row th{background:#d9e9f5;font-weight:800}.summary-table th,.summary-table td{font-size:10px;padding:3px}`;
   showDocumentPrintPreview(`General Feeding Actual vs Budget ${summary.year}`, financialPrintDocument(`General Feeding Actual vs. Budget ${summary.year}`, body, "legal landscape", extraStyles));
 }
 
@@ -7009,6 +7599,7 @@ function printMonitoringReport(report) {
     </html>
   `);
   printWindow.document.close();
+  enforceMinimumPrintFontSize(printWindow.document);
 }
 
 async function renderEditorPage(id = "") {
@@ -7981,7 +8572,7 @@ function printRecord(record, monitoringReports = []) {
             background: #edf3ef;
             color: #1d2520;
             font-family: "Segoe UI", Arial, sans-serif;
-            font-size: 8.2px;
+            font-size: 10px;
             line-height: 1.16;
           }
           button {
@@ -8027,7 +8618,7 @@ function printRecord(record, monitoringReports = []) {
           }
           .tagline {
             color: #55625b;
-            font-size: 8.6px;
+            font-size: 10px;
           }
           .form-title {
             display: inline-flex;
@@ -8043,7 +8634,7 @@ function printRecord(record, monitoringReports = []) {
           }
           .record-line {
             color: #243029;
-            font-size: 9px;
+            font-size: 10px;
             font-weight: 700;
           }
           .picture {
@@ -8077,7 +8668,7 @@ function printRecord(record, monitoringReports = []) {
             background: #eaf6ef;
             color: #143d33;
             padding: 4px 6px;
-            font-size: 9.2px;
+            font-size: 10px;
             line-height: 1;
           }
           .print-section.personal-grid,
@@ -8110,14 +8701,14 @@ function printRecord(record, monitoringReports = []) {
             display: block;
             margin-bottom: 2px;
             color: #5b6861;
-            font-size: 6.8px;
+            font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
           }
           .print-field strong {
             display: block;
             color: #1d2520;
-            font-size: 8.4px;
+            font-size: 10px;
             font-weight: 650;
           }
           .family {
@@ -8136,12 +8727,12 @@ function printRecord(record, monitoringReports = []) {
           .family th {
             background: #f2f7f4;
             color: #243029;
-            font-size: 6.8px;
+            font-size: 10px;
             line-height: 1.05;
             font-weight: 800;
           }
           .family td {
-            font-size: 7.2px;
+            font-size: 10px;
             line-height: 1.08;
           }
           .family th:nth-child(1),
@@ -8174,11 +8765,11 @@ function printRecord(record, monitoringReports = []) {
           .beneficiary-monitoring-head h3 {
             margin: 0;
             color: #143d33;
-            font-size: 9.2px;
+            font-size: 10px;
           }
           .beneficiary-monitoring-head span {
             color: #5b6861;
-            font-size: 7px;
+            font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
           }
@@ -8199,13 +8790,13 @@ function printRecord(record, monitoringReports = []) {
           .beneficiary-monitoring-kpis em {
             display: block;
             color: #5b6861;
-            font-size: 6.4px;
+            font-size: 10px;
             font-style: normal;
           }
           .beneficiary-monitoring-kpis strong {
             display: block;
             color: #143d33;
-            font-size: 8px;
+            font-size: 10px;
             line-height: 1.1;
           }
           .beneficiary-monitoring-table {
@@ -8217,7 +8808,7 @@ function printRecord(record, monitoringReports = []) {
           .beneficiary-monitoring-table td {
             border: 1px solid #cddbd2;
             padding: 3px 4px;
-            font-size: 6.8px;
+            font-size: 10px;
             overflow-wrap: anywhere;
           }
           .beneficiary-monitoring-table th {
@@ -8234,7 +8825,7 @@ function printRecord(record, monitoringReports = []) {
           .analytics-eyebrow {
             display: block;
             color: #155b3c;
-            font-size: 6.5px;
+            font-size: 10px;
             font-weight: 800;
             letter-spacing: 0;
             text-transform: uppercase;
@@ -8275,6 +8866,7 @@ function printRecord(record, monitoringReports = []) {
     </html>
   `);
   printWindow.document.close();
+  enforceMinimumPrintFontSize(printWindow.document);
 }
 
 async function exportData() {

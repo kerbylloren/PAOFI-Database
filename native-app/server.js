@@ -6,6 +6,7 @@ const { spawn } = require("node:child_process");
 const { createDatabase } = require("./src/database-factory");
 const { BENEFICIARY_FIELDS, fieldSectionMap } = require("./src/metadata");
 const { recognizeNutritionProfile } = require("./src/nutrition-ocr");
+const { philippineHolidaysForYear } = require("./src/philippine-holidays");
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 3417);
@@ -319,6 +320,12 @@ function createServer(database, startupError = null, reconnectDatabase = null) {
         return;
       }
 
+      if (pathname === "/api/calendar/philippine-holidays" && req.method === "GET") {
+        const year = Number(url.searchParams.get("year") || new Date().getFullYear());
+        sendJson(res, 200, { year, holidays: philippineHolidaysForYear(year) });
+        return;
+      }
+
       if (pathname === "/api/stats" && req.method === "GET") {
         await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, () => database.stats());
         return;
@@ -524,6 +531,142 @@ function createServer(database, startupError = null, reconnectDatabase = null) {
 
         clearResponseCache();
         sendJson(res, 200, { report });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/recipes" && req.method === "GET") {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
+          recipes: await database.listNutritionRecipes({
+            search: url.searchParams.get("search") || "",
+            limit: url.searchParams.get("limit") || 100,
+            offset: url.searchParams.get("offset") || 0
+          }),
+          total: await database.countNutritionRecipes({ search: url.searchParams.get("search") || "" })
+        }));
+        return;
+      }
+
+      if (pathname === "/api/nutrition/recipes" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        clearResponseCache();
+        sendJson(res, 200, { recipe: await database.saveNutritionRecipe(payload) });
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/recipes/") && req.method === "GET") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/recipes/");
+        const recipe = id ? await sendRecordFromCache(req, res, url, () => database.getNutritionRecipe(id), "recipe") : null;
+        if (!recipe) {
+          sendError(res, 404, "Recipe was not found.");
+          return;
+        }
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/recipes/") && req.method === "DELETE") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/recipes/");
+        const recipe = id ? await database.deleteNutritionRecipe(id) : null;
+        if (!recipe) {
+          sendError(res, 404, "Recipe was not found.");
+          return;
+        }
+        clearResponseCache();
+        sendJson(res, 200, { recipe });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/menus" && req.method === "GET") {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
+          menus: await database.listNutritionMenus({
+            year: url.searchParams.get("year") || "",
+            limit: url.searchParams.get("limit") || 60,
+            offset: url.searchParams.get("offset") || 0
+          }),
+          total: await database.countNutritionMenus({ year: url.searchParams.get("year") || "" })
+        }));
+        return;
+      }
+
+      if (pathname === "/api/nutrition/menus" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        clearResponseCache();
+        sendJson(res, 200, { menu: await database.saveNutritionMenu(payload) });
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/menus/") && pathname.endsWith("/generate") && req.method === "POST") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/menus/");
+        clearResponseCache();
+        sendJson(res, 200, await database.generateNutritionCostingsForMenu(id));
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/menus/") && req.method === "GET") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/menus/");
+        const menu = id ? await sendRecordFromCache(req, res, url, () => database.getNutritionMenu(id), "menu") : null;
+        if (!menu) {
+          sendError(res, 404, "Monthly menu was not found.");
+          return;
+        }
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/menus/") && req.method === "DELETE") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/menus/");
+        const menu = id ? await database.deleteNutritionMenu(id) : null;
+        if (!menu) {
+          sendError(res, 404, "Monthly menu was not found.");
+          return;
+        }
+        clearResponseCache();
+        sendJson(res, 200, { menu });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/costings" && req.method === "GET") {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
+          costings: await database.listNutritionCostings({
+            search: url.searchParams.get("search") || "",
+            centerId: url.searchParams.get("centerId") || "",
+            month: url.searchParams.get("month") || "",
+            limit: url.searchParams.get("limit") || 100,
+            offset: url.searchParams.get("offset") || 0
+          }),
+          total: await database.countNutritionCostings({
+            search: url.searchParams.get("search") || "",
+            centerId: url.searchParams.get("centerId") || "",
+            month: url.searchParams.get("month") || ""
+          })
+        }));
+        return;
+      }
+
+      if (pathname === "/api/nutrition/costings" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        clearResponseCache();
+        sendJson(res, 200, { costing: await database.saveNutritionCosting(payload) });
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/costings/") && req.method === "GET") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/costings/");
+        const costing = id ? await sendRecordFromCache(req, res, url, () => database.getNutritionCosting(id), "costing") : null;
+        if (!costing) {
+          sendError(res, 404, "Menu costing sheet was not found.");
+          return;
+        }
+        return;
+      }
+
+      if (pathname.startsWith("/api/nutrition/costings/") && req.method === "DELETE") {
+        const id = recordIdFromPath(pathname, "/api/nutrition/costings/");
+        const costing = id ? await database.deleteNutritionCosting(id) : null;
+        if (!costing) {
+          sendError(res, 404, "Menu costing sheet was not found.");
+          return;
+        }
+        clearResponseCache();
+        sendJson(res, 200, { costing });
         return;
       }
 
