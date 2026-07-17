@@ -37,6 +37,13 @@ native-app/*.traineddata
 native-app/dist/
 native-app/dist-electron/
 
+# Generated Graphify knowledge graph
+graphify-out/
+
+# Nested checkout and generated Codex artifacts
+/PAOFI-Database/
+/outputs/
+
 # Spreadsheet/import scratch files and real data exports
 native-app/.spreadsheet-work/
 *.xlsx

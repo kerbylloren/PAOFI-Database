@@ -136,6 +136,14 @@ test("generates weekly center costings from monthly menus and preserves actual e
   assert.equal(firstCostingPage.length, 1);
   assert.equal(secondCostingPage.length, 1);
   assert.notEqual(firstCostingPage[0].id, secondCostingPage[0].id);
+  const weeklyBatch = db.listNutritionCostingsForWeek("2026-07-06");
+  assert.equal(weeklyBatch.length, 2);
+  assert.deepEqual(weeklyBatch.map(costing => costing.center_name), ["Ascension", "Lourdes"]);
+  assert.ok(weeklyBatch.every(costing => costing.days.length === 2));
+  assert.ok(weeklyBatch.every(costing => costing.days[0].meal_date === "2026-07-06"));
+  assert.ok(weeklyBatch.every(costing => costing.days[1].meal_date === "2026-07-07"));
+  assert.ok(weeklyBatch.every(costing => costing.days.every(day => day.items.length === 2)));
+  assert.deepEqual(db.listNutritionCostingsForWeek("2026-07-13"), []);
   const ascensionCosting = db.listNutritionCostings({ centerId: ascension.id })[0];
   assert.equal(ascensionCosting.budget_released, 400);
   assert.equal(ascensionCosting.budget_food_total, 700);
@@ -655,6 +663,19 @@ test("creates monthly nutrition growth reports per feeding center", () => {
   assert.equal(nextReport.entries[0].cgs_classification, "Severely Underweight");
   assert.equal(db.stats().nutritionGrowthReports, 2);
   assert.equal(db.listNutritionGrowthReports({ centerId: center.id }).length, 2);
+
+  const yearlyAnalytics = db.nutritionGrowthAnalytics({ centerId: center.id, year: "2020" });
+  assert.equal(yearlyAnalytics.reports.length, 2);
+  assert.equal(yearlyAnalytics.entries.length, 1);
+  assert.equal(yearlyAnalytics.entries[0].beneficiary_id, child.id);
+  assert.equal(yearlyAnalytics.entries[0].report_month, "2020-02");
+  assert.equal(yearlyAnalytics.entries[0].weight_kg, "2.9");
+
+  const januaryAnalytics = db.nutritionGrowthAnalytics({ centerId: center.id, year: "2020", month: "01" });
+  assert.equal(januaryAnalytics.reports.length, 1);
+  assert.equal(januaryAnalytics.entries.length, 1);
+  assert.equal(januaryAnalytics.entries[0].report_month, "2020-01");
+  assert.equal(januaryAnalytics.entries[0].weight_kg, "3.2");
 
   const protectedSnapshot = db.saveNutritionBeneficiary({
     ...db.getNutritionBeneficiary(child.id),

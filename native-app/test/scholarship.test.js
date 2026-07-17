@@ -203,13 +203,33 @@ test("enforces installment balances, controlled numbering, allocations, voids, a
     exchange_rate: 1,
     status: "Open"
   }, 1);
+  const projectAllowancePledge = await db.scholarship.save("pledges", {
+    sponsor_id: sponsor.id,
+    sponsorship_id: sponsorship.id,
+    scholar_id: scholar.id,
+    enrollment_id: enrollment.id,
+    pledge_date: "2026-07-01",
+    due_date: "2026-10-01",
+    purpose_type: "Scholar-specific",
+    frequency: "Quarterly",
+    amount_php: 2500,
+    source_currency: "PHP",
+    source_amount: 2500,
+    exchange_rate: 1,
+    status: "Open"
+  }, 1);
   const invoiceDraft = await db.scholarship.save("invoices", {
     sponsor_id: sponsor.id,
-    pledge_id: pledge.id,
     issue_date: "2026-07-02",
-    amount_php: 10000,
-    status: "Draft"
+    status: "Draft",
+    items: [
+      { pledge_id: pledge.id, description: "Annual scholarship support", amount_php: 10000 },
+      { pledge_id: projectAllowancePledge.id, description: "Quarterly project allowance", amount_php: 2500 }
+    ]
   }, 1);
+  assert.equal(invoiceDraft.amount_php, 12500);
+  assert.equal(invoiceDraft.items.length, 2);
+  assert.equal(invoiceDraft.items[1].description, "Quarterly project allowance");
   await assert.rejects(() => db.scholarship.issueDocument("invoices", invoiceDraft.id, 1), /Approved financial document settings/i);
   await assert.rejects(() => db.scholarship.save("documentSettings", {
     effective_year: 2026,
@@ -254,12 +274,12 @@ test("enforces installment balances, controlled numbering, allocations, voids, a
     payment_method: "Bank Transfer",
     status: "Cleared"
   }, 1);
-  assert.equal((await db.scholarship.get("invoices", invoice.id)).payment_summary.balance, 6000);
+  assert.equal((await db.scholarship.get("invoices", invoice.id)).payment_summary.balance, 8500);
   await assert.rejects(() => db.scholarship.save("payments", {
     sponsor_id: sponsor.id,
     invoice_id: invoice.id,
     payment_date: "2026-07-06",
-    amount_php: 7000,
+    amount_php: 9000,
     status: "Cleared"
   }, 1), /remaining invoice balance/i);
 
@@ -296,15 +316,15 @@ test("enforces installment balances, controlled numbering, allocations, voids, a
 
   const yearly = await db.scholarship.financialYearSummary(2026);
   assert.deepEqual(yearly.totals, {
-    pledged: 10000,
+    pledged: 12500,
     received: 4000,
     reversed: 0,
     allocated: 2500,
-    outstanding: 6000,
+    outstanding: 8500,
     unallocated: 1500
   });
   assert.equal(yearly.monthly.length, 1);
-  assert.equal(yearly.sponsors[0].outstanding, 6000);
+  assert.equal(yearly.sponsors[0].outstanding, 8500);
 
   const voided = await db.scholarship.voidDocument("receipts", receipt.id, "Encoding correction", 1);
   assert.equal(voided.status, "Voided");

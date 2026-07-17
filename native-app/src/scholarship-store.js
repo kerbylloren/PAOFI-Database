@@ -238,6 +238,17 @@ const SCHOLARSHIP_SCHEMA_STATEMENTS = [
   )`,
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_scholarship_invoice_no ON scholarship_invoices(invoice_no) WHERE invoice_no <> ''",
   "CREATE INDEX IF NOT EXISTS idx_scholarship_invoices_sponsor ON scholarship_invoices(sponsor_id, status)",
+  `CREATE TABLE IF NOT EXISTS scholarship_invoice_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id INTEGER NOT NULL,
+    row_order INTEGER NOT NULL DEFAULT 0,
+    pledge_id INTEGER,
+    description TEXT NOT NULL DEFAULT '',
+    amount_php REAL NOT NULL DEFAULT 0,
+    FOREIGN KEY (invoice_id) REFERENCES scholarship_invoices(id) ON DELETE CASCADE,
+    FOREIGN KEY (pledge_id) REFERENCES scholarship_pledges(id) ON DELETE SET NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_scholarship_invoice_items_invoice ON scholarship_invoice_items(invoice_id, row_order, id)",
   `CREATE TABLE IF NOT EXISTS scholarship_payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     payment_no TEXT NOT NULL DEFAULT '',
@@ -1118,7 +1129,7 @@ class ScholarshipStore {
     const years = await selectMap("scholarship_academic_years", yearIds, "id, label");
     const periods = await selectMap("scholarship_academic_periods", periodIds, "id, period_name, academic_year_id");
     const events = await selectMap("scholarship_events", eventIds, "id, event_title, event_date");
-    const payments = await selectMap("scholarship_payments", paymentIds, "id, payment_no, sponsor_id, amount_php, status");
+    const payments = await selectMap("scholarship_payments", paymentIds, "id, payment_no, sponsor_id, payment_date, amount_php, status");
     const renewalTemplates = entity === "renewals" ? await selectMap("scholarship_renewal_templates", templateIds, "id, template_name, version") : new Map();
     const evaluationTemplates = entity === "evaluations" ? await selectMap("scholarship_evaluation_templates", templateIds, "id, template_name, version") : new Map();
 
@@ -1133,6 +1144,14 @@ class ScholarshipStore {
       const period = periods.get(Number(row.academic_period_id));
       const event = events.get(Number(row.event_id));
       const payment = payments.get(Number(row.payment_id));
+      if (enrollment) {
+        result.scholar_id = result.scholar_id || enrollment.scholar_id;
+        result.academic_year_id = result.academic_year_id || enrollment.academic_year_id;
+        result.school_name = result.school_name || enrollment.school_name;
+        result.education_level = result.education_level || enrollment.education_level;
+        result.grade_or_year = result.grade_or_year || enrollment.grade_or_year;
+        result.course = result.course || enrollment.course;
+      }
       if (scholar) {
         result.scholar_name = scholarName(scholar);
         result.scholar_no = result.scholar_no || scholar.scholar_no;
@@ -1153,6 +1172,7 @@ class ScholarshipStore {
       }
       if (payment) {
         result.payment_no = payment.payment_no;
+        result.payment_date = result.payment_date || payment.payment_date;
         result.payment_status = payment.status;
       }
       const renewalTemplate = renewalTemplates.get(Number(row.template_id));
@@ -1293,7 +1313,16 @@ class ScholarshipStore {
         [Number(id)]
       ));
     }
-    if (entity === "invoices") enriched.payment_summary = await this.invoicePaymentSummary(Number(id));
+    if (entity === "invoices") {
+      enriched.items = await this.driver.all(
+        `SELECT i.*, p.pledge_no, p.frequency, p.due_date
+         FROM scholarship_invoice_items i
+         LEFT JOIN scholarship_pledges p ON p.id = i.pledge_id
+         WHERE i.invoice_id = ? ORDER BY i.row_order, i.id`,
+        [Number(id)]
+      );
+      enriched.payment_summary = await this.invoicePaymentSummary(Number(id));
+    }
     if (entity === "payments") {
       enriched.allocations = await this.enrich("allocations", await this.driver.all(
         "SELECT * FROM scholarship_allocations WHERE payment_id = ? ORDER BY allocation_date, id",
@@ -1340,6 +1369,29 @@ class ScholarshipStore {
     const values = {};
     for (const field of definition.fields) {
       if (field in input) values[field] = normalizeField(field, input[field]);
+    }
+    let invoiceItems = null;
+    if (entity === "invoices" && Array.isArray(input.items)) {
+      invoiceItems = input.items
+        .map(item => ({
+          pledge_id: normalizeInteger(item.pledge_id),
+          description: String(item.description || "").trim(),
+          amount_php: normalizeNumber(item.amount_php)
+        }))
+        .filter(item => item.description || item.pledge_id || item.amount_php);
+      if (!invoiceItems.length) throw new Error("A Service Invoice must contain at least one donation line.");
+      if (invoiceItems.some(item => !(Number(item.amount_php) > 0))) throw new Error("Every Service Invoice line must have an amount greater than zero.");
+      const pledgeIds = invoiceItems.map(item => Number(item.pledge_id)).filter(Boolean);
+      if (new Set(pledgeIds).size !== pledgeIds.length) throw new Error("A pledge can appear only once on a Service Invoice.");
+      if (pledgeIds.length) {
+        const matching = await this.driver.all(
+          `SELECT id FROM scholarship_pledges WHERE sponsor_id = ? AND id IN (${placeholders(pledgeIds.length)})`,
+          [Number(values.sponsor_id ?? existing?.sponsor_id), ...pledgeIds]
+        );
+        if (matching.length !== pledgeIds.length) throw new Error("Every Service Invoice pledge must belong to the selected sponsor.");
+      }
+      values.amount_php = Math.round(invoiceItems.reduce((sum, item) => sum + Number(item.amount_php), 0) * 100) / 100;
+      values.pledge_id = invoiceItems.length === 1 ? invoiceItems[0].pledge_id : null;
     }
     for (const field of definition.required || []) {
       const candidate = values[field] ?? existing?.[field];
@@ -1427,6 +1479,10 @@ class ScholarshipStore {
           ["row_order", "member_name", "relationship", "birth_date", "age", "gender", "civil_status", "education_attainment", "occupation", "school", "monthly_income"], householdMembers);
       }
       if (!existing || "document_links" in input) await this.replaceDocumentLinks("scholar", recordId, input.document_links || []);
+    }
+    if (entity === "invoices" && invoiceItems) {
+      await this.replaceChildren("scholarship_invoice_items", "invoice_id", recordId,
+        ["row_order", "pledge_id", "description", "amount_php"], invoiceItems);
     }
     if (entity === "renewalTemplates" && (!existing || "items" in input)) {
       await this.replaceChildren("scholarship_renewal_template_items", "template_id", recordId,
@@ -2121,7 +2177,14 @@ class ScholarshipStore {
     const record = await this.driver.get(`SELECT * FROM ${definition.table} WHERE id = ?`, [Number(id)]);
     if (!record || record.status !== "Voided") throw new Error("Only voided documents can be reissued.");
     const input = { ...record, id: 0, status: "Draft", reissued_from_id: Number(id), voided_at: "", voided_by: null, void_reason: "", created_by: Number(userId) || null };
-    if (entity === "invoices") input.invoice_no = "";
+    if (entity === "invoices") {
+      input.invoice_no = "";
+      const items = await this.driver.all(
+        "SELECT pledge_id, description, amount_php FROM scholarship_invoice_items WHERE invoice_id = ? ORDER BY row_order, id",
+        [Number(id)]
+      );
+      if (items.length) input.items = items;
+    }
     else input.receipt_no = "";
     const created = await this.save(entity, input, userId);
     await this.audit(userId, "reissued_as_draft", entity, created.id, `From ${id}`);
@@ -2523,6 +2586,7 @@ class ScholarshipStore {
     result.renewalResponses = await this.driver.all("SELECT * FROM scholarship_renewal_responses ORDER BY renewal_id, template_item_id");
     result.evaluationCriteria = await this.driver.all("SELECT * FROM scholarship_evaluation_criteria ORDER BY template_id, row_order, id");
     result.evaluationScores = await this.driver.all("SELECT * FROM scholarship_evaluation_scores ORDER BY evaluation_id, criterion_id");
+    result.invoiceItems = await this.driver.all("SELECT * FROM scholarship_invoice_items ORDER BY invoice_id, row_order, id");
     return result;
   }
 

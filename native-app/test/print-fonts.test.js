@@ -4,9 +4,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const appSource = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
+const scholarshipSource = fs.readFileSync(path.join(__dirname, "..", "public", "scholarship.js"), "utf8");
 
 test("keeps print form text at least 10px", () => {
-  const fontSizes = [...appSource.matchAll(/font-size:\s*([0-9]+(?:\.[0-9]+)?)px/g)]
+  const printSources = `${appSource}\n${scholarshipSource}`;
+  const fontSizes = [...printSources.matchAll(/font-size:\s*([0-9]+(?:\.[0-9]+)?)px/g)]
     .map(match => Number(match[1]));
 
   assert.ok(fontSizes.length > 0);

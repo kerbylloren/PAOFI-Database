@@ -285,6 +285,66 @@ function decorateCosting(costing = {}, days = null) {
   };
 }
 
+function decorateCostingsFromRows(rows = []) {
+  const grouped = new Map();
+  rows.forEach(row => {
+    const costingId = Number(row.costing_id || 0);
+    if (!costingId) return;
+    if (!grouped.has(costingId)) {
+      grouped.set(costingId, {
+        costing: {
+          id: costingId,
+          center_id: Number(row.center_id || 0),
+          center_name: text(row.center_name),
+          menu_id: Number(row.menu_id || 0) || null,
+          report_month: text(row.report_month),
+          week_start: isoDate(row.week_start),
+          week_end: isoDate(row.week_end),
+          no_children: Number(row.no_children || 0),
+          inventory_rice: Number(row.inventory_rice || 0),
+          inventory_manna: Number(row.inventory_manna || 0),
+          inventory_vitameals: Number(row.inventory_vitameals || 0),
+          budget_released: amount(row.budget_released),
+          status: text(row.status),
+          notes: text(row.notes),
+          created_at: row.created_at,
+          updated_at: row.updated_at
+        },
+        days: new Map()
+      });
+    }
+    const dayId = Number(row.day_id || 0);
+    const entry = grouped.get(costingId);
+    if (dayId && !entry.days.has(dayId)) {
+      entry.days.set(dayId, {
+          id: Number(row.day_id || 0),
+          meal_date: isoDate(row.meal_date),
+          recipe_id: Number(row.recipe_id || 0) || null,
+          meal_name: text(row.meal_name),
+          kids_present: Number(row.kids_present || 0),
+          row_order: Number(row.day_order || 0),
+          items: []
+      });
+    }
+    if (dayId && Number(row.item_id || 0)) {
+      entry.days.get(dayId).items.push({
+        id: Number(row.item_id),
+        recipe_ingredient_id: Number(row.recipe_ingredient_id || 0) || null,
+        row_order: Number(row.item_order || 0),
+        ingredient_name: text(row.ingredient_name),
+        budget_quantity: text(row.budget_quantity),
+        budget_cost: amount(row.budget_cost),
+        actual_quantity: text(row.actual_quantity),
+        actual_cost: amount(row.actual_cost)
+      });
+    }
+  });
+  return [...grouped.values()].map(({ costing, days }) => decorateCosting(
+    costing,
+    [...days.values()].sort((left, right) => left.meal_date.localeCompare(right.meal_date) || left.row_order - right.row_order)
+  ));
+}
+
 function normalizeCosting(input = {}, existing = null) {
   const days = (Array.isArray(input.days) ? input.days : existing?.days || [])
     .map(normalizeCostingDay)
@@ -315,6 +375,7 @@ module.exports = {
   addDays,
   amount,
   decorateCosting,
+  decorateCostingsFromRows,
   decorateRecipe,
   groupMenuEntriesByWeek,
   isoDate,

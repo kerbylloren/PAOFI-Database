@@ -701,18 +701,31 @@ function createServer(database, startupError = null, reconnectDatabase = null) {
         return;
       }
 
+      if (pathname === "/api/nutrition/growth/analytics" && req.method === "GET") {
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, () => database.nutritionGrowthAnalytics({
+          centerId: url.searchParams.get("centerId") || "",
+          year: url.searchParams.get("year") || "",
+          month: url.searchParams.get("month") || ""
+        }));
+        return;
+      }
+
       if (pathname === "/api/nutrition/growth/reports" && req.method === "GET") {
         await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
           reports: await database.listNutritionGrowthReports({
             search: url.searchParams.get("search") || "",
             centerId: url.searchParams.get("centerId") || "",
+            year: url.searchParams.get("year") || "",
+            month: url.searchParams.get("month") || "",
             limit: url.searchParams.get("limit") || 200,
             offset: url.searchParams.get("offset") || 0
           }),
           total: typeof database.countNutritionGrowthReports === "function"
             ? await database.countNutritionGrowthReports({
               search: url.searchParams.get("search") || "",
-              centerId: url.searchParams.get("centerId") || ""
+              centerId: url.searchParams.get("centerId") || "",
+              year: url.searchParams.get("year") || "",
+              month: url.searchParams.get("month") || ""
             })
             : 0
         }));
@@ -878,6 +891,19 @@ function createServer(database, startupError = null, reconnectDatabase = null) {
         const payload = await readJsonBody(req);
         clearResponseCache();
         sendJson(res, 200, { costing: await database.saveNutritionCosting(payload) });
+        return;
+      }
+
+      if (pathname === "/api/nutrition/costings/week" && req.method === "GET") {
+        const weekStart = String(url.searchParams.get("weekStart") || "").trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+          sendError(res, 400, "Select a valid feeding week.");
+          return;
+        }
+        await sendCachedJson(res, cacheKey(req, url), SHORT_CACHE_MS, async () => ({
+          weekStart,
+          costings: await database.listNutritionCostingsForWeek(weekStart)
+        }));
         return;
       }
 

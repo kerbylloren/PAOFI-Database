@@ -1,6 +1,6 @@
 {
   "name": "paofi-database-native",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "Desktop database app for PAOFI program records.",
   "author": {
@@ -15,6 +15,7 @@
     "test": "node --test test/*.test.js",
     "import:csv": "node scripts/import-masterlist-csv.js",
     "import:scholarship-roster": "node scripts/import-scholarship-roster.js",
+    "import:scholarship-access": "node scripts/import-scholarship-access.js",
     "normalize:db": "node scripts/normalize-database-capitalization.js",
     "cloud:config": "node scripts/configure-cloud.js",
     "migrate:cloud": "node scripts/migrate-sqlite-to-turso.js"

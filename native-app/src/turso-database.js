@@ -32,6 +32,7 @@ const {
 } = require("./nutrition-cgs");
 const {
   decorateCosting,
+  decorateCostingsFromRows,
   decorateRecipe,
   groupMenuEntriesByWeek,
   normalizeCosting,
@@ -1862,13 +1863,23 @@ class TursoBeneficiaryDatabase {
     `;
   }
 
-  nutritionGrowthReportFilters({ search = "", centerId = "" } = {}) {
+  nutritionGrowthReportFilters({ search = "", centerId = "", year = "", month = "" } = {}) {
     const conditions = [];
     const args = [];
 
     if (centerId) {
       conditions.push("r.center_id = ?");
       args.push(Number(centerId));
+    }
+
+    if (/^\d{4}$/.test(String(year || ""))) {
+      conditions.push("substr(r.report_month, 1, 4) = ?");
+      args.push(String(year));
+    }
+
+    if (/^(0[1-9]|1[0-2])$/.test(String(month || ""))) {
+      conditions.push("substr(r.report_month, 6, 2) = ?");
+      args.push(String(month));
     }
 
     if (search.trim()) {
@@ -1893,10 +1904,10 @@ class TursoBeneficiaryDatabase {
     return Number(row.count || 0);
   }
 
-  async listNutritionGrowthReports({ search = "", centerId = "", limit = 200, offset = 0 } = {}) {
+  async listNutritionGrowthReports({ search = "", centerId = "", year = "", month = "", limit = 200, offset = 0 } = {}) {
     const max = clampLimit(limit, 200, 500);
     const skip = clampOffset(offset);
-    const { where, args } = this.nutritionGrowthReportFilters({ search, centerId });
+    const { where, args } = this.nutritionGrowthReportFilters({ search, centerId, year, month });
 
     return rows(await this.execute(
       `
@@ -1908,6 +1919,39 @@ class TursoBeneficiaryDatabase {
       `,
       [...args, max, skip]
     ));
+  }
+
+  async nutritionGrowthAnalytics({ centerId = "", year = "", month = "" } = {}) {
+    const reports = await this.listNutritionGrowthReports({ centerId, year, month, limit: 500 });
+    const { where, args } = this.nutritionGrowthReportFilters({ centerId, year, month });
+    const entries = rows(await this.execute(
+      `
+        WITH ranked_entries AS (
+          SELECT e.*,
+            r.center_id,
+            r.center_name,
+            r.report_month,
+            r.submitted_date,
+            ROW_NUMBER() OVER (
+              PARTITION BY CASE
+                WHEN e.beneficiary_id IS NOT NULL THEN 'id:' || e.beneficiary_id
+                ELSE 'fallback:' || lower(trim(r.center_name)) || '|' || lower(trim(e.beneficiary_no)) || '|' || lower(trim(e.beneficiary_name))
+              END
+              ORDER BY r.report_month DESC, r.id DESC, e.row_order DESC, e.id DESC
+            ) AS beneficiary_rank
+          FROM nutrition_growth_entries e
+          INNER JOIN nutrition_growth_reports r ON r.id = e.report_id
+          ${where}
+        )
+        SELECT *
+        FROM ranked_entries
+        WHERE beneficiary_rank = 1
+        ORDER BY center_name, beneficiary_name, beneficiary_no
+      `,
+      args
+    ));
+
+    return { reports, entries };
   }
 
   async getNutritionGrowthReport(id) {
@@ -2633,6 +2677,24 @@ class TursoBeneficiaryDatabase {
       LIMIT ? OFFSET ?
     `, [...args, clampLimit(limit, 100, 1000), clampOffset(offset)]);
     return rows(result).map(costing => decorateCosting(costing));
+  }
+
+  async listNutritionCostingsForWeek(weekStart) {
+    const result = await this.execute(`
+      SELECT
+        c.id AS costing_id, c.center_id, c.center_name, c.menu_id, c.report_month,
+        c.week_start, c.week_end, c.no_children, c.inventory_rice, c.inventory_manna,
+        c.inventory_vitameals, c.budget_released, c.status, c.notes, c.created_at, c.updated_at,
+        d.id AS day_id, d.row_order AS day_order, d.meal_date, d.recipe_id, d.meal_name, d.kids_present,
+        i.id AS item_id, i.recipe_ingredient_id, i.row_order AS item_order, i.ingredient_name,
+        i.budget_quantity, i.budget_cost, i.actual_quantity, i.actual_cost
+      FROM nutrition_menu_costings c
+      JOIN nutrition_menu_costing_days d ON d.costing_id = c.id
+      LEFT JOIN nutrition_menu_costing_items i ON i.costing_day_id = d.id
+      WHERE c.week_start = ?
+      ORDER BY lower(c.center_name), c.id, d.meal_date, d.row_order, i.row_order, i.id
+    `, [String(weekStart || "").trim()]);
+    return decorateCostingsFromRows(rows(result));
   }
 
   async getNutritionCosting(id) {

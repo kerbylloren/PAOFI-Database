@@ -30,6 +30,77 @@
     ["APR_PHOTO", "Annual Progress Report Photo", "Quarter 3", "All"],
     ["S2_Q4_REPORT_CARD", "Semester 2 / Q4 Report Card", "Quarter 4", "All"]
   ];
+  const SCHOLARSHIP_DOCUMENT_FORMATS = [
+    {
+      code: "APR",
+      title: "Annual Progress Report",
+      shortTitle: "APR",
+      scope: "Sponsor packet",
+      schedule: "Annual",
+      description: "One sponsor packet with a progress page for every selected scholar, followed by the scanned APR letter and report card attachment.",
+      attachmentNote: "Uses APR, APR photo, and final report card links from the renewal checklist.",
+      action: "generate-apr",
+      accent: "aqua"
+    },
+    {
+      code: "CHRISTMAS_LETTER",
+      title: "Christmas Letter",
+      shortTitle: "CL",
+      scope: "Sponsor packet",
+      schedule: "Christmas season",
+      description: "One sponsor packet containing one festive letter page for every selected scholar supported by that sponsor.",
+      attachmentNote: "Uses Christmas Letter and Christmas Letter Photo links from the renewal checklist.",
+      action: "generate-christmas-letter",
+      accent: "red"
+    },
+    {
+      code: "SOA",
+      title: "Statement of Account",
+      shortTitle: "SOA",
+      scope: "Per sponsor / per scholar",
+      schedule: "As required",
+      description: "A separate account statement for each scholar supported by a sponsor, showing commitment, scheduled donations, recorded allocations, and balance.",
+      attachmentNote: "Never combines multiple scholars in one SOA.",
+      action: "generate-soa",
+      accent: "gold"
+    },
+    {
+      code: "SERVICE_INVOICE",
+      title: "Service Invoice",
+      shortTitle: "SI",
+      scope: "Per sponsor",
+      schedule: "Before donation",
+      description: "One controlled Service Invoice for a sponsor covering all selected donations they are scheduled to send.",
+      attachmentNote: "Donation lines are saved with the invoice and remain fixed after issuance.",
+      action: "generate-service-invoice",
+      accent: "green"
+    },
+    {
+      code: "TYL",
+      title: "Thank You Letter",
+      shortTitle: "TYL",
+      scope: "Sponsor packet",
+      schedule: "After acknowledgement cycle",
+      description: "One sponsor packet containing the selected scholars' thank-you pages with each scanned Thank You Letter attached.",
+      attachmentNote: "Uses Scanned Thank You Letter and Thank You Letter Photo links from the renewal checklist.",
+      action: "generate-thank-you-letter",
+      accent: "navy"
+    }
+  ];
+  const DEFAULT_APR_SUPPORT = [
+    "School supplies, bags, uniforms, and shoes",
+    "Project allowance",
+    "Transportation allowance",
+    "Books allowance",
+    "Scholars Orionine Youth Camp",
+    "Sports Fest",
+    "Medical check-up"
+  ];
+  const DOCUMENT_ATTACHMENT_CODES = {
+    APR: { scan: "APR", photo: "APR_PHOTO", reportCard: "S2_Q4_REPORT_CARD" },
+    CHRISTMAS_LETTER: { scan: "CHRISTMAS_LETTER", photo: "CHRISTMAS_PHOTO" },
+    TYL: { scan: "TYL_SCAN", photo: "TYL_PHOTO" }
+  };
   const state = {
     context: null,
     meta: null,
@@ -824,8 +895,9 @@
 
   function openPrintWindow(title, body, options = {}) {
     const orientation = options.landscape ? "landscape" : "portrait";
+    const pageSize = options.pageSize || "Letter";
     const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
-      @page { size: Letter ${orientation}; margin: 0.45in; }
+      @page { size: ${pageSize} ${orientation}; margin: 0.45in; }
       * { box-sizing: border-box; }
       body { margin:0; color:#17231e; font: 10px Arial, sans-serif; background:#fff; }
       .print-toolbar { display:flex; justify-content:flex-end; padding:10px; background:#eef5f0; }
@@ -836,8 +908,13 @@
       .document-header h1 { font-size:20px; margin:0 0 4px; }
       .document-header p { margin:0; color:#4d6258; }
       h2 { font-size:14px; margin:16px 0 8px; color:#0f5d3a; }
-      table { width:100%; border-collapse:collapse; margin:8px 0 14px; }
-      th, td { border:1px solid #aabbb2; padding:5px 6px; text-align:left; vertical-align:top; }
+      table { width:100%; max-width:100%; border-collapse:collapse; margin:8px 0 14px; table-layout:auto; }
+      thead { display:table-header-group; }
+      tfoot { display:table-row-group; }
+      tr { break-inside:avoid; page-break-inside:avoid; }
+      th, td { border:1px solid #aabbb2; padding:5px 6px; text-align:left; vertical-align:top; hyphens:none; word-break:normal; white-space:normal; }
+      th { overflow-wrap:normal; }
+      td { overflow-wrap:break-word; }
       th { background:#e8f2ec; }
       .print-profile { display:grid; grid-template-columns:150px 1fr; gap:16px; }
       .print-photo { width:150px; min-height:180px; border:1px solid #b8c8bf; display:grid; place-items:center; }
@@ -849,7 +926,53 @@
       .money { text-align:right; }
       .signature-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:48px; margin-top:42px; }
       .signature-grid div { border-top:1px solid #333; padding-top:5px; text-align:center; }
-      @media print { .print-toolbar { display:none; } }
+      .sponsor-document-page { min-height:9.7in; padding:0.04in; break-after:page; page-break-after:always; }
+      .sponsor-document-page:last-child { break-after:auto; page-break-after:auto; }
+      .sponsor-document-header { display:grid; grid-template-columns:58px 1fr 58px; align-items:center; gap:12px; padding-bottom:8px; border-bottom:5px solid #00a6a6; text-align:center; }
+      .sponsor-document-header img { width:54px; height:54px; object-fit:contain; }
+      .sponsor-document-header h1 { margin:0; color:#1b365d; font-size:18px; letter-spacing:.02em; }
+      .sponsor-document-header p { margin:3px 0 0; color:#087f7f; font-size:10px; font-weight:700; }
+      .sponsor-document-meta { display:flex; justify-content:space-between; gap:16px; margin:8px 0 12px; color:#5d6d66; font-size:10px; }
+      .sponsor-document-card { border:1px solid #cad8d1; background:#fff; }
+      .sponsor-document-band { padding:5px 8px; background:#1b365d; color:#fff; font-weight:700; text-transform:uppercase; }
+      .sponsor-document-image { width:100%; max-height:4.8in; object-fit:contain; border:1px solid #d6dfda; background:#fff; }
+      .sponsor-document-placeholder { display:grid; min-height:1.8in; place-items:center; padding:18px; border:1px dashed #9fb1a8; color:#677a70; text-align:center; }
+      .apr-summary-grid { display:grid; grid-template-columns:2.05in 1fr; gap:10px; margin:10px 0; }
+      .apr-scholar-photo { width:100%; height:2.62in; object-fit:cover; border:1px solid #cad8d1; }
+      .apr-profile-copy { padding:7px; background:#f3f6f5; text-align:center; }
+      .apr-profile-copy strong { display:block; color:#1b365d; font-size:11px; }
+      .apr-profile-copy span { display:block; margin-top:2px; color:#5d6d66; }
+      .apr-detail-stack { display:grid; gap:9px; }
+      .apr-snapshot { padding:8px 10px; border:1px solid #cad8d1; }
+      .apr-snapshot h2 { margin:0 0 4px; color:#1b365d; font-size:13px; }
+      .apr-support-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:0; border:1px solid #bcd5cd; }
+      .apr-support-grid > div { padding:7px 9px; background:#e9f7f6; }
+      .apr-support-grid > div:last-child { background:#fff7df; }
+      .apr-support-grid p { margin:2px 0; }
+      .apr-assessment { padding:8px 10px; border-left:5px solid #f4b41a; background:#fff7df; line-height:1.45; }
+      .letter-document { border-color:#9b1c31; }
+      .letter-document .sponsor-document-header { border-bottom-color:#9b1c31; }
+      .letter-document .sponsor-document-header h1 { color:#9b1c31; }
+      .letter-document .sponsor-document-header p { color:#216b48; }
+      .letter-scholar-grid { display:grid; grid-template-columns:1fr 1.38in; gap:12px; align-items:start; margin:10px 0; padding:9px; border-top:2px solid #9b1c31; border-bottom:2px solid #9b1c31; background:#fff9f4; }
+      .letter-scholar-grid img { width:1.3in; height:1.75in; object-fit:cover; }
+      .letter-scholar-grid h2 { margin:0 0 6px; color:#1b365d; }
+      .letter-scholar-grid p { margin:3px 0; }
+      .letter-message-title { margin:0; padding:6px 10px; border-left:1.2in solid #216b48; border-right:1.2in solid #9b1c31; color:#9b1c31; text-align:center; font-size:12px; }
+      .soa-title { display:flex; justify-content:space-between; align-items:end; gap:18px; margin:18px 0 10px; }
+      .soa-title h1 { margin:0; color:#1b365d; font-size:22px; }
+      .soa-summary { display:grid; grid-template-columns:repeat(3,1fr); margin:14px 0; border:1px solid #bdcbc4; }
+      .soa-summary div { padding:10px; border-right:1px solid #bdcbc4; }
+      .soa-summary div:last-child { border-right:0; }
+      .soa-summary span { display:block; color:#62736b; font-size:10px; text-transform:uppercase; }
+      .soa-summary strong { display:block; margin-top:4px; color:#1b365d; font-size:15px; }
+      .invoice-particulars td:last-child, .invoice-particulars th:last-child { text-align:right; }
+      .invoice-total { margin-left:auto; width:48%; }
+      .invoice-total th { width:55%; }
+      @media print {
+        .print-toolbar { display:none; }
+        .sponsor-document-page { min-height:auto; }
+      }
     </style></head><body><div class="print-toolbar"><button onclick="window.print()">Print</button></div><main class="document">${body}</main></body></html>`;
     if (ctx().showDocumentPrintPreview) {
       document.querySelectorAll(".scholarship-modal-backdrop").forEach(element => element.remove());
@@ -860,6 +983,7 @@
     if (!win) throw new Error("The print preview could not be opened.");
     win.document.write(documentHtml);
     win.document.close();
+    ctx().applyPrintTableReadability?.(win.document);
     ctx().enforceMinimumPrintFontSize?.(win.document);
   }
 
@@ -1110,6 +1234,364 @@
     });
   }
 
+  function documentFormatByCode(code) {
+    return SCHOLARSHIP_DOCUMENT_FORMATS.find(item => item.code === code);
+  }
+
+  function isPrintableImage(value) {
+    const source = String(value || "").trim();
+    return /^data:image\//i.test(source) || /\.(png|jpe?g|webp|gif)(?:[?#].*)?$/i.test(source);
+  }
+
+  function printAttachment(source, label, className = "sponsor-document-image") {
+    const value = String(source || "").trim();
+    if (!value) return `<div class="sponsor-document-placeholder"><strong>${escapeHtml(label)} not linked</strong><span>Add the scanned attachment in the scholar renewal checklist before final printing.</span></div>`;
+    if (isPrintableImage(value)) return `<img class="${className}" src="${escapeHtml(value)}" alt="${escapeHtml(label)}">`;
+    return `<div class="sponsor-document-placeholder"><strong>${escapeHtml(label)} is stored as a linked file</strong><span>Open and append the linked scan to the final packet: ${escapeHtml(value)}</span></div>`;
+  }
+
+  function sponsorDocumentHeader(title, subtitle) {
+    const logo = `${location.origin}/assets/paofi-logo.png`;
+    return `<header class="sponsor-document-header"><img src="${logo}" alt=""><div><h1>PAYATAS ORIONE FOUNDATION, INC.</h1><p>${escapeHtml(title)} | ${escapeHtml(subtitle)}</p></div><img src="${logo}" alt=""></header>`;
+  }
+
+  function currentPercentageAverage(grades = []) {
+    const values = grades
+      .filter(item => item.grading_scale === "Percentage" && Number.isFinite(Number(item.numeric_value)))
+      .map(item => Number(item.numeric_value));
+    if (!values.length) return "";
+    return String(Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 100) / 100);
+  }
+
+  async function sponsorScholarContexts(sponsorId, academicYearId) {
+    if (!Number(sponsorId) || !Number(academicYearId)) return [];
+    const payload = await entityList("sponsorships", { sponsor_id: sponsorId, status: "Active", limit: 500, offset: 0 });
+    const assignments = (payload.records || []).filter(item => Number(item.academic_year_id) === Number(academicYearId));
+    return Promise.all(assignments.map(async assignment => {
+      const enrollment = await entityGet("enrollments", assignment.enrollment_id);
+      const [scholar, renewalPayload, gradePayload] = await Promise.all([
+        entityGet("scholars", enrollment.scholar_id),
+        entityList("renewals", { enrollment_id: enrollment.id, limit: 20, offset: 0 }),
+        entityList("grades", { enrollment_id: enrollment.id, limit: 500, offset: 0 })
+      ]);
+      const renewalSummary = (renewalPayload.records || [])[0];
+      const renewal = renewalSummary ? await entityGet("renewals", renewalSummary.id) : null;
+      const attachments = {};
+      for (const response of renewal?.responses || []) {
+        if (response.requirement_code && response.document_url) attachments[response.requirement_code] = response.document_url;
+      }
+      return {
+        assignment,
+        enrollment,
+        scholar,
+        renewal,
+        attachments,
+        percentageAverage: currentPercentageAverage(gradePayload.records || [])
+      };
+    }));
+  }
+
+  function packetRecipientEditor(format, recipient, index) {
+    const codes = DOCUMENT_ATTACHMENT_CODES[format.code] || {};
+    const scan = recipient.attachments[codes.scan] || "";
+    const photoReady = Boolean(recipient.attachments[codes.photo] || recipient.scholar.picture_data);
+    const scanReady = Boolean(scan);
+    const reportReady = format.code !== "APR" || Boolean(recipient.attachments[codes.reportCard]);
+    const badges = [
+      `<span class="${photoReady ? "ready" : "missing"}">${photoReady ? "Photo ready" : "Photo missing"}</span>`,
+      `<span class="${scanReady ? "ready" : "missing"}">${scanReady ? "Scan ready" : "Scan missing"}</span>`,
+      format.code === "APR" ? `<span class="${reportReady ? "ready" : "missing"}">${reportReady ? "Report card ready" : "Report card missing"}</span>` : ""
+    ].join("");
+    return `
+      <article class="scholarship-packet-recipient" data-packet-recipient="${index}">
+        <header>
+          <label class="scholarship-recipient-toggle"><input type="checkbox" name="include_recipient" checked><span><strong>${escapeHtml(recipient.scholar.scholar_name)}</strong><small>${escapeHtml(recipient.enrollment.education_level)} | ${escapeHtml(recipient.enrollment.grade_or_year)} | ${escapeHtml(recipient.enrollment.school_name)}</small></span></label>
+          <div class="scholarship-readiness-badges">${badges}</div>
+        </header>
+        <div class="scholarship-recipient-fields">
+          <label><span>General Average</span><input name="general_average" value="${escapeHtml(recipient.percentageAverage)}" placeholder="e.g. 83"></label>
+          <label><span>Photo override</span><input name="photo_url" value="${escapeHtml(recipient.attachments[codes.photo] || "")}" placeholder="Leave blank to use the scholar profile photo"></label>
+          <label class="wide"><span>${escapeHtml(format.shortTitle)} scanned letter</span><input name="scan_url" value="${escapeHtml(scan)}" placeholder="HTTPS image or protected file link"></label>
+          ${format.code === "APR" ? `<label class="wide"><span>Report card attachment</span><input name="report_card_url" value="${escapeHtml(recipient.attachments[codes.reportCard] || "")}" placeholder="HTTPS image or protected file link"></label><label class="wide"><span>Program Implementing Team assessment</span><textarea name="assessment" rows="3">${escapeHtml(recipient.renewal?.evaluation?.remarks || "")}</textarea></label>` : ""}
+        </div>
+        ${format.code === "APR" ? `<fieldset class="scholarship-support-checklist"><legend>Support received</legend>${DEFAULT_APR_SUPPORT.map((item, supportIndex) => `<label><input type="checkbox" data-support-item="${supportIndex}" ${supportIndex === 3 ? "" : "checked"}><span>${escapeHtml(item)}</span></label>`).join("")}</fieldset>` : ""}
+      </article>`;
+  }
+
+  function collectPacketRecipients(format, host, recipients) {
+    return [...host.querySelectorAll("[data-packet-recipient]")].filter(row => row.querySelector('[name="include_recipient"]').checked).map(row => {
+      const recipient = recipients[Number(row.dataset.packetRecipient)];
+      const photoOverride = row.querySelector('[name="photo_url"]').value.trim();
+      return {
+        ...recipient,
+        generalAverage: row.querySelector('[name="general_average"]').value.trim(),
+        photoSource: photoOverride || recipient.scholar.picture_data || "",
+        scanSource: row.querySelector('[name="scan_url"]').value.trim(),
+        reportCardSource: row.querySelector('[name="report_card_url"]')?.value.trim() || "",
+        assessment: row.querySelector('[name="assessment"]')?.value.trim() || "",
+        support: [...row.querySelectorAll("[data-support-item]")].filter(input => input.checked).map(input => DEFAULT_APR_SUPPORT[Number(input.dataset.supportItem)])
+      };
+    });
+  }
+
+  function printAnnualProgressPacket({ sponsor, year, issueDate, recipients }) {
+    const pages = [];
+    for (const recipient of recipients) {
+      const support = recipient.support || [];
+      const educational = support.filter(item => DEFAULT_APR_SUPPORT.indexOf(item) < 4);
+      const social = support.filter(item => DEFAULT_APR_SUPPORT.indexOf(item) >= 4);
+      pages.push(`
+        <section class="sponsor-document-page">
+          ${sponsorDocumentHeader("ANNUAL PROGRESS REPORT", `School Year ${year.label}`)}
+          <div class="sponsor-document-meta"><span>Sponsor: <strong>${escapeHtml(sponsor.sponsor_name)}</strong></span><span>Prepared: ${escapeHtml(displayDate(issueDate))}</span></div>
+          <div class="apr-summary-grid">
+            <div class="sponsor-document-card">
+              ${recipient.photoSource ? `<img class="apr-scholar-photo" src="${escapeHtml(recipient.photoSource)}" alt="${escapeHtml(recipient.scholar.scholar_name)}">` : `<div class="sponsor-document-placeholder">Scholar photo not recorded</div>`}
+              <div class="apr-profile-copy"><strong>${escapeHtml(recipient.scholar.scholar_name)}</strong><span>${escapeHtml(recipient.enrollment.education_level)} | ${escapeHtml(recipient.enrollment.grade_or_year)}</span><span>${escapeHtml(recipient.enrollment.school_name)}</span><strong>General Average: ${escapeHtml(recipient.generalAverage || "Not recorded")}</strong></div>
+            </div>
+            <div class="apr-detail-stack">
+              <div class="apr-snapshot"><h2>Scholar Snapshot</h2><p>${escapeHtml(recipient.enrollment.course || recipient.enrollment.education_level)} | ${escapeHtml(recipient.enrollment.scholarship_status)}</p></div>
+              <div><div class="sponsor-document-band">Support Received</div><div class="apr-support-grid"><div><strong>Educational Assistance</strong>${educational.length ? educational.map(item => `<p>&#9745; ${escapeHtml(item)}</p>`).join("") : "<p>No item selected</p>"}</div><div><strong>Social Development</strong>${social.length ? social.map(item => `<p>&#9745; ${escapeHtml(item)}</p>`).join("") : "<p>No item selected</p>"}</div></div></div>
+              <div><div class="sponsor-document-band">Program Implementing Team's Assessment</div><div class="apr-assessment">${escapeHtml(recipient.assessment || "Assessment not yet recorded.")}</div></div>
+            </div>
+          </div>
+          <div class="sponsor-document-band">Scholar's Message to Sponsor</div>
+          ${printAttachment(recipient.scanSource, `Scanned APR letter for ${recipient.scholar.scholar_name}`)}
+        </section>
+        <section class="sponsor-document-page">
+          ${sponsorDocumentHeader("ANNUAL PROGRESS REPORT", `Report Card Attachment | ${recipient.scholar.scholar_name}`)}
+          <div class="sponsor-document-meta"><span>Sponsor: <strong>${escapeHtml(sponsor.sponsor_name)}</strong></span><span>School Year ${escapeHtml(year.label)}</span></div>
+          ${printAttachment(recipient.reportCardSource, `Report card for ${recipient.scholar.scholar_name}`)}
+        </section>`);
+    }
+    openPrintWindow(`Annual Progress Report - ${sponsor.sponsor_name}`, pages.join(""));
+  }
+
+  function printLetterPacket({ format, sponsor, year, issueDate, recipients }) {
+    const letterTitle = format.code === "TYL" ? "THANK YOU LETTER" : "CHRISTMAS LETTER";
+    const messageTitle = format.code === "TYL" ? "A MESSAGE OF THANKS FROM YOUR SPONSORED SCHOLAR" : "A MESSAGE FROM YOUR SPONSORED SCHOLAR";
+    const pages = recipients.map(recipient => `
+      <section class="sponsor-document-page letter-document">
+        ${sponsorDocumentHeader(letterTitle, `${year.label} | Sponsor Copy`)}
+        <div class="sponsor-document-meta"><span>Sponsor: <strong>${escapeHtml(sponsor.sponsor_name)}</strong></span><span>Prepared: ${escapeHtml(displayDate(issueDate))}</span></div>
+        <div class="letter-scholar-grid"><div><h2>${escapeHtml(recipient.scholar.scholar_name)}</h2><p><strong>Educational Level:</strong> ${escapeHtml(recipient.enrollment.education_level)}</p><p><strong>Grade/Year:</strong> ${escapeHtml(recipient.enrollment.grade_or_year)}</p><p><strong>School:</strong> ${escapeHtml(recipient.enrollment.school_name)}</p></div>${recipient.photoSource ? `<img src="${escapeHtml(recipient.photoSource)}" alt="${escapeHtml(recipient.scholar.scholar_name)}">` : `<div class="sponsor-document-placeholder">Photo not recorded</div>`}</div>
+        <h2 class="letter-message-title">${escapeHtml(messageTitle)}</h2>
+        ${printAttachment(recipient.scanSource, `Scanned ${format.title} from ${recipient.scholar.scholar_name}`)}
+      </section>`).join("");
+    openPrintWindow(`${format.title} - ${sponsor.sponsor_name}`, pages);
+  }
+
+  async function openPacketGenerator(formatCode) {
+    const format = documentFormatByCode(formatCode);
+    const [sponsors, years] = await Promise.all([lookupRows("sponsors"), lookupRows("academicYears")]);
+    const activeYear = years.find(item => item.status === "Active") || years[0];
+    let recipients = [];
+    const { overlay, close } = modalShell(
+      `Generate ${format.title}`,
+      format.description,
+      `<form id="scholarshipPacketForm" class="scholarship-form-grid">
+        <label><span>Sponsor</span><select name="sponsor_id" required><option value="">Select sponsor</option>${sponsors.filter(item => item.status === "Active").map(item => `<option value="${item.id}">${escapeHtml(item.sponsor_name)}</option>`).join("")}</select></label>
+        <label><span>Academic Year</span><select name="academic_year_id" required><option value="">Select year</option>${years.map(item => `<option value="${item.id}" ${Number(item.id) === Number(activeYear?.id) ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}</select></label>
+        <label><span>Prepared / Issue Date</span><input name="issue_date" type="date" value="${todayDate()}" required></label>
+        <div class="scholarship-document-rule"><strong>${escapeHtml(format.scope)}</strong><span>${escapeHtml(format.attachmentNote)}</span></div>
+        <section class="scholarship-packet-recipient-list wide" id="packetRecipientList"><p>Select a sponsor and academic year to load supported scholars.</p></section>
+      </form>`,
+      `<button type="button" class="action-button" data-modal-cancel>Cancel</button><button type="submit" form="scholarshipPacketForm" class="action-button primary"><span class="button-icon">${icon("print")}</span><span>Open Print Preview</span></button>`
+    );
+    overlay.querySelector("[data-modal-cancel]").addEventListener("click", close);
+    const form = overlay.querySelector("#scholarshipPacketForm");
+    const host = overlay.querySelector("#packetRecipientList");
+    const loadRecipients = async () => {
+      const sponsorId = form.elements.sponsor_id.value;
+      const yearId = form.elements.academic_year_id.value;
+      if (!sponsorId || !yearId) {
+        recipients = [];
+        host.innerHTML = "<p>Select a sponsor and academic year to load supported scholars.</p>";
+        return;
+      }
+      host.innerHTML = `<div class="scholarship-document-loading">Loading sponsored scholars and renewal attachments...</div>`;
+      try {
+        recipients = await sponsorScholarContexts(sponsorId, yearId);
+        host.innerHTML = recipients.length
+          ? recipients.map((recipient, index) => packetRecipientEditor(format, recipient, index)).join("")
+          : `<div class="scholarship-empty"><strong>No active sponsored scholars found</strong><span>Check the sponsor assignments for the selected academic year.</span></div>`;
+      } catch (error) {
+        recipients = [];
+        host.innerHTML = `<div class="scholarship-empty"><strong>Could not load document recipients</strong><span>${escapeHtml(error.message)}</span></div>`;
+      }
+    };
+    form.elements.sponsor_id.addEventListener("change", loadRecipients);
+    form.elements.academic_year_id.addEventListener("change", loadRecipients);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      const selected = collectPacketRecipients(format, host, recipients);
+      if (!selected.length) {
+        ctx().showToast("Select at least one sponsored scholar.");
+        return;
+      }
+      const sponsor = sponsors.find(item => Number(item.id) === Number(form.elements.sponsor_id.value));
+      const year = years.find(item => Number(item.id) === Number(form.elements.academic_year_id.value));
+      const issueDate = form.elements.issue_date.value;
+      close();
+      if (format.code === "APR") printAnnualProgressPacket({ sponsor, year, issueDate, recipients: selected });
+      else printLetterPacket({ format, sponsor, year, issueDate, recipients: selected });
+    });
+  }
+
+  async function openStatementOfAccountGenerator() {
+    const [sponsors, years] = await Promise.all([lookupRows("sponsors"), lookupRows("academicYears")]);
+    const activeYear = years.find(item => item.status === "Active") || years[0];
+    let recipients = [];
+    const { overlay, close } = modalShell(
+      "Generate Statement of Account",
+      "SOAs are issued separately for each sponsor-scholar assignment.",
+      `<form id="soaForm" class="scholarship-form-grid">
+        <label><span>Sponsor</span><select name="sponsor_id" required><option value="">Select sponsor</option>${sponsors.filter(item => item.status === "Active").map(item => `<option value="${item.id}">${escapeHtml(item.sponsor_name)}</option>`).join("")}</select></label>
+        <label><span>Academic Year</span><select name="academic_year_id" required>${years.map(item => `<option value="${item.id}" ${Number(item.id) === Number(activeYear?.id) ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}</select></label>
+        <label class="wide"><span>Scholar Account</span><select name="assignment_id" required><option value="">Select sponsor and year first</option></select></label>
+        <label><span>Statement Date</span><input name="statement_date" type="date" value="${todayDate()}" required></label>
+        <label><span>Due Date</span><input name="due_date" type="date"></label>
+        <label class="wide"><span>Statement Notes</span><textarea name="notes" rows="2"></textarea></label>
+      </form>`,
+      `<button type="button" class="action-button" data-modal-cancel>Cancel</button><button type="submit" form="soaForm" class="action-button primary"><span class="button-icon">${icon("print")}</span><span>Open Print Preview</span></button>`
+    );
+    overlay.querySelector("[data-modal-cancel]").addEventListener("click", close);
+    const form = overlay.querySelector("#soaForm");
+    const assignmentSelect = form.elements.assignment_id;
+    const loadAssignments = async () => {
+      recipients = await sponsorScholarContexts(form.elements.sponsor_id.value, form.elements.academic_year_id.value);
+      assignmentSelect.innerHTML = `<option value="">Select scholar</option>${recipients.map((recipient, index) => `<option value="${index}">${escapeHtml(recipient.scholar.scholar_name)} | ${escapeHtml(recipient.enrollment.grade_or_year)}</option>`).join("")}`;
+    };
+    form.elements.sponsor_id.addEventListener("change", () => loadAssignments().catch(error => ctx().showToast(error.message)));
+    form.elements.academic_year_id.addEventListener("change", () => loadAssignments().catch(error => ctx().showToast(error.message)));
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const recipient = recipients[Number(assignmentSelect.value)];
+      if (!recipient) return ctx().showToast("Select one scholar account.");
+      const sponsor = sponsors.find(item => Number(item.id) === Number(form.elements.sponsor_id.value));
+      const year = years.find(item => Number(item.id) === Number(form.elements.academic_year_id.value));
+      try {
+        const [pledgePayload, allocationPayload] = await Promise.all([
+          entityList("pledges", { sponsor_id: sponsor.id, limit: 500, offset: 0 }),
+          entityList("allocations", { enrollment_id: recipient.enrollment.id, limit: 500, offset: 0 })
+        ]);
+        const pledges = (pledgePayload.records || []).filter(item =>
+          Number(item.sponsorship_id) === Number(recipient.assignment.id)
+          || Number(item.enrollment_id) === Number(recipient.enrollment.id)
+          || Number(item.scholar_id) === Number(recipient.scholar.id)
+        );
+        const allocations = allocationPayload.records || [];
+        const scheduled = pledges.reduce((sum, item) => sum + Number(item.amount_php || 0), 0);
+        const commitment = Number(recipient.assignment.commitment_amount_php || 0);
+        const received = allocations.reduce((sum, item) => sum + Number(item.amount_php || 0), 0);
+        const accountTotal = commitment || scheduled;
+        const balance = Math.max(0, Math.round((accountTotal - received) * 100) / 100);
+        const pledgeRows = pledges.map(item => ({ date: displayDate(item.pledge_date), due_date: displayDate(item.due_date), particulars: `${item.purpose_type || "Scholar support"} | ${item.frequency || ""}`, amount_php: item.amount_php }));
+        const allocationRows = allocations.map(item => ({ date: displayDate(item.allocation_date || item.payment_date), reference: item.payment_no || "Payment allocation", particulars: item.purpose || item.notes || "Scholar support", amount_php: item.amount_php }));
+        close();
+        const content = `<section class="sponsor-document-page">${sponsorDocumentHeader("STATEMENT OF ACCOUNT", `${year.label} | Per Scholar`)}<div class="soa-title"><div><h1>Statement of Account</h1><p>Statement Date: ${escapeHtml(displayDate(form.elements.statement_date.value))}${form.elements.due_date.value ? ` | Due: ${escapeHtml(displayDate(form.elements.due_date.value))}` : ""}</p></div><strong>${escapeHtml(sponsor.sponsor_no || "")}</strong></div><div class="print-grid">${profileField("Sponsor", sponsor.sponsor_name)}${profileField("Scholar", recipient.scholar.scholar_name)}${profileField("School", recipient.enrollment.school_name)}${profileField("Grade / Year", recipient.enrollment.grade_or_year)}${profileField("Academic Year", year.label)}${profileField("Sponsorship Frequency", recipient.assignment.frequency)}</div><div class="soa-summary"><div><span>Account Total</span><strong>${escapeHtml(formatMoney(accountTotal))}</strong></div><div><span>Recorded Payments</span><strong>${escapeHtml(formatMoney(received))}</strong></div><div><span>Balance</span><strong>${escapeHtml(formatMoney(balance))}</strong></div></div><h2>Scheduled Donations</h2>${pledgeRows.length ? printTable(pledgeRows, [["date", "Pledge Date"], ["due_date", "Due Date"], ["particulars", "Particulars"], ["amount_php", "Amount"]]) : `<div class="sponsor-document-placeholder">No scholar-specific pledge lines are recorded for this assignment.</div>`}<h2>Recorded Payment Allocations</h2>${allocationRows.length ? printTable(allocationRows, [["date", "Date"], ["reference", "Reference"], ["particulars", "Particulars"], ["amount_php", "Amount"]]) : `<div class="sponsor-document-placeholder">No payment allocation has been recorded for this scholar account.</div>`}${form.elements.notes.value.trim() ? `<h2>Notes</h2><p>${escapeHtml(form.elements.notes.value.trim())}</p>` : ""}<div class="signature-grid"><div>Prepared by</div><div>Scholarship Program Officer</div></div></section>`;
+        openPrintWindow(`SOA - ${sponsor.sponsor_name} - ${recipient.scholar.scholar_name}`, content);
+      } catch (error) { ctx().showToast(error.message); }
+    });
+  }
+
+  async function openServiceInvoiceComposer() {
+    if (!canFinance()) throw new Error("A Scholarship Finance role is required to create Service Invoices.");
+    const sponsors = await lookupRows("sponsors");
+    let pledges = [];
+    const { overlay, close } = modalShell(
+      "Create Consolidated Service Invoice",
+      "Select one sponsor and include every donation they are scheduled to send in this invoice.",
+      `<form id="serviceInvoiceComposer" class="scholarship-form-grid">
+        <label><span>Sponsor</span><select name="sponsor_id" required><option value="">Select sponsor</option>${sponsors.filter(item => item.status === "Active").map(item => `<option value="${item.id}">${escapeHtml(item.sponsor_name)}</option>`).join("")}</select></label>
+        <label><span>Issue Date</span><input name="issue_date" type="date" value="${todayDate()}" required></label>
+        <label><span>Due Date</span><input name="due_date" type="date"></label>
+        <label class="wide"><span>Additional Notes</span><textarea name="notes" rows="2"></textarea></label>
+        <section class="scholarship-invoice-lines wide" id="serviceInvoiceLines"><p>Select a sponsor to load open scheduled donations.</p></section>
+      </form>`,
+      `<button type="button" class="action-button" data-modal-cancel>Cancel</button><button type="submit" form="serviceInvoiceComposer" class="action-button primary"><span class="button-icon">${icon("save")}</span><span>Create Draft & Preview</span></button>`
+    );
+    overlay.querySelector("[data-modal-cancel]").addEventListener("click", close);
+    const form = overlay.querySelector("#serviceInvoiceComposer");
+    const host = overlay.querySelector("#serviceInvoiceLines");
+    form.elements.sponsor_id.addEventListener("change", async () => {
+      const sponsorId = form.elements.sponsor_id.value;
+      if (!sponsorId) {
+        pledges = [];
+        host.innerHTML = "<p>Select a sponsor to load open scheduled donations.</p>";
+        return;
+      }
+      const payload = await entityList("pledges", { sponsor_id: sponsorId, status: "Open", limit: 500, offset: 0 });
+      pledges = payload.records || [];
+      host.innerHTML = pledges.length ? `<div class="scholarship-invoice-line header"><span>Include</span><span>Donation / Purpose</span><span>Due</span><span>Amount</span></div>${pledges.map((item, index) => `<label class="scholarship-invoice-line"><span><input type="checkbox" data-invoice-pledge="${index}" checked></span><span><strong>${escapeHtml(item.pledge_no)}</strong><small>${escapeHtml(item.scholar_name || "General sponsor commitment")} | ${escapeHtml(item.purpose_type)} | ${escapeHtml(item.frequency)}</small></span><span>${escapeHtml(displayDate(item.due_date))}</span><span>${escapeHtml(formatMoney(item.amount_php))}</span></label>`).join("")}` : `<div class="scholarship-empty"><strong>No open scheduled donations</strong><span>Create or reopen a pledge before preparing the Service Invoice.</span></div>`;
+    });
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const selected = [...host.querySelectorAll("[data-invoice-pledge]:checked")].map(input => pledges[Number(input.dataset.invoicePledge)]);
+      if (!selected.length) return ctx().showToast("Select at least one scheduled donation.");
+      try {
+        const saved = await entitySave("invoices", {
+          sponsor_id: form.elements.sponsor_id.value,
+          issue_date: form.elements.issue_date.value,
+          due_date: form.elements.due_date.value,
+          status: "Draft",
+          notes: form.elements.notes.value.trim(),
+          items: selected.map(item => ({
+            pledge_id: item.id,
+            description: `${item.pledge_no} - ${item.scholar_name || item.purpose_type || "Sponsor commitment"} (${item.frequency || "Scheduled"})`,
+            amount_php: item.amount_php
+          }))
+        });
+        close();
+        ctx().showToast("Consolidated Service Invoice draft created.");
+        printFinancialDocument("invoices", saved);
+      } catch (error) { ctx().showToast(error.message); }
+    });
+  }
+
+  async function renderDocumentCenter() {
+    ctx().setTitle("Scholarship Document Center");
+    ctx().setTopbarActions([]);
+    ctx().root.innerHTML = `
+      <section class="scholarship-page scholarship-document-center">
+        ${workspaceHeader("Sponsor Document Center", "Generate the approved Scholarship Program formats from sponsor assignments, renewal attachments, donations, and payment records. Each format follows its required issuance scope.", "")}
+        ${metricStrip([
+          { label: "Formats", value: "5", note: "APR, CL, SOA, SI, TYL" },
+          { label: "Scanned-letter packets", value: "3", note: "APR, Christmas, Thank You" },
+          { label: "Per scholar", value: "SOA", note: "one sponsor-scholar account" },
+          { label: "Per sponsor", value: "SI", note: "all scheduled donations" }
+        ])}
+        <section class="scholarship-document-grid">
+          ${SCHOLARSHIP_DOCUMENT_FORMATS.map(format => `
+            <article class="scholarship-document-card accent-${format.accent}">
+              <header><span>${escapeHtml(format.shortTitle)}</span><div><p>${escapeHtml(format.schedule)}</p><h3>${escapeHtml(format.title)}</h3></div></header>
+              <strong>${escapeHtml(format.scope)}</strong>
+              <p>${escapeHtml(format.description)}</p>
+              <small>${escapeHtml(format.attachmentNote)}</small>
+              <button type="button" class="action-button primary" data-document-action="${format.action}"><span class="button-icon">${icon(format.code === "SERVICE_INVOICE" ? "finance" : "print")}</span><span>${format.code === "SERVICE_INVOICE" ? "Create Invoice" : "Generate Document"}</span></button>
+            </article>`).join("")}
+        </section>
+        <section class="scholarship-document-rules">
+          <div><p class="eyebrow">Issuance controls</p><h3>How the app applies the formats</h3></div>
+          <ol>
+            <li><strong>APR, Christmas Letter, and TYL:</strong> select a sponsor and school year, then compile one page per supported scholar using renewal checklist scans and scholar photos.</li>
+            <li><strong>Statement of Account:</strong> select exactly one sponsor-scholar assignment. The statement never combines scholars.</li>
+            <li><strong>Service Invoice:</strong> select one sponsor and all donation lines they are scheduled to send. The selected lines are saved with the controlled invoice.</li>
+          </ol>
+        </section>
+      </section>`;
+    ctx().root.querySelectorAll("[data-document-action]").forEach(button => button.addEventListener("click", () => {
+      const action = button.dataset.documentAction;
+      let task;
+      if (action === "generate-apr") task = openPacketGenerator("APR");
+      else if (action === "generate-christmas-letter") task = openPacketGenerator("CHRISTMAS_LETTER");
+      else if (action === "generate-thank-you-letter") task = openPacketGenerator("TYL");
+      else if (action === "generate-soa") task = openStatementOfAccountGenerator();
+      else if (action === "generate-service-invoice") task = openServiceInvoiceComposer();
+      Promise.resolve(task).catch(error => ctx().showToast(error.message));
+    }));
+  }
+
   async function renderDonationPage() {
     ctx().setTitle("Donations & Financial Documents");
     const entity = state.donationEntity;
@@ -1141,7 +1623,12 @@
         <p class="scholarship-compliance-note">Service Invoices are principal financial documents. Official Receipts are supplementary payment records. PAOFI accounting must approve production numbering and required document details.</p>
       </section>`;
     ctx().root.querySelectorAll("[data-finance-tab]").forEach(button => button.addEventListener("click", () => { state.donationEntity = button.dataset.financeTab; renderDonationPage().catch(error => ctx().showToast(error.message)); }));
-    ctx().root.querySelector('[data-scholar-action="new-finance"]')?.addEventListener("click", () => openSimpleEditor(entity, 0, renderDonationPage, financeSeed(entity)));
+    ctx().root.querySelector('[data-scholar-action="new-finance"]')?.addEventListener("click", () => {
+      const task = entity === "invoices"
+        ? openServiceInvoiceComposer()
+        : openSimpleEditor(entity, 0, renderDonationPage, financeSeed(entity));
+      Promise.resolve(task).catch(error => ctx().showToast(error.message));
+    });
     ctx().root.querySelector('[data-scholar-action="yearly-finance"]')?.addEventListener("click", openFinanceYearlySummary);
     ctx().root.querySelector('[data-scholar-action="export-finance"]')?.addEventListener("click", async () => {
       try { downloadJson(`PAOFI-Scholarship-${entity}.json`, await ctx().api(`/api/scholarship/export?entity=${entity}`)); } catch (error) { ctx().showToast(error.message); }
@@ -1238,7 +1725,16 @@
     const number = invoice ? record.invoice_no : record.receipt_no;
     const subtitle = invoice ? "SERVICE INVOICE" : "OFFICIAL RECEIPT (SUPPLEMENTARY)";
     const settings = record.document_settings || {};
-    const content = `${printHeader(subtitle)}<h1>${subtitle}</h1><div class="print-grid">${profileField("Registered Organization", settings.organization_name || "Payatas Orione Foundation Inc.")}${profileField("Organization Tax Identifier", settings.tax_identifier)}${profileField("Registered Address", settings.registered_address)}${profileField("Contact Details", settings.contact_details)}${profileField("Document No.", number || "DRAFT")}${profileField("Status", record.status)}${profileField("Date", displayDate(record.issue_date))}${profileField(invoice ? "Sponsor" : "Payment No.", invoice ? record.sponsor_name : record.payment_no)}${profileField("Amount", formatMoney(record.amount_php))}${profileField("Notes", record.notes)}</div><h2>Amount</h2><table><tbody><tr><th>Total</th><td class="money"><strong>${escapeHtml(formatMoney(record.amount_php))}</strong></td></tr></tbody></table><div class="signature-grid"><div>Prepared by</div><div>Authorized representative</div></div>`;
+    const invoiceItems = invoice ? (record.items || []).map((item, index) => ({
+      line: index + 1,
+      reference: item.pledge_no || "",
+      description: item.description,
+      amount_php: item.amount_php
+    })) : [];
+    const particulars = invoice && invoiceItems.length
+      ? `<h2>Scheduled Donations Covered by this Invoice</h2>${printTable(invoiceItems, [["line", "#"], ["reference", "Pledge"], ["description", "Particulars"], ["amount_php", "Amount"]])}`
+      : `<h2>Amount</h2><table><tbody><tr><th>Particulars</th><td>${escapeHtml(record.notes || "Sponsor donation")}</td><td class="money"><strong>${escapeHtml(formatMoney(record.amount_php))}</strong></td></tr></tbody></table>`;
+    const content = `${printHeader(subtitle)}<h1>${subtitle}</h1><div class="print-grid">${profileField("Registered Organization", settings.organization_name || "Payatas Orione Foundation Inc.")}${profileField("Organization Tax Identifier", settings.tax_identifier)}${profileField("Registered Address", settings.registered_address)}${profileField("Contact Details", settings.contact_details)}${profileField("Document No.", number || "DRAFT")}${profileField("Status", record.status)}${profileField("Issue Date", displayDate(record.issue_date))}${profileField("Due Date", displayDate(record.due_date))}${profileField(invoice ? "Sponsor" : "Payment No.", invoice ? record.sponsor_name : record.payment_no)}${profileField("Notes", record.notes)}</div>${particulars}<table class="invoice-total"><tbody><tr><th>Total Amount Due</th><td class="money"><strong>${escapeHtml(formatMoney(record.amount_php))}</strong></td></tr></tbody></table><div class="signature-grid"><div>Prepared by</div><div>Authorized representative</div></div>`;
     openPrintWindow(`${subtitle} ${number || "Draft"}`, content);
   }
 
@@ -1900,6 +2396,7 @@
     if (!state.meta) state.meta = await context.api("/api/scholarship/meta");
     if (route === "scholarship-scholars") return renderProfilesPage(id);
     if (route === "scholarship-sponsors") return renderSponsorsPage(id);
+    if (route === "scholarship-documents") return renderDocumentCenter(id);
     if (route === "scholarship-donations") return renderDonationPage(id);
     if (route === "scholarship-grades") return renderGradesPage(id);
     if (route === "scholarship-attendance") return renderAttendancePage(id);

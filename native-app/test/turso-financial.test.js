@@ -5,6 +5,50 @@ const os = require("node:os");
 const path = require("node:path");
 const { TursoBeneficiaryDatabase } = require("../src/turso-database");
 
+test("counts each child once in filtered libSQL growth analytics", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paofi-growth-analytics-libsql-test-"));
+  const databasePath = path.join(dir, "growth.sqlite").replaceAll("\\", "/");
+  const db = await TursoBeneficiaryDatabase.create({
+    url: `file:${databasePath}`,
+    authToken: "local-test-token"
+  });
+  const center = await db.saveNutritionCenter({ center_name: "Lourdes Feeding Program" });
+  const child = await db.saveNutritionBeneficiary({
+    beneficiary_no: "NP-LIBSQL-GROWTH-001",
+    center_id: center.id,
+    child_last_name: "Analytics",
+    child_first_name: "Child",
+    birth_date: "2020-01-15",
+    gender: "Female",
+    remarks: "Active"
+  });
+
+  await db.saveNutritionGrowthReport({
+    center_id: center.id,
+    report_month: "2026-01",
+    submitted_date: "02/02/2026",
+    entries: [{ beneficiary_id: child.id, height_cm: "110", weight_kg: "18" }]
+  });
+  await db.saveNutritionGrowthReport({
+    center_id: center.id,
+    report_month: "2026-02",
+    submitted_date: "03/02/2026",
+    entries: [{ beneficiary_id: child.id, height_cm: "111", weight_kg: "18.5" }]
+  });
+
+  const yearly = await db.nutritionGrowthAnalytics({ centerId: center.id, year: "2026" });
+  assert.equal(yearly.reports.length, 2);
+  assert.equal(yearly.entries.length, 1);
+  assert.equal(yearly.entries[0].report_month, "2026-02");
+
+  const january = await db.nutritionGrowthAnalytics({ centerId: center.id, year: "2026", month: "01" });
+  assert.equal(january.reports.length, 1);
+  assert.equal(january.entries.length, 1);
+  assert.equal(january.entries[0].report_month, "2026-01");
+
+  await db.close();
+});
+
 test("keeps nutrition financial calculations consistent through the libSQL adapter", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paofi-libsql-test-"));
   const databasePath = path.join(dir, "financial.sqlite").replaceAll("\\", "/");
@@ -78,6 +122,10 @@ test("keeps recipe, menu, and costing generation consistent through the libSQL a
   assert.equal((await db.listNutritionMenus({ limit: 1, offset: 1 })).length, 0);
   assert.equal((await db.listNutritionCostings({ centerId: center.id, month: "2026-08", limit: 1, offset: 0 })).length, 1);
   assert.equal((await db.listNutritionCostings({ centerId: center.id, month: "2026-08", limit: 1, offset: 1 })).length, 0);
+  const weeklyBatch = await db.listNutritionCostingsForWeek("2026-08-03");
+  assert.equal(weeklyBatch.length, 1);
+  assert.equal(weeklyBatch[0].days.length, 1);
+  assert.equal(weeklyBatch[0].days[0].items.length, 2);
   assert.equal(costings[0].budget_released, 270);
   assert.equal(costings[0].budget_food_total, 417.5);
   const detail = await db.getNutritionCosting(costings[0].id);
